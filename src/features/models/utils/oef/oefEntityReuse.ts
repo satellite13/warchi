@@ -9,7 +9,12 @@ export type OefResolvedAction = 'create' | 'reuse' | 'update'
 export type OefNodeResolution = { action: OefResolvedAction; id?: string }
 export type OefLinkResolution = { action: OefResolvedAction; id?: string }
 
-export type OefReuseWarningCode = 'nodeMatchAmbiguous' | 'linkMatchAmbiguous' | 'linkLabelConflict'
+export type OefReuseWarningCode =
+  | 'nodeMatchAmbiguous'
+  | 'linkMatchAmbiguous'
+  | 'linkLabelConflict'
+  | 'linkMatchedIgnoringLabel'
+  | 'nodeAutoMergedFromDecision'
 
 export type OefReuseWarning = {
   code: OefReuseWarningCode
@@ -77,6 +82,8 @@ export function resolveOefEntityMatches(params: {
   existingLinks: EditorLink[]
   existingDiagrams: EditorDiagram[]
   settings: OefReuseSettings
+  /** Persisted duplicate-merge decisions (OEF entity id → target node id). */
+  mergeDecisions?: Record<string, string>
 }): OefEntityMatchResult {
   const warnings: OefReuseWarning[] = []
   const summary = emptySummary()
@@ -87,6 +94,24 @@ export function resolveOefEntityMatches(params: {
   const activeLinks = params.existingLinks.filter(link => !link._isDeleted)
   const activeDiagrams = params.existingDiagrams.filter(diagram => !diagram._isDeleted)
 
+  const activeNodeById = new Map(activeNodes.map(node => [node.id, node]))
+  // OEF identity (attrs.oef.entityId) → existing node id: set by previous OEF imports.
+  const oefEntityIdByNodeId = new Map<string, string>()
+  for (const node of activeNodes) {
+    const entityId = node.parsedAttrs.oef?.entityId
+    if (entityId) oefEntityIdByNodeId.set(entityId, node.id)
+  }
+
+  const activeLinkById = new Map(activeLinks.map(link => [link.id, link]))
+  // OEF identity (attrs.oef.entityId) → existing link id: set by previous OEF imports.
+  const oefLinkEntityIdToLinkId = new Map<string, string>()
+  for (const link of activeLinks) {
+    const entityId = link.parsedAttrs.oef?.entityId
+    if (entityId && !oefLinkEntityIdToLinkId.has(entityId)) {
+      oefLinkEntityIdToLinkId.set(entityId, link.id)
+    }
+  }
+
   const resolvedNodeRealIds = new Map<string, string>()
 
   for (const draftNode of params.draft.nodes) {
@@ -96,9 +121,38 @@ export function resolveOefEntityMatches(params: {
       continue
     }
 
+    // 1. Persisted merge decision wins unconditionally (even when reuse is disabled):
+    //    this entity was already merged into an existing node by a previous validation
+    //    run — never create a duplicate again.
+    // 2. OEF identity (attrs.oef.entityId from a previous import) beats name matching
+    //    but only when the user opted into reuse.
+    const decisionTarget = params.mergeDecisions?.[draftNode.sourceElementId]
+    if (decisionTarget != null && activeNodeById.has(decisionTarget)) {
+      const action = actionFromPolicy(params.settings.onNodeMatch)
+      nodes[draftNode.sourceElementId] = { action, id: decisionTarget }
+      resolvedNodeRealIds.set(draftNode.sourceElementId, decisionTarget)
+      bump(summary, 'nodes', action)
+      warnings.push({
+        code: 'nodeAutoMergedFromDecision',
+        sourceId: draftNode.sourceElementId,
+        message: `Entity "${draftNode.sourceElementId}" merged into existing node by a saved decision`,
+        candidateIds: [decisionTarget],
+      })
+      continue
+    }
+
     if (params.settings.nodesMode !== 'reuseMatching') {
       nodes[draftNode.sourceElementId] = { action: 'create' }
       bump(summary, 'nodes', 'create')
+      continue
+    }
+
+    const identityTarget = oefEntityIdByNodeId.get(draftNode.sourceElementId)
+    if (identityTarget != null && activeNodeById.has(identityTarget)) {
+      const action = actionFromPolicy(params.settings.onNodeMatch)
+      nodes[draftNode.sourceElementId] = { action, id: identityTarget }
+      resolvedNodeRealIds.set(draftNode.sourceElementId, identityTarget)
+      bump(summary, 'nodes', action)
       continue
     }
 
@@ -155,6 +209,31 @@ export function resolveOefEntityMatches(params: {
       continue
     }
 
+    // 1. Saved merge decision wins unconditionally (like nodes).
+    const decisionTarget = params.mergeDecisions?.[draftLink.sourceRelationshipId]
+    if (decisionTarget != null && activeLinkById.has(decisionTarget)) {
+      const action = actionFromPolicy(params.settings.onLinkMatch)
+      links[draftLink.sourceRelationshipId] = { action, id: decisionTarget }
+      bump(summary, 'links', action)
+      warnings.push({
+        code: 'nodeAutoMergedFromDecision',
+        sourceId: draftLink.sourceRelationshipId,
+        message: `Relationship "${draftLink.sourceRelationshipId}" merged into existing link by a saved decision`,
+        candidateIds: [decisionTarget],
+      })
+      continue
+    }
+
+    // 2. OEF identity (attrs.oef.entityId from a previous import) beats endpoint matching
+    //    and survives endpoint drift between exports.
+    const identityTarget = oefLinkEntityIdToLinkId.get(draftLink.sourceRelationshipId)
+    if (identityTarget != null && activeLinkById.has(identityTarget)) {
+      const action = actionFromPolicy(params.settings.onLinkMatch)
+      links[draftLink.sourceRelationshipId] = { action, id: identityTarget }
+      bump(summary, 'links', action)
+      continue
+    }
+
     const sourceRealId = resolvedNodeRealIds.get(draftLink.sourceElementId)
     const targetRealId = resolvedNodeRealIds.get(draftLink.targetElementId)
     if (!sourceRealId || !targetRealId) {
@@ -165,29 +244,57 @@ export function resolveOefEntityMatches(params: {
     }
 
     const oefLabel = (draftLink.name ?? '').trim()
-    const candidates: string[] = []
+    const collectCandidates = (
+      requireLabelMatch: boolean
+    ): { ids: string[]; conflicts: Array<{ id: string; samples: string[] }> } => {
+      const ids: string[] = []
+      const conflicts: Array<{ id: string; samples: string[] }> = []
+      for (const candidate of activeLinks) {
+        if (candidate.sourceId !== sourceRealId || candidate.targetId !== targetRealId) continue
+        if (candidate.linkTypeId !== mapped.linkTypeId) continue
+        const relationBinding =
+          candidate.parsedAttrs.notationRelations[params.notationId]?.relationId
+        if (relationBinding && relationBinding !== mapped.relationId) continue
 
-    for (const candidate of activeLinks) {
-      if (candidate.sourceId !== sourceRealId || candidate.targetId !== targetRealId) continue
-      if (candidate.linkTypeId !== mapped.linkTypeId) continue
-      const relationBinding = candidate.parsedAttrs.notationRelations[params.notationId]?.relationId
-      if (relationBinding && relationBinding !== mapped.relationId) continue
-
-      if (params.settings.linkMatchCriterion === 'endpointsTypeAndLabel') {
-        const effective = effectiveLinkLabel(candidate.id, activeDiagrams)
-        if (effective.conflict) {
-          warnings.push({
-            code: 'linkLabelConflict',
-            sourceId: draftLink.sourceRelationshipId,
-            message: `Existing link ${candidate.id} has conflicting edge labels: ${effective.samples.join(', ')}`,
-            candidateIds: [candidate.id],
-          })
-          continue
+        if (params.settings.linkMatchCriterion === 'endpointsTypeAndLabel' && requireLabelMatch) {
+          const effective = effectiveLinkLabel(candidate.id, activeDiagrams)
+          if (effective.conflict) {
+            conflicts.push({ id: candidate.id, samples: effective.samples })
+            continue
+          }
+          if (oefLabel !== (effective.label ?? '')) continue
         }
-        if (oefLabel !== (effective.label ?? '')) continue
-      }
 
-      candidates.push(candidate.id)
+        ids.push(candidate.id)
+      }
+      return { ids, conflicts }
+    }
+
+    const strict = collectCandidates(true)
+    for (const conflict of strict.conflicts) {
+      warnings.push({
+        code: 'linkLabelConflict',
+        sourceId: draftLink.sourceRelationshipId,
+        message: `Existing link ${conflict.id} has conflicting edge labels: ${conflict.samples.join(', ')}`,
+        candidateIds: [conflict.id],
+      })
+    }
+
+    // Legacy links created before edge labels were persisted carry no label on
+    // their diagram edges. Fall back to endpoints+type matching so such links
+    // are reused (and their canvases refreshed) instead of re-created forever.
+    let candidates = strict.ids
+    if (candidates.length === 0 && strict.conflicts.length === 0) {
+      const fallback = collectCandidates(false)
+      if (fallback.ids.length > 0) {
+        warnings.push({
+          code: 'linkMatchedIgnoringLabel',
+          sourceId: draftLink.sourceRelationshipId,
+          message: `Link "${draftLink.sourceRelationshipId}" matched by endpoints ignoring label (existing edge label differs)`,
+          candidateIds: fallback.ids,
+        })
+        candidates = fallback.ids
+      }
     }
 
     candidates.sort(compareIdAsc)

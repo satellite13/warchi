@@ -375,4 +375,55 @@ describe('chunkOefBatchSave', () => {
     expect(linkChunk?.links.create[0]!.sourceId).toBe('existing-node-uuid')
     expect(linkChunk?.links.create[0]!.targetId).toBe('real-oef-node-new')
   })
+
+  it('plans diagram update chunks and applies them with counters', async () => {
+    const request = sampleRequest({ nodes: 1, links: 1, diagrams: 1 })
+    request.diagrams.update = [
+      {
+        id: 'existing-diagram-uuid',
+        name: 'D0',
+        version: '1.0.0',
+        notationId: 'not',
+        nodeId: 'oef-node-0',
+        attrs: JSON.stringify({
+          instances: {
+            nodes: [{ id: 'dn1', modelNodeId: 'oef-node-0' }],
+            edges: [{ id: 'de1', modelLinkId: 'oef-link-0' }],
+          },
+        }),
+        baseUpdatedAt: '2026-09-10T00:00:00Z',
+      },
+    ]
+
+    const planned = planOefBatchSaveChunks(request)
+    const diagramChunks = planned.filter(chunk => chunk.kind === 'diagrams')
+    expect(diagramChunks).toHaveLength(2)
+    expect(diagramChunks[0]!.request.diagrams.create).toHaveLength(1)
+    expect(diagramChunks[1]!.request.diagrams.update).toHaveLength(1)
+    expect(diagramChunks[0]!.totalOfKind).toBe(2)
+
+    const calls: BatchSaveRequest[] = []
+    const batchSave = vi.fn(async (_modelId: string, request: BatchSaveRequest) => {
+      calls.push(request)
+      const response: BatchSaveResponse = {
+        nodeIdMap: { 'oef-node-0': 'real-node-0' },
+        linkIdMap: { 'oef-link-0': 'real-link-0' },
+        diagramIdMap: {},
+      }
+      return { success: true, data: response } as const
+    })
+
+    const result = await applyOefBatchSaveChunks({ modelId: 'model-1', request, batchSave })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.diagramsUpdated).toBe(1)
+      expect(result.data.nodesCreated).toBe(1)
+    }
+    const updateChunk = calls.find(call => call.diagrams.update.length > 0)
+    expect(updateChunk?.diagrams.update[0]!.id).toBe('existing-diagram-uuid')
+    expect(updateChunk?.diagrams.update[0]!.nodeId).toBe('real-node-0')
+    const attrs = JSON.parse(updateChunk?.diagrams.update[0]!.attrs ?? '{}')
+    expect(attrs.instances.nodes[0].modelNodeId).toBe('real-node-0')
+    expect(attrs.instances.edges[0].modelLinkId).toBe('real-link-0')
+  })
 })

@@ -11,6 +11,9 @@ vi.mock('@/composables/useApi', () => ({
 
 vi.mock('@/features/models-validation/api', () => ({
   fetchValidationReport: vi.fn(),
+  fetchAutoMergeLock: vi.fn().mockResolvedValue({ success: true, data: { locked: false } }),
+  acquireAutoMergeLock: vi.fn(),
+  releaseAutoMergeLock: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -125,10 +128,20 @@ describe('ModelValidationView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Instances 1')
-    expect(wrapper.text()).toContain('Links 1')
+    const tabs = wrapper.findAll('.model-validation__tab')
+    expect(tabs).toHaveLength(4)
+    expect(tabs[0].text()).toContain('Instances')
+    expect(tabs[0].text()).toContain('1')
+    expect(tabs[1].text()).toContain('Links')
+    expect(tabs[1].text()).toContain('1')
+
+    // Group content opens on the active tab.
     expect(wrapper.text()).toContain('Application · CRM')
     expect(wrapper.text()).toContain('2 copies')
+    expect(wrapper.text()).not.toContain('CRM → ERP · Serving')
+
+    await tabs[1].trigger('click')
+
     expect(wrapper.text()).toContain('CRM → ERP · Serving')
     expect(wrapper.text()).toContain('3 copies')
   })

@@ -230,7 +230,7 @@ describe('resolveOefEntityMatches', () => {
     expect(result.links.r1).toEqual({ action: 'reuse', id: 'l-1' })
   })
 
-  it('endpointsTypeAndLabel does not match when edge label differs from OEF name', () => {
+  it('endpointsTypeAndLabel falls back to endpoints+type when edge label differs from OEF name', () => {
     const settings = {
       ...createDefaultOefReuseSettings(),
       nodesMode: 'reuseMatching' as const,
@@ -255,7 +255,10 @@ describe('resolveOefEntityMatches', () => {
       existingDiagrams: [diagramWithEdge('l-1', 'Other')],
       settings,
     })
-    expect(result.links.r1?.action).toBe('create')
+    // Legacy links without persisted edge labels must not be re-created on every
+    // import: the label mismatch falls back to endpoints+type matching.
+    expect(result.links.r1?.action).toBe('reuse')
+    expect(result.warnings.some(w => w.code === 'linkMatchedIgnoringLabel')).toBe(true)
   })
 
   it('updateFromOef marks action update', () => {

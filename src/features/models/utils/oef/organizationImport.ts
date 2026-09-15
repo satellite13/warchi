@@ -14,6 +14,8 @@ export type PlannedDirectory = {
   tempKey: string
   name: string
   parentTempKey: string | null
+  /** Folder properties from the OEF exporter extension (e.g. plugin `autoCreated`/`folderType` markers). */
+  properties: Record<string, string>
 }
 
 export type OrganizationImportPlan = {
@@ -104,7 +106,7 @@ export function buildOrganizationImportPlan(
     const viewsOnly = isViewsOnlyBranch(node)
     const name = folderName(node, viewsOnly)
     const tempKey = nextDirKey(`${pathLabel}/${name}`)
-    directories.push({ tempKey, name, parentTempKey })
+    directories.push({ tempKey, name, parentTempKey, properties: { ...(node.properties ?? {}) } })
 
     for (const child of node.children) {
       if (isLeaf(child)) {

@@ -32,6 +32,7 @@ type MemberRow = {
   id: string
   name: string
   parentName: string | null
+  diagramCount: number | null
 }
 
 type ChipState = {
@@ -47,12 +48,14 @@ const members = computed<MemberRow[]>(() => {
       id: node.id,
       name: node.name,
       parentName: node.parentName,
+      diagramCount: node.diagramCount ?? null,
     }))
   }
   return props.linkMembers.map(link => ({
     id: link.id,
     name: link.id,
     parentName: null,
+    diagramCount: link.diagramCount ?? null,
   }))
 })
 
@@ -181,8 +184,17 @@ function onMerge(dropId: string): void {
             >
               {{ t('models.validationReportKeep') }}
             </span>
+
+            <span
+              v-if="member.diagramCount != null"
+              class="validation-duplicate-group__usage"
+              :title="t('models.validationReportDiagramUsage', { count: member.diagramCount })"
+            >
+              {{ t('models.validationReportDiagramUsage', { count: member.diagramCount }) }}
+            </span>
+
             <button
-              v-else
+              v-if="member.id !== keepId"
               type="button"
               class="validation-duplicate-group__merge"
               @click.stop="onMerge(member.id)"
@@ -325,6 +337,16 @@ function onMerge(dropId: string): void {
 .validation-duplicate-group__parent {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.validation-duplicate-group__usage {
+  font-size: 11px;
+  color: var(--text-subtle);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
 }
 
 .validation-duplicate-group__merge {

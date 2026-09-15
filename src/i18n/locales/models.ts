@@ -151,7 +151,7 @@ export const modelsMessages = {
       oefImportProgressLinks: 'связи',
       oefImportProgressDiagrams: 'диаграммы',
       oefImportProgress:
-        '{kind}: {index}/{total} (создано: ноды {nodes}, связи {links}, диаграммы {diagrams})',
+        '{kind}: {index}/{total} (создано: ноды {nodes}, связи {links}, диаграммы {diagrams}; обновлено диаграмм: {diagramsUpdated})',
       oefImportNoChanges: 'Импорт не содержит изменений для сохранения.',
       oefImportFailed: 'Ошибка импорта: {message}',
       oefImportCompletedWithWarnings: 'Импорт завершен с предупреждениями: {count}',
@@ -252,6 +252,11 @@ export const modelsMessages = {
       oefImportWarningNodeMatchAmbiguous: 'Несколько подходящих нод — взята первая по id',
       oefImportWarningLinkMatchAmbiguous: 'Несколько подходящих связей — взята первая по id',
       oefImportWarningLinkLabelConflict: 'У связи разные метки на диаграммах — не переиспользована',
+      oefImportWarningLinkMatchedIgnoringLabel:
+        'Связь сматчена по конечным точкам, метка существующей отличается — канвасы будут обновлены',
+      oefImportWarningDirectoryMatchAmbiguous: 'Несколько подходящих папок — создана новая папка',
+      oefImportWarningNodeAutoMergedFromDecision:
+        'Слито с существующей нодой по сохранённому решению слияния дубликатов',
       oefImportReportReusedNodes: 'Переиспользовано нод: {count}',
       oefImportReportUpdatedNodes: 'Обновлено нод: {count}',
       oefImportReportReusedLinks: 'Переиспользовано связей: {count}',
@@ -460,6 +465,19 @@ export const modelsMessages = {
       validationReportEmpty: 'Дубликатов не найдено',
       validationReportNodes: 'Экземпляры',
       validationReportLinks: 'Связи',
+      validationReportDiagrams: 'Целостность диаграмм',
+      validationReportDiagramIssuesCount: '{count} проблем',
+      validationDiagramOpen: 'Открыть диаграмму в новой вкладке',
+      validationReportDiagramUsage: 'В диаграммах: {count}',
+      validationReportUnused: 'Неиспользуемые элементы',
+      validationReportUnusedNodes: 'Неиспользуемые узлы ({count})',
+      validationReportUnusedLinks: 'Неиспользуемые связи ({count})',
+      validationReportUnusedHint:
+        'Не размещены ни на одной диаграмме, без связей, детей и документов. Можно удалять.',
+      validationReportDeleteSelected: 'Удалить выбранные ({count})',
+      validationReportDeleteConfirm: 'Удалить выбранные элементы ({count})? Отменить будет нельзя.',
+      validationReportDeleteError: 'Не удалось удалить элементы',
+      validationReportUnusedDeleted: 'Элементы удалены',
       validationReportCopies: '{count} копий',
       validationReportGroupHint:
         'Радиокнопка выбирает копию, которая останется. Кнопка на другой строке сливает эту копию с оставшейся.',
@@ -477,6 +495,61 @@ export const modelsMessages = {
       validationReportCancel: 'Отмена',
       validationReportLoadError: 'Не удалось загрузить отчёт валидации',
       validationReportShownOf: '{shown} из {total}',
+      validationTabEmpty: 'Проблем в этой категории не найдено',
+      validationTabDescNodes:
+        'Ищутся узлы с одинаковым именем и типом — кандидаты на слияние. Дубликаты обычно появляются при повторных импортах и копировании веток модели. Слейте копии в одну: несколько «канонических» экземпляров одного элемента раскидывают связи, диаграммы и документы по разным узлам и искажают отчёты.',
+      validationTabDescLinks:
+        'Ищутся повторяющиеся связи между одной парой узлов с одним типом связи. Обычно это артефакт повторных импортов и слияний. Каждая копия попадает в диаграммы и экспорты отдельно и завышает число связей — оставьте одну, остальные слейте.',
+      validationTabDescDiagrams:
+        'Сверяются экземпляры на холстах диаграмм с сущностями модели: ссылки на удалённые узлы и связи, несовпадение концов визуальной связи с концами модельной, дубли instance id. Битые элементы не обновляются вместе с моделью и могут пропасть при экспорте — удалите их или перепривяжите.',
+      validationTabDescUnused:
+        'Находятся узлы и связи, не размещённые ни на одной диаграмме, без связей, детей и документов. Это остатки импортов и переработок модели: на её использование они не влияют, но мешают навигации — проверьте список и удалите ненужное.',
+      validationAutoMerge: 'Слить всё автоматически',
+      validationAutoMergeHint:
+        'Каждую группу дубликатов слить в копию, наиболее используемую в диаграммах. Группы с разными значениями свойств, дочерними узлами или документами пропускаются — их решайте вручную.',
+      validationAutoMergeDialogTitle: 'Автослияние дубликатов',
+      validationAutoMergeRulesTitle: 'Как будут слиты элементы',
+      validationAutoMergeRuleKeep:
+        'Выжившая копия — та, что чаще всего используется в диаграммах ({nodes} групп узлов)',
+      validationAutoMergeRuleLinks:
+        'Уникальные связи удаляемой копии переезжают на выжившую, дубли связей удаляются',
+      validationAutoMergeRuleDiagrams:
+        'Упоминания удаляемой копии в диаграммах и её диаграммы переезжают на выжившую',
+      validationAutoMergeRuleDecision:
+        'Для повторных импортов сохранится решение: OEF-сущность → выживший узел',
+      validationAutoMergeRuleDocuments:
+        'Копии с документами никогда не сливаются автоматически — решайте их вручную',
+      validationAutoMergeConditionsTitle: 'Условия',
+      validationAutoMergeOptIncludeLinks: 'Сливать связи-дубликаты ({links} групп)',
+      validationAutoMergeOptPropsLabel: 'Если значения свойств различаются',
+      validationAutoMergeOptPropsSkip: 'Пропустить группу (безопасно)',
+      validationAutoMergeOptPropsKeep: 'Оставить значения выжившей копии',
+      validationAutoMergeOptPropsFillEmpty: 'Дозаполнить пустые значения из удаляемой копии',
+      validationAutoMergeOptChildrenLabel: 'Если у удаляемой копии есть дочерние узлы',
+      validationAutoMergeOptChildrenSkip: 'Пропустить группу (безопасно)',
+      validationAutoMergeOptChildrenReparent: 'Перенести детей под выжившую копию',
+      validationAutoMergeAction: 'Слить',
+      validationAutoMergeLockedBy: 'Автослияние уже выполняется: {name}',
+      validationAutoMergeRunning: 'Идёт автослияние…',
+      validationAutoMergeMergedSoFar: 'Слито групп: {merged}',
+      validationAutoMergeSkippedSoFar: 'Пропущено: {skipped}',
+      validationAutoMergeKeepOpen:
+        'Не закрывайте вкладку — процесс идёт в этом окне. При закрытии вкладки он прервётся.',
+      validationAutoMergeAbort: 'Остановить',
+      validationAutoMergeDoneTitle: 'Готово. Слито групп: {merged}',
+      validationAutoMergeStopped: 'Автослияние остановлено. Слито групп: {merged}',
+      validationAutoMergeProgress: 'Слияние {done} из {total}…',
+      validationAutoMergePassLabel: 'Проход {pass}',
+      validationAutoMergeDone: 'Слито групп: {merged}',
+      validationAutoMergeDoneWithSkips:
+        'Слито групп: {merged}. Пропущено: {skipped} — требуют решения вручную',
+      validationAutoMergeAborted: 'Автослияние остановлено: {message}',
+      validationAutoMergeSkip: {
+        hasChildren: 'у удаляемой копии есть дочерние узлы',
+        hasDocuments: 'у удаляемой копии есть документы',
+        propsDiffer: 'значения свойств различаются — выберите вручную',
+        error: 'ошибка слияния',
+      },
       validationReportPropertyColumn: 'Свойство',
       validationReportKeepColumn: 'Оставшаяся копия',
       validationReportDropColumn: 'Удаляемая копия',
@@ -835,7 +908,7 @@ export const modelsMessages = {
       oefImportProgressLinks: 'links',
       oefImportProgressDiagrams: 'diagrams',
       oefImportProgress:
-        '{kind}: {index}/{total} (created: nodes {nodes}, links {links}, diagrams {diagrams})',
+        '{kind}: {index}/{total} (created: nodes {nodes}, links {links}, diagrams {diagrams}; diagrams updated: {diagramsUpdated})',
       oefImportNoChanges: 'Import has no changes to save.',
       oefImportFailed: 'Import failed: {message}',
       oefImportCompletedWithWarnings: 'Import completed with warnings: {count}',
@@ -935,6 +1008,12 @@ export const modelsMessages = {
       oefImportWarningNodeMatchAmbiguous: 'Multiple matching nodes — picked lowest id',
       oefImportWarningLinkMatchAmbiguous: 'Multiple matching links — picked lowest id',
       oefImportWarningLinkLabelConflict: 'Link has conflicting diagram labels — not reused',
+      oefImportWarningLinkMatchedIgnoringLabel:
+        'Link matched by endpoints ignoring label — canvases will be refreshed',
+      oefImportWarningDirectoryMatchAmbiguous:
+        'Multiple matching folders — a new folder was created',
+      oefImportWarningNodeAutoMergedFromDecision:
+        'Merged into an existing node by a saved duplicate-merge decision',
       oefImportReportReusedNodes: 'Nodes reused: {count}',
       oefImportReportUpdatedNodes: 'Nodes updated: {count}',
       oefImportReportReusedLinks: 'Links reused: {count}',
@@ -1141,6 +1220,19 @@ export const modelsMessages = {
       validationReportEmpty: 'No duplicates found',
       validationReportNodes: 'Instances',
       validationReportLinks: 'Links',
+      validationReportDiagrams: 'Diagram integrity',
+      validationReportDiagramIssuesCount: '{count} issues',
+      validationDiagramOpen: 'Open diagram in a new tab',
+      validationReportDiagramUsage: 'Used in {count} diagrams',
+      validationReportUnused: 'Unused elements',
+      validationReportUnusedNodes: 'Unused nodes ({count})',
+      validationReportUnusedLinks: 'Unused links ({count})',
+      validationReportUnusedHint:
+        'Not placed on any diagram, no links, children or documents. Safe to delete.',
+      validationReportDeleteSelected: 'Delete selected ({count})',
+      validationReportDeleteConfirm: 'Delete selected elements ({count})? This cannot be undone.',
+      validationReportDeleteError: 'Failed to delete elements',
+      validationReportUnusedDeleted: 'Elements deleted',
       validationReportCopies: '{count} copies',
       validationReportGroupHint:
         'The radio button chooses the copy that will remain. A button on another row merges that copy into the remaining one.',
@@ -1158,6 +1250,61 @@ export const modelsMessages = {
       validationReportCancel: 'Cancel',
       validationReportLoadError: 'Failed to load validation report',
       validationReportShownOf: '{shown} of {total}',
+      validationTabEmpty: 'No issues in this category',
+      validationTabDescNodes:
+        'Finds nodes with the same name and type — merge candidates. Duplicates usually come from repeated imports or copied model branches. Merge copies into one: multiple "canonical" instances of the same element scatter links, diagrams and documents across nodes and distort reports.',
+      validationTabDescLinks:
+        'Finds repeated links between the same pair of nodes with the same link type — usually an artifact of repeated imports and merges. Every copy lands in diagrams and exports separately, inflating link counts: keep one and merge the rest.',
+      validationTabDescDiagrams:
+        'Cross-checks diagram canvas instances against model entities: references to deleted nodes and links, visual edge endpoints vs model link endpoints, duplicate instance ids. Broken items no longer follow model changes and may vanish on export — delete or re-attach them.',
+      validationTabDescUnused:
+        'Finds nodes and links placed on no diagram, with no links, children or documents. Leftovers from imports and refactors: they do not affect model behavior but clutter navigation — review the list and delete what is not needed.',
+      validationAutoMerge: 'Auto-merge all',
+      validationAutoMergeHint:
+        'Merge each duplicate group into the copy most used in diagrams. Groups with differing property values, children or documents are skipped — resolve those manually.',
+      validationAutoMergeDialogTitle: 'Auto-merge duplicates',
+      validationAutoMergeRulesTitle: 'How items will be merged',
+      validationAutoMergeRuleKeep:
+        'The surviving copy is the one most used in diagrams ({nodes} node groups)',
+      validationAutoMergeRuleLinks:
+        'Unique links of the removed copy move to the surviving copy, duplicate links are deleted',
+      validationAutoMergeRuleDiagrams:
+        'References to the removed copy in diagrams and its own diagrams move to the surviving copy',
+      validationAutoMergeRuleDecision:
+        'For future imports a decision is stored: OEF entity → surviving node',
+      validationAutoMergeRuleDocuments:
+        'Copies with documents are never merged automatically — resolve them manually',
+      validationAutoMergeConditionsTitle: 'Conditions',
+      validationAutoMergeOptIncludeLinks: 'Merge duplicate links ({links} groups)',
+      validationAutoMergeOptPropsLabel: 'When property values differ',
+      validationAutoMergeOptPropsSkip: 'Skip the group (safe)',
+      validationAutoMergeOptPropsKeep: 'Keep the surviving copy values',
+      validationAutoMergeOptPropsFillEmpty: 'Fill empty values from the removed copy',
+      validationAutoMergeOptChildrenLabel: 'When the removed copy has child nodes',
+      validationAutoMergeOptChildrenSkip: 'Skip the group (safe)',
+      validationAutoMergeOptChildrenReparent: 'Move children under the surviving copy',
+      validationAutoMergeAction: 'Merge',
+      validationAutoMergeLockedBy: 'Auto-merge is already running: {name}',
+      validationAutoMergeRunning: 'Auto-merge is running…',
+      validationAutoMergeMergedSoFar: 'Groups merged: {merged}',
+      validationAutoMergeSkippedSoFar: 'Skipped: {skipped}',
+      validationAutoMergeKeepOpen:
+        'Do not close the tab — the process runs in this window and stops if the tab is closed.',
+      validationAutoMergeAbort: 'Stop',
+      validationAutoMergeDoneTitle: 'Groups merged: {merged}',
+      validationAutoMergeStopped: 'Auto-merge stopped. Groups merged: {merged}',
+      validationAutoMergeProgress: 'Merging {done} of {total}…',
+      validationAutoMergePassLabel: 'Pass {pass}',
+      validationAutoMergeDone: 'Groups merged: {merged}',
+      validationAutoMergeDoneWithSkips:
+        'Groups merged: {merged}. Skipped: {skipped} — require a manual decision',
+      validationAutoMergeAborted: 'Auto-merge stopped: {message}',
+      validationAutoMergeSkip: {
+        hasChildren: 'dropped copy has children',
+        hasDocuments: 'dropped copy has documents',
+        propsDiffer: 'property values differ — resolve manually',
+        error: 'merge failed',
+      },
       validationReportPropertyColumn: 'Property',
       validationReportKeepColumn: 'Kept copy',
       validationReportDropColumn: 'Removed copy',

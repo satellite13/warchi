@@ -25,6 +25,7 @@ export type OefChunkProgress = {
   diagramsCreated: number
   nodesUpdated: number
   linksUpdated: number
+  diagramsUpdated: number
 }
 
 export type ApplyOefBatchChunksResult = {
@@ -36,6 +37,7 @@ export type ApplyOefBatchChunksResult = {
   diagramsCreated: number
   nodesUpdated: number
   linksUpdated: number
+  diagramsUpdated: number
 }
 
 function emptyRequest(force?: boolean): BatchSaveRequest {
@@ -176,13 +178,25 @@ export function planOefBatchSaveChunks(
   })
 
   const diagrams = request.diagrams.create
+  const diagramUpdates = request.diagrams.update
+  const diagramTotalOfKind = diagrams.length + diagramUpdates.length
   diagrams.forEach((create, index) => {
     const next = emptyRequest(force)
     next.diagrams = { create: [create], update: [], delete: [] }
     chunks.push({
       kind: 'diagrams',
       index: index + 1,
-      totalOfKind: diagrams.length,
+      totalOfKind: diagramTotalOfKind,
+      request: next,
+    })
+  })
+  diagramUpdates.forEach((update, index) => {
+    const next = emptyRequest(force)
+    next.diagrams = { create: [], update: [update], delete: [] }
+    chunks.push({
+      kind: 'diagrams',
+      index: diagrams.length + index + 1,
+      totalOfKind: diagramTotalOfKind,
       request: next,
     })
   })
@@ -273,6 +287,19 @@ function remapDiagramCreates(
   })
 }
 
+/** Diagram updates reference only existing ids; attrs still carry diagram-scoped temp ids. */
+function remapDiagramUpdates(
+  updates: BatchSaveRequest['diagrams']['update'],
+  nodeIdMap: Record<string, string>,
+  linkIdMap: Record<string, string>
+): BatchSaveRequest['diagrams']['update'] {
+  return updates.map(diagram => ({
+    ...diagram,
+    nodeId: diagram.nodeId ? (nodeIdMap[diagram.nodeId] ?? diagram.nodeId) : diagram.nodeId,
+    attrs: remapDiagramAttrsTempIds(diagram.attrs, nodeIdMap, linkIdMap),
+  }))
+}
+
 export async function applyOefBatchSaveChunks(options: {
   modelId: string
   request: BatchSaveRequest
@@ -294,6 +321,7 @@ export async function applyOefBatchSaveChunks(options: {
   let diagramsCreated = 0
   let nodesUpdated = 0
   let linksUpdated = 0
+  let diagramsUpdated = 0
 
   for (const chunk of planned) {
     let request = chunk.request
@@ -320,6 +348,7 @@ export async function applyOefBatchSaveChunks(options: {
           diagrams: {
             ...request.diagrams,
             create: remapDiagramCreates(request.diagrams.create, nodeIdMap, linkIdMap),
+            update: remapDiagramUpdates(request.diagrams.update, nodeIdMap, linkIdMap),
           },
         }
       } catch (error) {
@@ -354,6 +383,7 @@ export async function applyOefBatchSaveChunks(options: {
     diagramsCreated += request.diagrams.create.length
     nodesUpdated += request.nodes.update.length
     linksUpdated += request.links.update.length
+    diagramsUpdated += request.diagrams.update.length
 
     options.onProgress?.({
       kind: chunk.kind,
@@ -364,6 +394,7 @@ export async function applyOefBatchSaveChunks(options: {
       diagramsCreated,
       nodesUpdated,
       linksUpdated,
+      diagramsUpdated,
     })
   }
 
@@ -378,6 +409,7 @@ export async function applyOefBatchSaveChunks(options: {
       diagramsCreated,
       nodesUpdated,
       linksUpdated,
+      diagramsUpdated,
     },
   }
 }

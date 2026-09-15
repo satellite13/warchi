@@ -52,6 +52,8 @@ export type OefOrganizationNode = {
   children?: OefOrganizationNode[] | null
   refId?: string | null
   refKind?: 'element' | 'relationship' | 'view' | null
+  /** Folder properties from the exporter extension namespace (plugin folder markers). */
+  properties?: Record<string, string> | null
 }
 
 export type OefParsedModel = {

@@ -11,6 +11,15 @@ export type LinkRelationBinding = {
   relationId: string
 }
 
+export type OefNodeAttrs = {
+  /** Folder/element properties carried from the OEF exporter extension (e.g. plugin folder markers). */
+  properties: Record<string, string>
+  /** Stable OEF identity: source element id for elements, plugin folder `id` for directories. */
+  entityId?: string
+  /** ISO timestamp of the last OEF import that created/updated the entity. */
+  syncedAt?: string
+}
+
 export type ModelNodeAttrs = {
   treeOrder: number
   notationComponents: Record<string, NodeComponentBinding>
@@ -19,6 +28,8 @@ export type ModelNodeAttrs = {
   typeProperties: Record<string, unknown>
   /** UUID файла markdown-документации */
   documentFileId?: string
+  /** Свойства, перенесённые из OEF-импорта (папочные маркеры плагина и т.п.) */
+  oef?: OefNodeAttrs
 }
 
 export type ModelLinkAttrs = {
@@ -26,6 +37,8 @@ export type ModelLinkAttrs = {
   relationProperties: Record<string, Record<string, Record<string, unknown>>>
   /** Значения кастомных свойств типа связи (общие для модели, не зависят от диаграммы) */
   typeProperties: Record<string, unknown>
+  /** OEF identity: entityId = id связи (relationship) из exchange XML. */
+  oef?: OefNodeAttrs
 }
 
 export type ScopedCustomValues = Record<string, Record<string, Record<string, unknown>>>
@@ -82,6 +95,8 @@ export type DiagramAttrs = {
   }
   /** UUID файла markdown-документации */
   documentFileId?: string
+  /** OEF identity: entityId = id представления из exchange XML. */
+  oef?: OefNodeAttrs
 }
 
 export { createId } from '@/utils/createId'
@@ -227,16 +242,50 @@ export const parseNodeAttrs = (raw: string | null | undefined): ModelNodeAttrs =
   if (typeof data.documentFileId === 'string' && data.documentFileId.trim().length > 0) {
     result.documentFileId = data.documentFileId.trim()
   }
+  const oef = parseOefAttrs(data.oef)
+  if (oef) {
+    result.oef = oef
+  }
   return result
+}
+
+const parseOefAttrs = (value: unknown): OefNodeAttrs | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const raw = (value as { properties?: unknown }).properties
+  const properties: Record<string, string> = {}
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+        properties[key] = String(val)
+      }
+    }
+  }
+  const entityIdRaw = (value as { entityId?: unknown }).entityId
+  const entityId =
+    typeof entityIdRaw === 'string' && entityIdRaw.trim().length > 0
+      ? entityIdRaw.trim()
+      : undefined
+  const syncedAtRaw = (value as { syncedAt?: unknown }).syncedAt
+  const syncedAt =
+    typeof syncedAtRaw === 'string' && syncedAtRaw.trim().length > 0
+      ? syncedAtRaw.trim()
+      : undefined
+  if (Object.keys(properties).length === 0 && !entityId && !syncedAt) return undefined
+  return { properties, ...(entityId ? { entityId } : {}), ...(syncedAt ? { syncedAt } : {}) }
 }
 
 export const parseLinkAttrs = (raw: string | null | undefined): ModelLinkAttrs => {
   const data = parseJson(raw)
-  return {
+  const result: ModelLinkAttrs = {
     notationRelations: toLinkBindings(data.notationRelations),
     relationProperties: toScopedMap(data.relationProperties),
     typeProperties: toClonedRecord(data.typeProperties),
   }
+  const oef = parseOefAttrs(data.oef)
+  if (oef) {
+    result.oef = oef
+  }
+  return result
 }
 
 export const parseDiagramAttrs = (raw: string | null | undefined): DiagramAttrs => {
@@ -250,6 +299,10 @@ export const parseDiagramAttrs = (raw: string | null | undefined): DiagramAttrs 
   }
   if (typeof data.documentFileId === 'string' && data.documentFileId.trim().length > 0) {
     result.documentFileId = data.documentFileId.trim()
+  }
+  const oef = parseOefAttrs(data.oef)
+  if (oef) {
+    result.oef = oef
   }
   return result
 }

@@ -56,7 +56,7 @@ describe('useOefImport detached reuse input', () => {
       parsedAttrs: parseLinkAttrs(null),
       updatedAt: null,
     }
-    vi.mocked(buildOefBatchSaveRequest).mockReturnValue({
+    vi.mocked(buildOefBatchSaveRequest).mockResolvedValue({
       request: {
         nodes: { create: [], update: [], delete: [] },
         links: { create: [], update: [], delete: [] },
@@ -75,6 +75,7 @@ describe('useOefImport detached reuse input', () => {
         nodesUpdated: 0,
         linksReused: 0,
         linksUpdated: 0,
+        diagramsUpdated: 0,
       },
     })
     const oef = useOefImport({

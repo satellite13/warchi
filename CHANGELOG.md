@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.17] - 2026-09-15
+
+### Added
+- OEF import supports folder properties.
+- Model validation: auto-merge for duplicates, unused elements and diagram issues tabs, and persisted OEF merge decisions.
+
 ## [0.25.16] - 2026-09-08
 
 ### Fixed

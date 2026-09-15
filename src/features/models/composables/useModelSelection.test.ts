@@ -55,6 +55,30 @@ describe('useModelSelection lazy materialization', () => {
     scope.stop()
   })
 
+  it('does not resolve diagram-only canvas containers, notes, or edge anchors', async () => {
+    const state = ref({ ...createEmptyModelEditorState(), modelId: 'model-1' })
+    const scope = effectScope()
+    const selection = scope.run(() =>
+      useModelSelection({
+        state,
+        mergeNodes: vi.fn(() => true),
+        beginRequest: () => ({ generation: 1, requestKey: 'selection', token: 1 }),
+        isRequestCurrent: () => true,
+      })
+    )!
+
+    selection.selectedModelNodeIds.value = ['__diagram-container__:c1']
+    await nextTick()
+    selection.selectedModelNodeIds.value = ['__diagram-note__:n1']
+    await nextTick()
+    selection.selectedModelNodeIds.value = ['__diagram-edge-anchor__:a1']
+    await nextTick()
+
+    expect(resolveModelNodesMock).not.toHaveBeenCalled()
+    expect(selection.selectedNodeError.value).toBeNull()
+    scope.stop()
+  })
+
   it('does not resolve zero, multiple, deleted, or already materialized selections', async () => {
     const materialized = {
       ...node('known'),

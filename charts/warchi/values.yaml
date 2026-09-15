@@ -11,7 +11,7 @@ image:
   # This sets the pull policy for images.
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "0.25.15"
+  tag: '0.25.16'
 
 # Blue/Green deployment settings
 # When enabled:
@@ -20,18 +20,18 @@ image:
 blueGreen:
   enabled: false
   # Traffic selector for service ("blue" or "green")
-  activeColor: "blue"
+  activeColor: 'blue'
   image:
     # If empty, fallback to .image.tag
-    blueTag: ""
+    blueTag: ''
     # If empty, fallback to .image.tag
-    greenTag: ""
+    greenTag: ''
 
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
 # This is to override the chart name.
-nameOverride: ""
-fullnameOverride: ""
+nameOverride: ''
+fullnameOverride: ''
 
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
@@ -43,7 +43,7 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  name: ''
 
 # This is for setting Kubernetes Annotations to a Pod.
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
@@ -76,12 +76,12 @@ service:
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
   enabled: false
-  className: "nginx"
+  className: 'nginx'
   annotations:
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/ssl-redirect: 'false'
   hosts:
     - host: warchi.local
       paths:
@@ -185,13 +185,13 @@ affinity: {}
 # the build arguments used when building the Docker image.
 api:
   # Base URL for the API server
-  baseUrl: ""
+  baseUrl: ''
   # Notation endpoint path
-  notationUrl: "/api/v1/notation"
+  notationUrl: '/api/v1/notation'
 
 # ConfigMap configuration
 configMap:
   # If enabled, creates a ConfigMap with API configuration
   enabled: true
   # Name of the ConfigMap (if not set, uses fullname)
-  name: ""
+  name: ''

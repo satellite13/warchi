@@ -58,6 +58,9 @@ export {
   truncateOefEntityName,
 } from './oefEntityName'
 
+/** Depth cap for folder path resolution — guards against parent cycles in editor state. */
+const MAX_DIRECTORY_PATH_DEPTH = 64
+
 const DEFAULT_NOTE_DIAGRAM_STYLE = {
   nodeShape: 'rectangle',
   fillColor: '#fff9c4',
@@ -89,6 +92,9 @@ export type OefImportBuildWarningCode =
   | 'nodeMatchAmbiguous'
   | 'linkMatchAmbiguous'
   | 'linkLabelConflict'
+  | 'linkMatchedIgnoringLabel'
+  | 'directoryMatchAmbiguous'
+  | 'nodeAutoMergedFromDecision'
 
 export type OefImportBuildWarning = {
   code: OefImportBuildWarningCode
@@ -113,6 +119,7 @@ export type OefImportBuildResult = {
     nodesUpdated: number
     linksReused: number
     linksUpdated: number
+    diagramsUpdated: number
   }
 }
 
@@ -137,12 +144,27 @@ export type BuildOefBatchSaveParams = {
   existingLinks?: EditorLink[]
   existingDiagrams?: EditorDiagram[]
   reuseSettings?: OefReuseSettings
+  /**
+   * Persisted duplicate-merge decisions for this model (OEF entity id → target node id).
+   * When an imported entity has a decision, it is merged into the target node instead of
+   * being created again (the decision is produced by a previous validation merge).
+   */
+  mergeDecisions?: Record<string, string>
 }
 
-function makeDirectoryAttrs(treeOrder: number): string {
+function makeDirectoryAttrs(
+  treeOrder: number,
+  properties: Record<string, string> = {},
+  entityId?: string,
+  syncedAt?: string
+): string {
+  const parsed = parseNodeAttrs(null)
+  const hasProps = Object.keys(properties).length > 0
+  const oef = { properties, ...(entityId ? { entityId } : {}), ...(syncedAt ? { syncedAt } : {}) }
   return serializeNodeAttrs({
-    ...parseNodeAttrs(null),
+    ...parsed,
     treeOrder,
+    ...(hasProps || entityId || syncedAt ? { oef } : {}),
   })
 }
 
@@ -163,7 +185,9 @@ function makeNodeAttrs(
   componentId: string,
   treeOrder: number,
   typeProperties: Record<string, unknown>,
-  componentDefaults: Record<string, unknown>
+  componentDefaults: Record<string, unknown>,
+  oef?: { entityId?: string; properties?: Record<string, string> },
+  syncedAt?: string
 ): ModelNodeAttrs {
   return {
     treeOrder,
@@ -179,13 +203,24 @@ function makeNodeAttrs(
           }
         : {},
     typeProperties,
+    ...(oef &&
+    (oef.entityId || (oef.properties && Object.keys(oef.properties).length > 0) || syncedAt)
+      ? {
+          oef: {
+            properties: oef?.properties ?? {},
+            ...(oef?.entityId ? { entityId: oef.entityId } : {}),
+            ...(syncedAt ? { syncedAt } : {}),
+          },
+        }
+      : {}),
   }
 }
 
 function makeLinkAttrs(
   notationId: string,
   relationId: string,
-  relationDefaults: Record<string, unknown>
+  relationDefaults: Record<string, unknown>,
+  identity: { entityId: string; syncedAt: string }
 ): ModelLinkAttrs {
   return {
     notationRelations: {
@@ -200,6 +235,7 @@ function makeLinkAttrs(
           }
         : {},
     typeProperties: {},
+    oef: { properties: {}, entityId: identity.entityId, syncedAt: identity.syncedAt },
   }
 }
 
@@ -236,8 +272,19 @@ function createDiagramOnlyEdge(
   }
 }
 
-export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefImportBuildResult {
+export async function buildOefBatchSaveRequest(
+  params: BuildOefBatchSaveParams
+): Promise<OefImportBuildResult> {
   const warnings: OefImportBuildWarning[] = []
+  // Yield to the event loop periodically so the browser does not mark the tab
+  // as unresponsive ("page is not responding") while large imports are built.
+  const OEF_BUILD_YIELD_INTERVAL = 400
+  let yieldCounter = 0
+  const yieldToEventLoop = async (): Promise<void> => {
+    yieldCounter += 1
+    if (yieldCounter % OEF_BUILD_YIELD_INTERVAL !== 0) return
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+  }
   const usedIds = new Set<string>()
   const parentNodeId = params.parentNodeId ?? null
   const diagramVersion = params.diagramVersion ?? '1.0.0'
@@ -249,6 +296,20 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   const existingNodeById = new Map(existingNodes.map(node => [node.id, node]))
   const existingLinkById = new Map(existingLinks.map(link => [link.id, link]))
 
+  // Diagram identity: by stored OEF view id first (survives renames), then by name.
+  const existingDiagramByOefId = new Map<string, EditorDiagram>()
+  const existingDiagramByName = new Map<string, EditorDiagram>()
+  for (const diagram of existingDiagrams) {
+    const oefId = diagram.parsedAttrs?.oef?.entityId
+    if (oefId && !existingDiagramByOefId.has(oefId)) {
+      existingDiagramByOefId.set(oefId, diagram)
+    }
+    const nameKey = diagram.name.trim().toLowerCase()
+    if (nameKey && !existingDiagramByName.has(nameKey)) {
+      existingDiagramByName.set(nameKey, diagram)
+    }
+  }
+
   const matchResult = resolveOefEntityMatches({
     draft: params.draft,
     mapping: params.mapping,
@@ -257,6 +318,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     existingLinks,
     existingDiagrams,
     settings: reuseSettings,
+    mergeDecisions: params.mergeDecisions,
   })
   for (const warning of matchResult.warnings) {
     warnings.push({
@@ -278,6 +340,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   const linkNameBySourceRelationshipId = new Map<string, string>()
   const dirTempByKey = new Map<string, string>()
   const usedDiagramNameVersions = new Set<string>()
+  const syncedAt = new Date().toISOString()
   const elementTypeByElementId = new Map(
     params.draft.nodes.map(node => [node.sourceElementId, node.sourceType])
   )
@@ -287,6 +350,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   let nodesUpdated = 0
   let linksReused = 0
   let linksUpdated = 0
+  let diagramsUpdated = 0
 
   const orgPlan = buildOrganizationImportPlan(params.draft.organizations)
   for (const warning of orgPlan.warnings) {
@@ -312,11 +376,176 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
     return current
   }
 
+  // ---- Directory reuse: folders are re-resolved on every import so repeated imports
+  // attach entities to the existing tree instead of duplicating it. Identity first
+  // (plugin folder `id` property persisted in attrs.oef.entityId), then name+parent.
+  const dirRealIdByTempKey = new Map<string, string>()
+  const dirEntityIdByExistingNodeId = new Map<string, string>()
+  for (const node of existingNodes) {
+    if (node._isDeleted || node.nodeTypeId !== params.directoryNodeTypeId) continue
+    const entityId = node.parsedAttrs.oef?.entityId
+    if (entityId) dirEntityIdByExistingNodeId.set(entityId, node.id)
+  }
+  const existingDirsByParentAndName = new Map<string, string[]>()
+  for (const node of existingNodes) {
+    if (node._isDeleted || node.nodeTypeId !== params.directoryNodeTypeId) continue
+    const key = `${node.parentNodeId ?? ''}::${normalizeOefNodeName(node.name)}`
+    existingDirsByParentAndName.set(key, [...(existingDirsByParentAndName.get(key) ?? []), node.id])
+  }
+
+  // Full-path index over existing folders (names from the tree root down). Disambiguates
+  // repeated folder names ("Archive" under many parents) and survives unresolved parents.
+  const existingDirById = new Map<string, EditorNode>()
+  for (const node of existingNodes) {
+    if (!node._isDeleted && node.nodeTypeId === params.directoryNodeTypeId) {
+      existingDirById.set(node.id, node)
+    }
+  }
+  const existingDirPathById = new Map<string, string>()
+  const computeExistingDirPath = (id: string, depth = 0): string => {
+    // The import anchor of draft paths, so it is excluded from
+    // existing paths: draft "Strategy/Capabilities" must match existing
+    // "<treeRoot>/Strategy/Capabilities".
+    if (params.parentNodeId != null && id === params.parentNodeId) return ''
+    const cached = existingDirPathById.get(id)
+    if (cached !== undefined) return cached
+    const node = existingDirById.get(id)
+    if (!node || depth > MAX_DIRECTORY_PATH_DEPTH) return ''
+    const parentPath = node.parentNodeId ? computeExistingDirPath(node.parentNodeId, depth + 1) : ''
+    const name = normalizeOefNodeName(truncateOefEntityName(node.name))
+    const path = parentPath ? `${parentPath}:${name}` : name
+    existingDirPathById.set(id, path)
+    return path
+  }
+  const existingDirsByPath = new Map<string, string[]>()
+  for (const id of existingDirById.keys()) {
+    const path = computeExistingDirPath(id)
+    existingDirsByPath.set(path, [...(existingDirsByPath.get(path) ?? []), id])
+  }
+
+  // Draft folder paths mirror the org tree; memoized so processing order does not matter.
+  const draftDirByTempKey = new Map(orgPlan.directories.map(dir => [dir.tempKey, dir]))
+  const draftDirPathByTempKey = new Map<string, string>()
+  const computeDraftDirPath = (dir: (typeof orgPlan.directories)[number]): string => {
+    const cached = draftDirByTempKey.get(dir.tempKey)
+      ? draftDirPathByTempKey.get(dir.tempKey)
+      : undefined
+    if (cached !== undefined) return cached
+    const parentPath =
+      dir.parentTempKey != null && draftDirByTempKey.has(dir.parentTempKey)
+        ? computeDraftDirPath(draftDirByTempKey.get(dir.parentTempKey)!)
+        : ''
+    const name = normalizeOefNodeName(truncateOefEntityName(dir.name))
+    const path = parentPath ? `${parentPath}:${name}` : name
+    draftDirPathByTempKey.set(dir.tempKey, path)
+    return path
+  }
+
   if (hasOrgFolders && params.directoryNodeTypeId) {
+    // Tracks round-robin hand-out of indistinguishable folder candidates across
+    // draft folders (see assignFromPool below).
+    const dirAssignmentCounter = new Map<string, number>()
     for (const dir of orgPlan.directories) {
+      const dirEntityId = dir.properties['id']?.trim() || undefined
+      const decisionTarget = dirEntityId != null ? params.mergeDecisions?.[dirEntityId] : undefined
+      const identityTarget =
+        dirEntityId != null ? dirEntityIdByExistingNodeId.get(dirEntityId) : undefined
+      const targetId = identityTarget ?? decisionTarget
+      let resolution: { action: 'create' | 'reuse' | 'update'; id?: string } = { action: 'create' }
+
+      if (targetId != null) {
+        const existing = existingNodeById.get(targetId)
+        if (existing && !existing._isDeleted) {
+          resolution = {
+            action: reuseSettings.onNodeMatch === 'updateFromOef' ? 'update' : 'reuse',
+            id: targetId,
+          }
+        }
+      }
+
+      if (resolution.action === 'create') {
+        // Identity/decision match failed: fall back to name+resolved-parent matching.
+        // dirTempByKey/dirRealIdByTempKey are keyed by tempKey; the resolved value is
+        // a real node id when the parent was reused, or a temp id when it was created.
+        const existingParentId =
+          dir.parentTempKey != null
+            ? (dirRealIdByTempKey.get(dir.parentTempKey) ?? undefined)
+            : (parentNodeId ?? undefined)
+        const key = `${existingParentId ?? ''}::${normalizeOefNodeName(dir.name)}`
+        const candidates = existingDirsByParentAndName.get(key) ?? []
+        const assignFromPool = (pool: string[]): string => {
+          const sorted = [...pool].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+          if (sorted.length === 1) return sorted[0]!
+          const assignKey = sorted.join(',')
+          const seen = dirAssignmentCounter.get(assignKey) ?? 0
+          dirAssignmentCounter.set(assignKey, seen + 1)
+          return sorted[seen % sorted.length]!
+        }
+        if (candidates.length === 1) {
+          resolution = {
+            action: reuseSettings.onNodeMatch === 'updateFromOef' ? 'update' : 'reuse',
+            id: candidates[0],
+          }
+        } else {
+          // Ambiguous or unresolved parent: match by the full folder path from the
+          // tree root. Resolves repeated names ("Archive" under many parents) and
+          // prevents subtree duplication cascades when the parent failed to match.
+          const pathCandidates = existingDirsByPath.get(computeDraftDirPath(dir)) ?? []
+          if (pathCandidates.length === 1) {
+            resolution = {
+              action: reuseSettings.onNodeMatch === 'updateFromOef' ? 'update' : 'reuse',
+              id: pathCandidates[0],
+            }
+          } else if (pathCandidates.length > 1) {
+            resolution = {
+              action: reuseSettings.onNodeMatch === 'updateFromOef' ? 'update' : 'reuse',
+              id: assignFromPool(pathCandidates),
+            }
+          } else if (candidates.length > 1) {
+            resolution = {
+              action: reuseSettings.onNodeMatch === 'updateFromOef' ? 'update' : 'reuse',
+              id: assignFromPool(candidates),
+            }
+          }
+        }
+      }
+
+      if (resolution.action === 'reuse' || resolution.action === 'update') {
+        const existingId = resolution.id!
+        dirTempByKey.set(dir.tempKey, existingId)
+        dirRealIdByTempKey.set(dir.tempKey, existingId)
+        if (resolution.action === 'update') {
+          const existing = existingNodeById.get(existingId)
+          if (existing) {
+            const mergedProps = { ...existing.parsedAttrs.oef?.properties, ...dir.properties }
+            const nextAttrs = {
+              ...existing.parsedAttrs,
+              oef: {
+                properties: mergedProps,
+                ...(dirEntityId ? { entityId: dirEntityId } : {}),
+                syncedAt,
+              },
+            }
+            request.nodes.update.push({
+              id: existing.id,
+              name: normalizeOefNodeName(dir.name) || existing.name,
+              nodeTypeId: existing.nodeTypeId,
+              parentNodeId: existing.parentNodeId ?? null,
+              attrs: serializeNodeAttrs(nextAttrs),
+              baseUpdatedAt: existing.updatedAt ?? null,
+            })
+            nodesUpdated += 1
+          }
+        } else {
+          nodesReused += 1
+        }
+        continue
+      }
+
       // dir.tempKey already has a stable unique prefix from the org planner.
       const tempId = makeStableTempId('dir', dir.tempKey.replace(/^oef-dir-/, ''), usedIds)
       dirTempByKey.set(dir.tempKey, tempId)
+      dirRealIdByTempKey.set(dir.tempKey, tempId)
       const parentId =
         dir.parentTempKey != null
           ? (dirTempByKey.get(dir.parentTempKey) ?? parentNodeId)
@@ -334,12 +563,18 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
         name: name || 'Folder',
         nodeTypeId: params.directoryNodeTypeId,
         parentNodeId: parentId,
-        attrs: makeDirectoryAttrs(nextTreeOrder(dir.parentTempKey)),
+        attrs: makeDirectoryAttrs(
+          nextTreeOrder(dir.parentTempKey),
+          dir.properties,
+          dirEntityId,
+          syncedAt
+        ),
       })
     }
   }
 
   for (const node of params.draft.nodes) {
+    await yieldToEventLoop()
     const mapped = params.mapping.elementTypeMap[node.sourceType]
     if (!mapped?.nodeTypeId || !mapped.componentId) {
       warnings.push({
@@ -405,6 +640,13 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
               [mapped.componentId]: merged.componentValues,
             },
           },
+          oef: {
+            properties: { ...existing.parsedAttrs.oef?.properties, ...node.properties },
+            // Do not overwrite an identity from a previous import: a node may be the
+            // merge target of several OEF entities (dup-merge decisions).
+            entityId: existing.parsedAttrs.oef?.entityId ?? node.sourceElementId,
+            syncedAt,
+          },
         }
         request.nodes.update.push({
           id: existing.id,
@@ -466,7 +708,12 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
           mapped.componentId,
           nextTreeOrder(orgParentKey ?? null),
           merged.typeValues,
-          merged.componentValues
+          merged.componentValues,
+          {
+            entityId: node.sourceElementId,
+            properties: node.properties ?? {},
+          },
+          syncedAt
         )
       ),
     })
@@ -474,6 +721,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   }
 
   for (const link of params.draft.links) {
+    await yieldToEventLoop()
     const sourceIsRelationship = relationshipIds.has(link.sourceElementId)
     const targetIsRelationship = relationshipIds.has(link.targetElementId)
     if (sourceIsRelationship || targetIsRelationship) {
@@ -544,6 +792,12 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
               ...(existing.parsedAttrs.relationProperties[params.notationId] ?? {}),
               [mapped.relationId]: merged.relationValues,
             },
+          },
+          // Do not overwrite an identity from a previous import.
+          oef: {
+            properties: existing.parsedAttrs.oef?.properties ?? {},
+            entityId: existing.parsedAttrs.oef?.entityId ?? link.sourceRelationshipId,
+            syncedAt,
           },
         }
         request.links.update.push({
@@ -631,7 +885,10 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       targetId,
       linkTypeId: mapped.linkTypeId,
       attrs: serializeLinkAttrs(
-        makeLinkAttrs(params.notationId, mapped.relationId, merged.relationValues)
+        makeLinkAttrs(params.notationId, mapped.relationId, merged.relationValues, {
+          entityId: link.sourceRelationshipId,
+          syncedAt,
+        })
       ),
     })
     linkTempBySourceRelationshipId.set(link.sourceRelationshipId, tempId)
@@ -645,6 +902,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
   }
 
   for (const diagram of params.draft.diagrams) {
+    await yieldToEventLoop()
     const diagramTempId = makeStableTempId('oef-diagram', diagram.sourceViewId, usedIds)
     const nodeInstanceIdBySourceNodeId = new Map<string, string>()
     const edgeInstanceIdBySourceConnectionId = new Map<string, string>()
@@ -893,13 +1151,36 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       viewOrgKey != null && params.directoryNodeTypeId
         ? (dirTempByKey.get(viewOrgKey) ?? parentNodeId)
         : parentNodeId
+
+    const diagramAttrsSerialized = serializeDiagramAttrs({
+      ...diagramAttrs,
+      oef: { properties: {}, entityId: diagram.sourceViewId, syncedAt },
+    })
+
+    const existingMatch =
+      existingDiagramByOefId.get(diagram.sourceViewId) ??
+      existingDiagramByName.get(diagram.name.trim().toLowerCase())
+    if (existingMatch) {
+      request.diagrams.update.push({
+        id: existingMatch.id,
+        name: diagramName,
+        version: diagramVersion,
+        notationId: params.notationId,
+        nodeId: existingMatch.nodeId ?? diagramParentNodeId,
+        attrs: diagramAttrsSerialized,
+        baseUpdatedAt: existingMatch.updatedAt ?? null,
+      })
+      diagramsUpdated += 1
+      continue
+    }
+
     request.diagrams.create.push({
       tempId: diagramTempId,
       name: diagramName,
       version: diagramVersion,
       notationId: params.notationId,
       nodeId: diagramParentNodeId,
-      attrs: serializeDiagramAttrs(diagramAttrs),
+      attrs: diagramAttrsSerialized,
     })
   }
 
@@ -924,6 +1205,7 @@ export function buildOefBatchSaveRequest(params: BuildOefBatchSaveParams): OefIm
       nodesUpdated,
       linksReused,
       linksUpdated,
+      diagramsUpdated,
     },
   }
 }

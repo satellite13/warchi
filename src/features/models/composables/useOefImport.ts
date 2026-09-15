@@ -15,6 +15,7 @@ import { applyOefBatchSaveChunks, type OefChunkProgress } from '../utils/oef/chu
 import type { OefRelationRuleDecision } from '../utils/oef/oefRelationRuleValidation'
 import { buildOefBatchSaveRequest } from '../utils/oef/oefToBatchSave'
 import { buildOrganizationImportPlan } from '../utils/oef/organizationImport'
+import { fetchOefMergeDecisions } from '@/features/models-validation/api'
 import { batchSave, hasBatchChanges } from './useModelBatchSave'
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
@@ -68,6 +69,7 @@ export function useOefImport(options: {
       nodes: progress.nodesCreated,
       links: progress.linksCreated,
       diagrams: progress.diagramsCreated,
+      diagramsUpdated: progress.diagramsUpdated,
     })
   }
 
@@ -109,6 +111,8 @@ export function useOefImport(options: {
         return options.t('models.oefImportWarningLinkMatchAmbiguous')
       case 'linkLabelConflict':
         return options.t('models.oefImportWarningLinkLabelConflict')
+      case 'linkMatchedIgnoringLabel':
+        return options.t('models.oefImportWarningLinkMatchedIgnoringLabel')
       default:
         return code
     }
@@ -140,7 +144,7 @@ export function useOefImport(options: {
   }
 
   function collectOefMissingRequiredReport(
-    request: ReturnType<typeof buildOefBatchSaveRequest>['request']
+    request: Awaited<ReturnType<typeof buildOefBatchSaveRequest>>['request']
   ): OefImportReport['missingRequired'] {
     const componentById = new Map(
       options.state.value.components.map(component => [component.id, component])
@@ -295,7 +299,16 @@ export function useOefImport(options: {
           parseEntityAttrs(relation.attrs ?? null).customProperties,
         ])
       )
-      const built = buildOefBatchSaveRequest({
+      // Saved duplicate-merge decisions from previous validation runs: entities with a
+      // decision are merged into their target node instead of being created again.
+      const mergeDecisions: Record<string, string> = {}
+      const decisionsResult = await fetchOefMergeDecisions(modelId)
+      if (decisionsResult.success) {
+        for (const decision of decisionsResult.data) {
+          mergeDecisions[decision.oefEntityId] = decision.targetNodeId
+        }
+      }
+      const built = await buildOefBatchSaveRequest({
         draft: payload.draft,
         notationId: payload.notationId,
         mapping: payload.mapping,
@@ -317,6 +330,7 @@ export function useOefImport(options: {
         ),
         existingDiagrams: options.state.value.diagrams.filter(diagram => !diagram._isDeleted),
         reuseSettings: payload.reuseSettings,
+        mergeDecisions,
       })
       if (directoryTypeCreated) {
         built.warnings.push({
@@ -329,7 +343,8 @@ export function useOefImport(options: {
         (built.reuseCounts.nodesReused > 0 ||
           built.reuseCounts.linksReused > 0 ||
           built.reuseCounts.nodesUpdated > 0 ||
-          built.reuseCounts.linksUpdated > 0)
+          built.reuseCounts.linksUpdated > 0 ||
+          built.reuseCounts.diagramsUpdated > 0)
       if (!hasBatchChanges(built.request) && !reusedOnly) {
         options.setUiError(options.t('models.oefImportNoChanges'))
         return

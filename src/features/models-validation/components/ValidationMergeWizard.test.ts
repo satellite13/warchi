@@ -16,6 +16,12 @@ vi.mock('@/features/models-validation/api', () => ({
   mergeLinks: vi.fn(),
 }))
 
+vi.mock('@/composables/useApi', () => ({
+  apiGet: vi
+    .fn()
+    .mockResolvedValue({ success: false, error: { message: 'not found', status: 404 } }),
+}))
+
 const fetchNodesPreviewMock = vi.mocked(fetchMergeNodesPreview)
 const fetchLinksPreviewMock = vi.mocked(fetchMergeLinksPreview)
 const mergeNodesMock = vi.mocked(mergeNodes)

@@ -6,8 +6,8 @@ import {
   fetchMergeLinksPreview,
   fetchMergeNodesPreview,
   mergeLinks,
-  mergeNodes,
 } from '@/features/models-validation/api'
+import { mergeNodesWithOefDecision } from '@/features/models-validation/utils/persistOefMergeDecision'
 import type {
   MergeLinksPreview,
   MergeNodesPreview,
@@ -158,7 +158,7 @@ async function submit(): Promise<void> {
   const typeProperties = collectTypeProperties(rows.value)
   const result =
     props.kind === 'node'
-      ? await mergeNodes(props.modelId, {
+      ? await mergeNodesWithOefDecision(props.modelId, {
           keepId: props.keepId,
           dropId: props.dropId,
           typeProperties,

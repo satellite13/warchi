@@ -3,6 +3,7 @@ export type DuplicateNodeMember = {
   name: string
   parentId: string | null
   parentName: string | null
+  diagramCount?: number
 }
 
 export type DuplicateNodeGroup = {
@@ -13,7 +14,10 @@ export type DuplicateNodeGroup = {
   nodes: DuplicateNodeMember[]
 }
 
-export type DuplicateLinkMember = { id: string }
+export type DuplicateLinkMember = {
+  id: string
+  diagramCount?: number
+}
 
 export type DuplicateLinkGroup = {
   sourceId: string
@@ -33,6 +37,51 @@ export type ValidationReport = {
   duplicateLinks: DuplicateLinkGroup[]
   duplicateNodesTotal?: number
   duplicateLinksTotal?: number
+  diagramIssues?: DiagramIssueGroup[]
+  diagramIssuesTotal?: number
+  unusedNodes?: UnusedNode[]
+  unusedLinks?: UnusedLink[]
+  unusedNodesTotal?: number
+  unusedLinksTotal?: number
+}
+
+export type UnusedNode = {
+  id: string
+  name: string
+  parentId: string | null
+  parentName: string | null
+}
+
+export type UnusedLink = {
+  id: string
+  sourceName: string
+  targetName: string
+  linkTypeName: string
+}
+
+export type DeleteUnusedRequest = {
+  nodeIds: string[]
+  linkIds: string[]
+}
+
+export type DeleteUnusedResponse = {
+  deletedNodeIds: string[]
+  deletedLinkIds: string[]
+  skippedNodeIds: string[]
+  skippedLinkIds: string[]
+}
+
+export type DiagramIssue = {
+  code: string
+  level: 'error' | 'warning' | string
+  instanceId?: string | null
+  message: string
+}
+
+export type DiagramIssueGroup = {
+  diagramId: string
+  diagramName: string
+  issues: DiagramIssue[]
 }
 
 export type DiagramRef = { diagramId: string; diagramName: string }
@@ -78,6 +127,7 @@ export type MergeNodesRequest = {
   dropId: string
   typeProperties: Record<string, unknown>
   transferLinkIds: string[]
+  reparentChildren?: boolean
   keepUpdatedAt: string
   dropUpdatedAt: string
 }
@@ -88,4 +138,30 @@ export type MergeLinksRequest = {
   typeProperties: Record<string, unknown>
   keepUpdatedAt: string
   dropUpdatedAt: string
+}
+
+export type OefMergeDecision = {
+  id: string
+  oefEntityId: string
+  targetNodeId: string
+  signatureType: string | null
+  signatureName: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export type OefMergeDecisionSaveItem = {
+  oefEntityId: string
+  targetNodeId: string
+  signatureType?: string | null
+  signatureName?: string | null
+}
+
+export type OefMergeDecisionSaveRequest = {
+  decisions: OefMergeDecisionSaveItem[]
+}
+
+export type OefMergeDecisionSaveResponse = {
+  saved: number
+  skipped: number
 }

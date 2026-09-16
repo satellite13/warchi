@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.17] - 2026-09-16
+
+### Fixed
+
+- Modals no longer close when selecting text and releasing the mouse on the dimmed overlay (e.g. create diagram).
+
+
 ## [0.25.16] - 2026-09-08
 
 ### Fixed

@@ -16,7 +16,7 @@ const { isAuthenticated, loadCurrentUser } = useAuth();
 const { hasGrant } = useFeatureGrants();
 const { currentLocale, setLocale } = useLocale();
 const { outage, isOutage, isRetrying, retryNow } = useAvailabilityGuard();
-const { showNewVersionToast, newVersion } = useVersionCheck();
+const { showNewVersionToast, newVersion, reloadToNewVersion } = useVersionCheck();
 
 /** Without ui.languageSwitch keep Russian (default for guests, reader, viewer). */
 watch(
@@ -85,15 +85,22 @@ onUnmounted(() => {
     </div>
   </Teleport>
 
-  <!-- New version toast -->
+  <!-- New version informer (no auto-reload) -->
   <Teleport to="body">
     <Transition name="toast">
       <div
         v-if="showNewVersionToast"
         class="version-toast"
+        role="status"
+        aria-live="polite"
       >
-        <UiIcon name="sync" class="version-toast__icon" />
-        <span>{{ t("common.newVersionAvailable", { version: newVersion }) }}</span>
+        <UiIcon name="info" class="version-toast__icon" />
+        <span class="version-toast__text">
+          {{ t("common.newVersionAvailable", { version: newVersion }) }}
+        </span>
+        <button type="button" class="version-toast__action" @click="reloadToNewVersion">
+          {{ t("common.newVersionReload") }}
+        </button>
       </div>
     </Transition>
   </Teleport>
@@ -107,14 +114,15 @@ onUnmounted(() => {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 14px 12px 16px;
   border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
+  line-height: 1.35;
   z-index: 2000;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  pointer-events: none;
   background: var(--surface);
   color: var(--text-muted);
   border: 1px solid var(--border);
@@ -123,12 +131,30 @@ onUnmounted(() => {
 .version-toast__icon {
   width: 20px;
   height: 20px;
-  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+  color: var(--accent, var(--base-text));
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
+.version-toast__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.version-toast__action {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-muted, var(--surface-strong));
+  color: var(--base-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.version-toast__action:hover {
+  background: var(--surface-strong);
 }
 
 .toast-enter-active,

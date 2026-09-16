@@ -98,8 +98,23 @@ const handleKeydown = (event: KeyboardEvent) => {
   }
 }
 
-const handleOverlayClick = () => {
-  emit('close')
+/** True only when the pointer pressed on the dimmed overlay itself (not the panel). */
+let overlayMouseDownOnSelf = false
+
+const handleOverlayMouseDown = (event: MouseEvent) => {
+  overlayMouseDownOnSelf = event.target === event.currentTarget
+}
+
+/**
+ * Close on overlay click only if the gesture also started there.
+ * Selecting text in an input and releasing outside otherwise fires click on the
+ * overlay (common ancestor of mousedown/mouseup) and would dismiss the dialog.
+ */
+const handleOverlayClick = (event: MouseEvent) => {
+  if (overlayMouseDownOnSelf && event.target === event.currentTarget) {
+    emit('close')
+  }
+  overlayMouseDownOnSelf = false
 }
 
 onMounted(() => {
@@ -125,7 +140,11 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div class="modal-overlay" @click.self="handleOverlayClick">
+    <div
+      class="modal-overlay"
+      @mousedown="handleOverlayMouseDown"
+      @click="handleOverlayClick"
+    >
       <div class="modal" :class="panelClass" :style="panelStyle">
         <div v-if="!hideHeader || $slots.header" class="modal-header" :class="{ 'modal-header--custom': !!$slots.header }">
           <slot name="header">

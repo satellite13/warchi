@@ -2,7 +2,6 @@ import type { Ref } from 'vue'
 import { onMounted, onUnmounted, ref } from 'vue'
 
 const POLL_INTERVAL_MS = 60_000 // 1 минута
-const TOAST_DELAY_MS = 2_500 // Показать toast перед перезагрузкой
 
 interface VersionInfo {
   version: string
@@ -11,22 +10,23 @@ interface VersionInfo {
 
 /**
  * Периодически проверяет version.json на сервере.
- * При обнаружении новой версии показывает toast и через 2.5 сек перезагружает страницу.
+ * При новой версии показывает информер; страницу не перезагружает автоматически —
+ * пользователь обновляет вкладку сам (или кнопкой в toast).
  */
 export function useVersionCheck(): {
   showNewVersionToast: Ref<boolean>
   newVersion: Ref<string>
+  reloadToNewVersion: () => void
 } {
   const showNewVersionToast = ref(false)
   const newVersion = ref('')
   let intervalId: ReturnType<typeof setInterval> | null = null
-  let reloadTimeoutId: ReturnType<typeof setTimeout> | null = null
 
   const buildVersion = (import.meta.env.APP_VERSION as string | undefined) ?? ''
   const buildTime = (import.meta.env.APP_BUILD_TIME as string | undefined) ?? ''
 
   async function checkVersion(): Promise<void> {
-    if (!buildVersion) return
+    if (!buildVersion || showNewVersionToast.value) return
 
     try {
       const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '') || ''
@@ -39,13 +39,14 @@ export function useVersionCheck(): {
       if (data.version !== buildVersion || (data.buildTime && data.buildTime !== buildTime)) {
         showNewVersionToast.value = true
         newVersion.value = data.version
-        reloadTimeoutId = setTimeout(() => {
-          window.location.reload()
-        }, TOAST_DELAY_MS)
       }
     } catch {
       // Игнорируем ошибки сети — попробуем при следующей проверке
     }
+  }
+
+  const reloadToNewVersion = () => {
+    window.location.reload()
   }
 
   onMounted(() => {
@@ -60,11 +61,7 @@ export function useVersionCheck(): {
       clearInterval(intervalId)
       intervalId = null
     }
-    if (reloadTimeoutId) {
-      clearTimeout(reloadTimeoutId)
-      reloadTimeoutId = null
-    }
   })
 
-  return { showNewVersionToast, newVersion }
+  return { showNewVersionToast, newVersion, reloadToNewVersion }
 }

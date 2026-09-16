@@ -47,7 +47,9 @@ export const commonMessages = {
       no: 'Нет',
       confirmDelete: 'Вы уверены, что хотите удалить {entity}',
       deleteIrreversible: 'Это действие нельзя отменить.',
-      newVersionAvailable: 'Новая версия v{version} доступна. Обновление...',
+      newVersionAvailable:
+        'Доступна новая версия v{version}. Обновите страницу (Ctrl+R / ⌘R или F5), чтобы применить изменения.',
+      newVersionReload: 'Обновить',
       outageTitle: 'Сервис временно недоступен',
       outageAuthzMessage:
         'Сервис авторизации недоступен. Работа с приложением временно невозможна.',
@@ -216,7 +218,9 @@ export const commonMessages = {
       no: 'No',
       confirmDelete: 'Are you sure you want to delete {entity}',
       deleteIrreversible: 'This action cannot be undone.',
-      newVersionAvailable: 'New version v{version} available. Updating...',
+      newVersionAvailable:
+        'New version v{version} is available. Refresh the page (Ctrl+R / ⌘R or F5) to apply the update.',
+      newVersionReload: 'Refresh',
       outageTitle: 'Service is temporarily unavailable',
       outageAuthzMessage:
         'Authorization service is unavailable. The application cannot be used right now.',

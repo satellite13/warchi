@@ -16,8 +16,28 @@ After a successful sign-up, a session is created and the app navigates to the ho
 
 ## Roles
 
-- **USER** — works with owned resources and shared resources.
-- **ADMIN** — has additional administration capabilities (user management, including revoking a user’s API keys, deleted resources, force-releasing diagram locks).
+Product user roles (`role` field):
+
+| Role | Purpose |
+|------|---------|
+| `admin` | Admin panel and the full feature-grant set |
+| `architect` | Full work with models and catalogs (default) |
+| `editor` | Editing within resource ACL |
+| `reader` | Read access and limited UI |
+| `viewer` | Minimal view |
+
+Access to **specific** models, notations, and other objects is still decided by ownership, sharing, and Cerbos (resource ACL). Role and feature grants do not replace those checks.
+
+Admin capabilities (users, deleted resources, diagram locks, grant matrix) require `ADMIN_PANEL:VIEW` — typically the `admin` role. See [Administration](/docs/admin).
+
+## Feature grants
+
+**Feature grants** are UI capability keys (`model.create`, `notation.nav`, …) returned in the user profile (`/auth/me` → `featureGrants`).
+
+- Effective set = role grants **plus** per-user allow-only extras (set by an admin on the user card).
+- The `admin` role **always** receives the full grant catalog.
+- Admins configure the role matrix and user extras under [Administration → Role grants](/docs/admin).
+- In **phase 1**, grants only hide/show UI and soft-guard some routes; the API does **not** yet reject calls for a missing grant.
 
 ## Route protection
 
@@ -25,6 +45,7 @@ After a successful sign-up, a session is created and the app navigates to the ho
 - Opening a protected route while unauthenticated redirects to login.
 - The **Documentation** section (`/docs`) is available **without signing in**. Guests see help in the header and a **Sign in** button (after login, the same page opens).
 - Admin routes are guarded by permission checks (`ADMIN_PANEL:VIEW`) via policy-based authorization.
+- Some catalog/tool routes also require a feature grant (missing grant redirects home); this is a client soft-guard, not a substitute for ACL.
 
 ## Session refresh
 

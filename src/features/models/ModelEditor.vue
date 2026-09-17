@@ -75,6 +75,7 @@ import {
 import { canvasModelNodeIds, orphanedUntypedNodeIds } from './utils/orphanedDiagramOnlyNodes'
 import { getDiagramScopedLinkValues } from './utils/diagramScopedProperties'
 import { useAuth } from '@/composables/useAuth'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { usePermissions } from '@/composables/usePermissions'
 import { useCanShare } from '@/composables/useCanShare'
 import ModelEditorHeader from './components/ModelEditorHeader.vue'
@@ -233,6 +234,7 @@ const modelLiveSyncEnabled = computed(
 )
 
 const { currentUser } = useAuth()
+const { hasGrant } = useFeatureGrants()
 const { checkPermission } = usePermissions()
 const { t, locale } = useI18n()
 
@@ -257,8 +259,12 @@ const modelRootDocumentFileId = computed((): string | null => {
   }
 })
 
+const canCreateWiki = computed(
+  () => canInspectDiagramJson.value && hasGrant('model.wiki.create')
+)
+
 const showModelWikiHeaderButton = computed(
-  () => canInspectDiagramJson.value || !!modelRootDocumentFileId.value
+  () => canCreateWiki.value || !!modelRootDocumentFileId.value
 )
 
 const {
@@ -328,7 +334,7 @@ const versionDiff = useModelVersionDiff()
 
 async function handleOpenCompareModal() {
   const modelId = state.value.modelId
-  if (!modelId) return
+  if (!modelId || !hasGrant('model.compareVersions')) return
   showCompareModal.value = true
   versionDiff.clearCompare()
   await Promise.all([
@@ -339,7 +345,7 @@ async function handleOpenCompareModal() {
 
 function handleOpenRelationMatrix(): void {
   const modelId = state.value.modelId
-  if (!modelId) return
+  if (!modelId || !hasGrant('model.relationMatrix')) return
   router.push({ name: 'model-relation-matrix', params: { id: modelId } })
 }
 
@@ -415,7 +421,7 @@ const activeDiagramDocumentFileId = computed((): string | null => {
 })
 
 const showDiagramWikiToolbarButton = computed(
-  () => canInspectDiagramJson.value || !!activeDiagramDocumentFileId.value
+  () => canCreateWiki.value || !!activeDiagramDocumentFileId.value
 )
 
 const {
@@ -705,7 +711,7 @@ const baselineCreating = ref(false)
 const baselineError = ref<string | null>(null)
 async function handleCreateBaseline() {
   const diagram = activeDiagram.value
-  if (!diagram || isDiagramReadOnly.value) return
+  if (!diagram || isDiagramReadOnly.value || !hasGrant('model.createBaseline')) return
   baselineError.value = null
   baselineCreating.value = true
   try {
@@ -1039,6 +1045,7 @@ const {
   state,
   model,
   selectedDiagramId,
+  canEdit: canInspectDiagramJson,
   t: (key, params) => String(t(key, params ?? {})),
   setUiError,
   clearUiError: () => {
@@ -2669,7 +2676,7 @@ onBeforeUnmount(() => {
         :baseline-creating="baselineCreating"
         :baseline-error="baselineError"
         :is-admin="canInspectDiagramJson"
-        :show-compare-button="!!model?.id"
+        :show-compare-button="hasGrant('model.compareVersions') && !!model?.id"
         :model-id="model?.id ?? null"
         @action="handleToolbarAction"
         @rename-model="handleRenameModel"
@@ -2714,6 +2721,7 @@ onBeforeUnmount(() => {
             :model-name="model?.name"
             :sync-selection-enabled="selectionSyncEnabled"
             :navigation-only-mode="diagramNavigationOnlyMode"
+            :can-edit="canInspectDiagramJson"
             :loaded-children-for="loadedChildrenFor"
             :children-pages="childrenPages"
             :children-loading="partialStore.childrenLoading.value"
@@ -2925,6 +2933,7 @@ onBeforeUnmount(() => {
               :model-documents="modelDocuments"
               :wiki-documents="wikiDocumentsList"
               :read-only="isDiagramReadOnly"
+              :can-create-wiki="canCreateWiki"
               @bind-node-component="handleBindNodeComponent"
               @bind-link-relation="
                 id => selectedLink && !isDiagramReadOnly && bindLinkRelationFromPanel(id)
@@ -2938,7 +2947,8 @@ onBeforeUnmount(() => {
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
               @set-link-scoped-value="(k, v) => !isDiagramReadOnly && setLinkScopedValue(k, v)"
               @create-document-for-property="
-                (name, scope) => !isDiagramReadOnly && handleCreateDocumentForProperty(name, scope)
+                (name, scope) =>
+                  canCreateWiki && !isDiagramReadOnly && handleCreateDocumentForProperty(name, scope)
               "
               :on-open-node-document="handleOpenNodeDoc"
             />
@@ -3288,7 +3298,9 @@ onBeforeUnmount(() => {
     v-if="showDocModal"
     :title="docModalTitle"
     :file-id="docModalFileId"
-    :read-only="!canInspectDiagramJson"
+    :read-only="
+      !canInspectDiagramJson || (!docModalFileId && !hasGrant('model.wiki.create'))
+    "
     @saved="handleDocSaved"
     @close="handleDocModalClose"
   />

@@ -16,6 +16,12 @@ vi.mock('vue-i18n', async importOriginal => {
   }
 })
 
+vi.mock('@/composables/useFeatureGrants', () => ({
+  useFeatureGrants: () => ({
+    hasGrant: () => true,
+  }),
+}))
+
 function makeNode(
   overrides: Partial<EditorNode> & { id: string; name: string; nodeTypeId?: string }
 ): EditorNode {

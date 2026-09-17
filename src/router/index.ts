@@ -80,17 +80,20 @@ const router = createRouter({
     {
       path: "/models/:id/compare",
       name: "model-visual-compare",
-      component: () => import("../views/ModelVisualCompareView.vue")
+      component: () => import("../views/ModelVisualCompareView.vue"),
+      meta: { requiresFeatureGrant: "model.compareVersions" }
     },
     {
       path: "/models/:id/diagram-compare",
       name: "diagram-versions-compare",
-      component: () => import("../views/DiagramVersionsCompareView.vue")
+      component: () => import("../views/DiagramVersionsCompareView.vue"),
+      meta: { requiresFeatureGrant: "model.compareVersions" }
     },
     {
       path: "/models/:id/relation-matrix",
       name: "model-relation-matrix",
-      component: () => import("../views/ModelRelationMatrixView.vue")
+      component: () => import("../views/ModelRelationMatrixView.vue"),
+      meta: { requiresFeatureGrant: "model.relationMatrix" }
     },
     {
       path: "/models/:id/validation",

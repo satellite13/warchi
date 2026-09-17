@@ -156,4 +156,76 @@ describe('useModelEditorToolbarActions', () => {
     })
     scope.stop()
   })
+
+  it('blocks export-diagram-png without model.exportDiagramImage grant', async () => {
+    const scope = effectScope()
+    await scope.run(async () => {
+      grantsState.hasGrant.mockImplementation((key: string) => key !== 'model.exportDiagramImage')
+      const exportActiveDiagramAsPng = vi.fn()
+      const api = useModelEditorToolbarActions(buildOptions({ exportActiveDiagramAsPng }) as never)
+
+      await api.handleToolbarAction('export-diagram-png')
+
+      expect(exportActiveDiagramAsPng).not.toHaveBeenCalled()
+    })
+    scope.stop()
+  })
+
+  it('blocks import-oef without model.importOef grant', async () => {
+    const scope = effectScope()
+    await scope.run(async () => {
+      grantsState.hasGrant.mockImplementation((key: string) => key !== 'model.importOef')
+      const load = vi.fn(async () => ({ ok: true }))
+      const showImportWizard = ref(false)
+      const api = useModelEditorToolbarActions(
+        buildOptions({
+          canInspectDiagramJson: computed(() => true),
+          oefDetachedSnapshot: { load, error: ref(null) },
+          showImportWizard,
+        }) as never
+      )
+
+      await api.handleToolbarAction('import-oef')
+
+      expect(load).not.toHaveBeenCalled()
+      expect(showImportWizard.value).toBe(false)
+    })
+    scope.stop()
+  })
+
+  it('blocks run-validation-script without model.runValidationScripts grant', async () => {
+    const scope = effectScope()
+    await scope.run(async () => {
+      grantsState.hasGrant.mockImplementation(
+        (key: string) => key !== 'model.runValidationScripts'
+      )
+      const openValidationScriptsModal = vi.fn()
+      const api = useModelEditorToolbarActions(
+        buildOptions({ openValidationScriptsModal }) as never
+      )
+
+      await api.handleToolbarAction('run-validation-script')
+
+      expect(openValidationScriptsModal).not.toHaveBeenCalled()
+    })
+    scope.stop()
+  })
+
+  it('blocks show-diagram-json without model.inspectJson grant', async () => {
+    const scope = effectScope()
+    await scope.run(async () => {
+      grantsState.hasGrant.mockImplementation((key: string) => key !== 'model.inspectJson')
+      const openDiagramJson = vi.fn()
+      const checkPermission = vi.fn(async () => true)
+      const api = useModelEditorToolbarActions(
+        buildOptions({ openDiagramJson, checkPermission }) as never
+      )
+
+      await api.handleToolbarAction('show-diagram-json')
+
+      expect(checkPermission).not.toHaveBeenCalled()
+      expect(openDiagramJson).not.toHaveBeenCalled()
+    })
+    scope.stop()
+  })
 })

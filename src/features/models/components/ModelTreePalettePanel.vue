@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/vue-virtual"
 import { computed, nextTick, ref, toRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions"
+import { useFeatureGrants } from "@/composables/useFeatureGrants"
 import { compareVersions } from "@/utils/version"
 import { parseTypeAttrs } from "@/domain/attrs/notationAttrs"
 import type { DiagramLockStatusResponse, ModelSearchHit, NodeTypeResponse } from "@/types/api"
@@ -25,30 +26,49 @@ const DRAG_SCROLL_EDGE_PX = 40
 const DRAG_SCROLL_STEP_PX = 18
 const EMPTY_DROP_CLASS: Record<string, boolean> = {}
 
-const props = defineProps<{
-  nodes: EditorNode[]
-  diagrams: EditorDiagram[]
-  nodeTypes: NodeTypeResponse[]
-  treeRootNodeId?: string | null
-  selectedNodeId: string | null
-  selectedDiagramId: string | null
-  /** Активные блокировки редактирования диаграмм (GET /diagram-locks) */
-  diagramLocks?: DiagramLockStatusResponse[]
-  currentUserId?: string | null
-  modelName?: string
-  syncSelectionEnabled?: boolean
-  navigationOnlyMode?: boolean
-  loadedChildrenFor?: Set<string>
-  childrenPages?: Map<string, ChildrenPageState>
-  childrenLoading?: Set<string>
-  childrenErrors?: Map<string, string>
-  searchHits?: ModelSearchHit[]
-  searchQuery?: string
-  searchLoading?: boolean
-  searchError?: string | null
-  treeFocusLoading?: boolean
-  treeFocusError?: string | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    nodes: EditorNode[]
+    diagrams: EditorDiagram[]
+    nodeTypes: NodeTypeResponse[]
+    treeRootNodeId?: string | null
+    selectedNodeId: string | null
+    selectedDiagramId: string | null
+    /** Активные блокировки редактирования диаграмм (GET /diagram-locks) */
+    diagramLocks?: DiagramLockStatusResponse[]
+    currentUserId?: string | null
+    modelName?: string
+    syncSelectionEnabled?: boolean
+    navigationOnlyMode?: boolean
+    /** Resource ACL: EDIT/OWNER/ADMIN на модель */
+    canEdit?: boolean
+    loadedChildrenFor?: Set<string>
+    childrenPages?: Map<string, ChildrenPageState>
+    childrenLoading?: Set<string>
+    childrenErrors?: Map<string, string>
+    searchHits?: ModelSearchHit[]
+    searchQuery?: string
+    searchLoading?: boolean
+    searchError?: string | null
+    treeFocusLoading?: boolean
+    treeFocusError?: string | null
+  }>(),
+  {
+    canEdit: true,
+  }
+)
+
+const { hasGrant } = useFeatureGrants()
+const canCreateRoot = computed(
+  () => !!props.canEdit && hasGrant("model.tree.createRoot")
+)
+const canCreateChildFolder = computed(
+  () => !!props.canEdit && hasGrant("model.tree.createChildFolder")
+)
+const canMutateFolder = computed(
+  () => !!props.canEdit && hasGrant("model.tree.renameDeleteMoveFolder")
+)
+const canEditTree = computed(() => !!props.canEdit)
 
 const diagramLockById = computed(() => {
   const map = new Map<string, DiagramLockStatusResponse>()
@@ -275,7 +295,11 @@ const isNodeUsed = (nodeId: string): boolean => usedNodeIds.value.has(nodeId)
 
 const onDragNodeStart = (event: DragEvent, nodeId: string) => {
   const node = nodeById.value.get(nodeId)
-  if (!node || props.navigationOnlyMode) {
+  if (!node || props.navigationOnlyMode || !props.canEdit) {
+    event.preventDefault()
+    return
+  }
+  if (isDirectory(node) && !canMutateFolder.value) {
     event.preventDefault()
     return
   }
@@ -307,6 +331,10 @@ const onDragNodeStart = (event: DragEvent, nodeId: string) => {
 }
 
 const onDragDiagramStart = (event: DragEvent, diagramId: string) => {
+  if (props.navigationOnlyMode || !props.canEdit) {
+    event.preventDefault()
+    return
+  }
   event.dataTransfer?.setData("application/x-model-diagram-id", diagramId)
   event.dataTransfer?.setData("text/plain", `diagram:${diagramId}`)
 }
@@ -390,6 +418,7 @@ const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
   if (!draggedNodeId && !draggedDiagramId) return
 
   if (draggedDiagramId) {
+    if (!props.canEdit) return
     if (!targetNodeId) {
       emit("moveDiagram", draggedDiagramId, null)
       return
@@ -402,7 +431,8 @@ const onTreeDrop = (event: DragEvent, targetNodeId: string | null) => {
 
   if (!draggedNodeId || draggedNodeId === targetNodeId) return
   const draggedNode = nodeById.value.get(draggedNodeId)
-  if (!draggedNode || props.navigationOnlyMode) return
+  if (!draggedNode || props.navigationOnlyMode || !props.canEdit) return
+  if (isDirectory(draggedNode) && !canMutateFolder.value) return
 
   // Prevent dropping a node onto its own descendant
   if (targetNodeId && isDescendant(targetNodeId, draggedNodeId)) return
@@ -419,6 +449,8 @@ const getDropClass = (nodeId: string): Record<string, boolean> => {
 }
 
 const startRenameNode = (node: EditorNode) => {
+  if (isDirectory(node) && !canMutateFolder.value) return
+  if (!isDirectory(node) && !canEditTree.value) return
   renamingNodeId.value = node.id
   renamingNodeName.value = node.name
 }
@@ -696,17 +728,17 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
             <UiIcon name="sync_alt" />
           </button>
         </AppTooltip>
-        <AppTooltip :text="t('models.addRootFolder')" placement="bottom">
+        <AppTooltip v-if="canCreateRoot" :text="t('models.addRootFolder')" placement="bottom">
           <button type="button" class="btn--icon" @click="emit('createFolder', null)">
             <UiIcon name="create_new_folder" />
           </button>
         </AppTooltip>
-        <AppTooltip :text="t('models.addRootNode')" placement="bottom">
+        <AppTooltip v-if="canCreateRoot" :text="t('models.addRootNode')" placement="bottom">
           <button type="button" class="btn--icon" @click="emit('createNode', null)">
             <UiIcon name="add_box" />
           </button>
         </AppTooltip>
-        <AppTooltip :text="t('models.createDiagramTitle')" placement="bottom">
+        <AppTooltip v-if="canCreateRoot" :text="t('models.createDiagramTitle')" placement="bottom">
           <button type="button" class="btn--icon" @click="emit('createDiagram', null)">
             <UiIcon name="dashboard" />
           </button>
@@ -793,7 +825,7 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
               :class="{ 'tree-node__row--active': selectedNodeId === row.node.id, ...getDropClass(row.node.id) }"
               :style="{ '--tree-depth': String(row.depth) }"
               :data-tree-node-id="row.node.id"
-              :draggable="!props.navigationOnlyMode"
+              :draggable="!props.navigationOnlyMode && canEditTree && (!isDirectory(row.node) || canMutateFolder)"
               @dragstart="onDragNodeStart($event, row.node.id)"
               @dragover.prevent="onTreeDragOver($event, row.node.id)"
               @dragleave="onTreeDragLeave"
@@ -853,7 +885,7 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
               </button>
               <div class="tree-node__actions">
                 <AppTooltip
-                  v-if="isDirectory(row.node)"
+                  v-if="isDirectory(row.node) && canCreateChildFolder"
                   :text="t('models.addChildFolder')"
                   placement="bottom"
                 >
@@ -866,7 +898,7 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
                   </button>
                 </AppTooltip>
                 <AppTooltip
-                  v-if="isDirectory(row.node)"
+                  v-if="isDirectory(row.node) && canEditTree"
                   :text="t('models.addChildNode')"
                   placement="bottom"
                 >
@@ -879,7 +911,7 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
                   </button>
                 </AppTooltip>
                 <AppTooltip
-                  v-if="isDirectory(row.node)"
+                  v-if="isDirectory(row.node) && canEditTree"
                   :text="t('models.createDiagramTitle')"
                   placement="bottom"
                 >
@@ -892,7 +924,7 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
                   </button>
                 </AppTooltip>
                 <AppTooltip
-                  v-if="isDirectory(row.node)"
+                  v-if="isDirectory(row.node) && canMutateFolder"
                   :text="t('models.renameFolder')"
                   placement="bottom"
                 >
@@ -904,7 +936,11 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
                     <UiIcon name="edit" />
                   </button>
                 </AppTooltip>
-                <AppTooltip :text="t('common.delete')" placement="bottom">
+                <AppTooltip
+                  v-if="isDirectory(row.node) ? canMutateFolder : canEditTree"
+                  :text="t('common.delete')"
+                  placement="bottom"
+                >
                   <button
                     type="button"
                     class="btn--icon btn--icon--danger"
@@ -923,7 +959,7 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
             :class="{ 'diagram-row--active': selectedDiagramId === row.diagram.id }"
             :style="{ '--tree-depth': String(row.depth) }"
             :data-tree-diagram-id="row.diagram.id"
-            :draggable="!props.navigationOnlyMode"
+            :draggable="!props.navigationOnlyMode && canEditTree"
             @dragstart="onDragDiagramStart($event, row.diagram.id)"
           >
             <button
@@ -974,7 +1010,7 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
               </button>
             </AppTooltip>
             <AppTooltip
-              v-if="renamingDiagramId !== row.diagram.id"
+              v-if="renamingDiagramId !== row.diagram.id && canEditTree"
               :text="t('models.renameDiagram')"
               placement="bottom"
             >
@@ -987,13 +1023,14 @@ defineExpose({ expandToNode, expandPath, focusNode, focusDiagram })
               </button>
             </AppTooltip>
             <button
+              v-if="canEditTree"
               type="button"
               class="btn--icon btn--icon--danger"
               @click="emit('deleteDiagram', row.diagram.id)"
             >
               <UiIcon name="delete" />
             </button>
-          <AppTooltip :text="t('models.diagramCopy.title')" placement="bottom">
+          <AppTooltip v-if="canEditTree" :text="t('models.diagramCopy.title')" placement="bottom">
             <button
               type="button"
               class="btn--icon diagram-row__copy-btn"

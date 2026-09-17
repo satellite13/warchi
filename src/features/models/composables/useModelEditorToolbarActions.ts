@@ -182,12 +182,15 @@ export function useModelEditorToolbarActions(options: {
         options.diagramNavigationOnlyMode.value = !options.diagramNavigationOnlyMode.value
         break
       case 'export-diagram-png':
+        if (!hasGrant('model.exportDiagramImage')) break
         await options.exportActiveDiagramAsPng()
         break
       case 'export-diagram-svg':
+        if (!hasGrant('model.exportDiagramImage')) break
         options.exportActiveDiagramAsSvg()
         break
       case 'share-diagram-image':
+        if (!hasGrant('model.exportDiagramImage')) break
         options.showDiagramImageShareModal.value = true
         break
       case 'copy-diagram-link': {
@@ -208,7 +211,7 @@ export function useModelEditorToolbarActions(options: {
         break
       }
       case 'import-oef':
-        if (options.canInspectDiagramJson.value) {
+        if (hasGrant('model.importOef') && options.canInspectDiagramJson.value) {
           const loadedSnapshot = await options.oefDetachedSnapshot.load()
           if (!loadedSnapshot) {
             options.setUiError(options.oefDetachedSnapshot.error.value ?? options.t('common.error'))
@@ -231,6 +234,7 @@ export function useModelEditorToolbarActions(options: {
         break
       }
       case 'run-validation-script':
+        if (!hasGrant('model.runValidationScripts')) break
         options.openValidationScriptsModal()
         break
       case 'close-diagram':
@@ -246,6 +250,7 @@ export function useModelEditorToolbarActions(options: {
         break
       case 'show-diagram-json':
         if (
+          hasGrant('model.inspectJson') &&
           options.model.value?.id &&
           (await options.checkPermission({
             resourceType: 'MODEL',
@@ -258,7 +263,9 @@ export function useModelEditorToolbarActions(options: {
         break
       case 'open-model-doc': {
         const hasModelDoc = !!options.modelRootDocumentFileId.value
-        if (!options.canInspectDiagramJson.value && !hasModelDoc) break
+        const canCreateWiki =
+          hasGrant('model.wiki.create') && options.canInspectDiagramJson.value
+        if (!canCreateWiki && !hasModelDoc) break
         options.handleOpenModelDoc()
         break
       }
@@ -268,7 +275,9 @@ export function useModelEditorToolbarActions(options: {
         const hasDiagramDoc =
           typeof d.parsedAttrs?.documentFileId === 'string' &&
           d.parsedAttrs.documentFileId.trim().length > 0
-        if (!options.canInspectDiagramJson.value && !hasDiagramDoc) break
+        const canCreateWiki =
+          hasGrant('model.wiki.create') && options.canInspectDiagramJson.value
+        if (!canCreateWiki && !hasDiagramDoc) break
         options.handleOpenDiagramDoc()
         break
       }

@@ -1,5 +1,6 @@
-import { computed, ref, watch, type Ref } from 'vue'
+import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { apiGet } from '@/composables/useApi'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { bumpMinor, compareVersions } from '@/utils/version'
 import { createId, parseNodeAttrs } from '../modelAttrs'
 import type { EditorNode, ModelEditorState, TreeParentScope } from '../types'
@@ -24,7 +25,12 @@ export function useModelTreeOperations(options: {
   reconcileMaterializedRows?: (
     affectedScopes?: readonly TreeParentScope[] | 'all'
   ) => void
+  /** Resource ACL EDIT/OWNER/ADMIN */
+  canEdit?: Ref<boolean> | ComputedRef<boolean>
 }) {
+  const { hasGrant } = useFeatureGrants()
+  const canEditModel = () => options.canEdit?.value !== false
+
   const createNodeModal = ref<{ parentNodeId: string | null; kind: 'folder' | 'node' }>({
     parentNodeId: null,
     kind: 'node',
@@ -268,6 +274,12 @@ export function useModelTreeOperations(options: {
   }
 
   const openCreateFolder = (parentNodeId: string | null) => {
+    if (!canEditModel()) return
+    if (parentNodeId == null) {
+      if (!hasGrant('model.tree.createRoot')) return
+    } else if (!hasGrant('model.tree.createChildFolder')) {
+      return
+    }
     if (!directoryNodeType.value) {
       options.setUiError(options.t('models.directoryTypeNotFound'))
       return
@@ -281,6 +293,8 @@ export function useModelTreeOperations(options: {
   }
 
   const openCreateRegularNode = (parentNodeId: string | null) => {
+    if (!canEditModel()) return
+    if (parentNodeId == null && !hasGrant('model.tree.createRoot')) return
     if (nonDirectoryNodeTypes.value.length === 0) {
       options.setUiError(options.t('models.noAvailableNodeTypes'))
       return
@@ -326,7 +340,10 @@ export function useModelTreeOperations(options: {
   }
 
   const openCreateDiagram = (nodeId: string | null) => {
-    createDiagramNodeId.value = nodeId ?? treeRootNodeId.value ?? null
+    if (!canEditModel()) return
+    const targetNodeId = nodeId ?? treeRootNodeId.value ?? null
+    if (nodeId == null && !hasGrant('model.tree.createRoot')) return
+    createDiagramNodeId.value = targetNodeId
     newDiagramName.value = ''
     newDiagramVersion.value = '1.0.0'
     newDiagramNotationId.value = options.state.value.notations[0]?.id ?? ''
@@ -465,6 +482,7 @@ export function useModelTreeOperations(options: {
     targetNodeId: string | null,
     position: 'above' | 'below' | 'inside'
   ): Promise<void> => {
+    if (!canEditModel()) return
     const operationToken = (moveOperationTokens.get(nodeId) ?? 0) + 1
     moveOperationTokens.set(nodeId, operationToken)
     const isCurrentOperation = (): boolean => moveOperationTokens.get(nodeId) === operationToken
@@ -473,6 +491,7 @@ export function useModelTreeOperations(options: {
     let nodes = options.state.value.nodes
     let movingNode = nodes.find(item => item.id === nodeId)
     if (!movingNode) return
+    if (isDirectoryNode(nodeId) && !hasGrant('model.tree.renameDeleteMoveFolder')) return
     if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId))) return
 
     let targetNode = targetNodeId ? nodes.find(item => item.id === targetNodeId) : null
@@ -583,6 +602,8 @@ export function useModelTreeOperations(options: {
   }
 
   const handleRenameNode = (nodeId: string, newName: string) => {
+    if (!canEditModel()) return
+    if (isDirectoryNode(nodeId) && !hasGrant('model.tree.renameDeleteMoveFolder')) return
     const node = options.state.value.nodes.find(item => item.id === nodeId)
     const nextName = newName.trim()
     if (!node || !nextName || node.name === nextName) return

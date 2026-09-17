@@ -175,6 +175,10 @@ const {
   resolveBatchSaveReload,
   resolveBatchSaveOverwrite,
   dismissBatchSaveConflict,
+  pendingModelDraft,
+  applyModelDraft,
+  rejectModelDraft,
+  scheduleDraftSave,
   partialStore,
 } = useModelEditor()
 
@@ -1815,6 +1819,7 @@ const setDiagramAttrs = (next: DiagramAttrs, options?: { dirty?: boolean }) => {
       ...(keepDirty ? (current._isNew ? {} : { _isDirty: true }) : { _isDirty: false }),
     }
     state.value.diagrams = diagrams
+    if (keepDirty) scheduleDraftSave()
   } else if (options?.dirty !== false) {
     markDiagramDirty(diagram.id)
   }
@@ -3247,6 +3252,17 @@ onBeforeUnmount(() => {
     max-width="400px"
     @close="cancelLeave"
     @confirm="confirmLeave"
+  />
+
+  <ConfirmModal
+    v-if="pendingModelDraft"
+    :title="t('models.draftTitle')"
+    :message="t('models.draftRestoreMessage')"
+    :cancel-label="t('models.draftUseServer')"
+    :confirm-label="t('models.draftRestore')"
+    max-width="460px"
+    @close="rejectModelDraft"
+    @confirm="applyModelDraft"
   />
 
   <DiagramJsonModal

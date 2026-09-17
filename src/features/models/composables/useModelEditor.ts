@@ -23,6 +23,14 @@ import {
 } from './modelEditorLoadModel'
 import { discardUnsavedModelChanges } from './discardUnsavedModelChanges'
 import { executeModelEditorSave } from './modelEditorSaveCoordinator'
+import {
+  clearModelEditorDraft,
+  createModelEditorDraftSnapshot,
+  loadModelEditorDraft,
+  restoreModelEditorDraft,
+  saveModelEditorDraft,
+  type ModelEditorDraftSnapshot,
+} from './useModelEditorDraft'
 import { useModelBatchConflictResolution } from './useModelBatchConflictResolution'
 import { useModelEditorStateHelpers } from './useModelEditorStateHelpers'
 import { useModelPartialStore } from './useModelPartialStore'
@@ -102,6 +110,14 @@ type ModelEditorReturn = {
   resolveBatchSaveOverwrite: () => Promise<boolean>
   /** Закрыть диалог конфликта без действия */
   dismissBatchSaveConflict: () => void
+  /** Локальный черновик модели, который можно восстановить (null если нет) */
+  pendingModelDraft: Ref<ModelEditorDraftSnapshot | null>
+  /** Применить черновик поверх загруженного с сервера состояния */
+  applyModelDraft: () => void
+  /** Отклонить черновик и удалить его из localStorage */
+  rejectModelDraft: () => void
+  /** Запланировать (дебаунс) запись черновика — используется при прямых правках холста */
+  scheduleDraftSave: () => void
   partialStore: ReturnType<typeof useModelPartialStore>
 }
 
@@ -124,6 +140,10 @@ export const useModelEditor = (): ModelEditorReturn => {
   const modelDirty = ref(false)
   const modelInitialName = ref('')
   const modelCatalog = ref<ModelData[]>([])
+  /** Локальный черновик открытой модели (localStorage), который предлагается восстановить. */
+  const pendingModelDraft = ref<ModelEditorDraftSnapshot | null>(null)
+  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null
+  const DRAFT_DEBOUNCE_MS = 800
   const partialStore = useModelPartialStore(state)
   const traceabilityDiagramRevision = ref(0)
   const invalidateTraceabilityDiagrams = (): void => {
@@ -147,9 +167,9 @@ export const useModelEditor = (): ModelEditorReturn => {
   const {
     markNodeDirty: markNodeDirtyInState,
     markLinkDirty: markLinkDirtyInState,
-    markDiagramDirty,
-    markModelDirty,
-    renameModel,
+    markDiagramDirty: markDiagramDirtyInState,
+    markModelDirty: markModelDirtyInState,
+    renameModel: renameModelInState,
     scheduleSaveErrorClear,
     disposeSaveErrorTimer,
   } = useModelEditorStateHelpers({
@@ -161,16 +181,83 @@ export const useModelEditor = (): ModelEditorReturn => {
     saveError,
   })
 
+  const scheduleDraftSave = (): void => {
+    if (!model.value) return
+    if (draftSaveTimer !== null) clearTimeout(draftSaveTimer)
+    draftSaveTimer = setTimeout(() => {
+      draftSaveTimer = null
+      persistModelDraft()
+    }, DRAFT_DEBOUNCE_MS)
+  }
+
+  const persistModelDraft = (): void => {
+    const current = model.value
+    if (!current) return
+    saveModelEditorDraft(current.id, createModelEditorDraftSnapshot(state.value, current))
+  }
+
   const markNodeDirty = (id: string): void => {
     markNodeDirtyInState(id)
     const node = state.value.nodes.find(item => item.id === id)
     if (node) partialStore.syncLocalNode(node)
+    scheduleDraftSave()
   }
 
   const markLinkDirty = (id: string): void => {
     markLinkDirtyInState(id)
     const link = state.value.links.find(item => item.id === id)
     if (link) partialStore.syncLocalLink(link)
+    scheduleDraftSave()
+  }
+
+  const markDiagramDirty = (id: string): void => {
+    markDiagramDirtyInState(id)
+    scheduleDraftSave()
+  }
+
+  const markModelDirty = (): void => {
+    markModelDirtyInState()
+    scheduleDraftSave()
+  }
+
+  const renameModel = (nextName: string): string | null => {
+    const result = renameModelInState(nextName)
+    scheduleDraftSave()
+    return result
+  }
+
+  const applyModelDraft = (): void => {
+    const snapshot = pendingModelDraft.value
+    if (!snapshot) return
+    const restored = restoreModelEditorDraft(snapshot)
+    state.value = {
+      ...state.value,
+      nodes: restored.nodes,
+      links: restored.links,
+      diagrams: restored.diagrams,
+    }
+    if (model.value) {
+      if (
+        snapshot.model.name !== model.value.name ||
+        snapshot.model.version !== model.value.version ||
+        snapshot.model.ownerId !== model.value.ownerId
+      ) {
+        model.value.name = snapshot.model.name
+        model.value.version = snapshot.model.version
+        model.value.ownerId = snapshot.model.ownerId
+        modelInitialName.value = snapshot.model.name
+        modelDirty.value = true
+      }
+    }
+    pendingModelDraft.value = null
+    persistModelDraft()
+  }
+
+  const rejectModelDraft = (): void => {
+    const snapshot = pendingModelDraft.value
+    if (!snapshot) return
+    clearModelEditorDraft(snapshot.model.id)
+    pendingModelDraft.value = null
   }
 
   onScopeDispose(() => {
@@ -311,6 +398,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     catalogReady.value = false
     errorMessage.value = null
     catalogLoadWarning.value = null
+    pendingModelDraft.value = null
     // Cancel child-page requests from the previous load before starting a new shell.
     partialStore.resetPartialScopes(modelId)
     const progressTracker = createModelEditorLoadProgressTracker({ generation, modelId })
@@ -345,6 +433,7 @@ export const useModelEditor = (): ModelEditorReturn => {
       resetLoadedNotationIds([])
       resetLoadedNotationCatalogIds([])
       state.value = shell.state
+      pendingModelDraft.value = loadModelEditorDraft(modelId)
       partialStore.resetPartialScopes(modelId, {
         scope: { kind: 'root' },
         page: shell.rootChildrenPage,
@@ -434,6 +523,7 @@ export const useModelEditor = (): ModelEditorReturn => {
 
       partialStore.reconcileMaterializedRows()
       invalidateTraceabilityDiagrams()
+      if (model.value) clearModelEditorDraft(model.value.id)
       completeSave(2500)
       return true
     } finally {
@@ -578,6 +668,10 @@ export const useModelEditor = (): ModelEditorReturn => {
     resolveBatchSaveReload,
     resolveBatchSaveOverwrite,
     dismissBatchSaveConflict,
+    pendingModelDraft,
+    applyModelDraft,
+    rejectModelDraft,
+    scheduleDraftSave,
     partialStore,
   }
 }

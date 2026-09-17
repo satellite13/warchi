@@ -162,6 +162,38 @@ describe('useModelBatchSave', () => {
     ])
   })
 
+  it('still sends canvas attrs when a pending-hydration diagram carries local instances', () => {
+    const request = buildBatchSaveRequest(
+      [],
+      [],
+      [
+        createDiagram({
+          id: 'diagram-edited',
+          nodeId: 'folder-1',
+          _isDirty: true,
+          _attrsPending: true,
+          updatedAt: '2026-01-03T00:00:00.000Z',
+          parsedAttrs: parseDiagramAttrs(
+            JSON.stringify({
+              instances: {
+                nodes: [{ id: 'i-1', modelNodeId: 'n-1', x: 10, y: 20 }],
+                edges: [],
+              },
+            })
+          ),
+        }),
+      ]
+    )
+
+    expect(request.diagrams.update[0]).toMatchObject({
+      id: 'diagram-edited',
+      nodeId: 'folder-1',
+    })
+    const attrs = JSON.parse(request.diagrams.update[0]!.attrs!)
+    expect(attrs.instances.nodes).toHaveLength(1)
+    expect(attrs.instances.nodes[0]).toMatchObject({ modelNodeId: 'n-1', x: 10, y: 20 })
+  })
+
   it('never deletes remote ids that are absent from the materialized arrays', () => {
     const request = buildBatchSaveRequest(
       [createNode({ id: 'loaded-clean' }), createNode({ id: 'loaded-dirty', _isDirty: true })],

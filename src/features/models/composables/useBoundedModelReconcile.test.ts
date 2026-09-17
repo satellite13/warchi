@@ -365,6 +365,34 @@ describe('createBoundedModelReconcile', () => {
     expect(h.errors).not.toHaveBeenCalled()
   })
 
+  it('does not mark an open diagram with local instances as attrs-pending after a slim merge', async () => {
+    const openWithInstances = {
+      ...editorDiagram('diagram-1', 'remote open'),
+      parsedAttrs: parseDiagramAttrs(
+        JSON.stringify({
+          instances: {
+            nodes: [{ id: 'i-1', modelNodeId: 'n-1', x: 0, y: 0 }],
+            edges: [],
+          },
+        })
+      ),
+    }
+    const h = harness({
+      diagrams: [openWithInstances],
+      fetchers: {
+        fetchModel: vi.fn(async () => ok(model('model-1', REVISION_2))),
+        fetchSlimDiagrams: vi.fn(async () => ok([diagramResponse('diagram-1', 'remote open')])),
+      },
+    })
+
+    h.reconciler.request('poll_timer')
+    await h.reconciler.flush()
+
+    const [row] = h.getDiagrams()
+    expect(row._attrsPending).toBe(false)
+    expect(row.parsedAttrs.instances.nodes).toHaveLength(1)
+  })
+
   it('keeps one single flight and coalesces overlaps into one follow-up probe', async () => {
     const first = deferred<ReturnType<typeof ok<ModelData>>>()
     let active = 0

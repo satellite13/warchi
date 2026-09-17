@@ -188,7 +188,12 @@ export function createBoundedModelReconcile(
     ).items
     options.replaceDiagrams(
       merged.map(row =>
-        row.id === openDiagramId && !row._isDirty && !row._isNew && !row._isDeleted
+        row.id === openDiagramId &&
+        !row._isDirty &&
+        !row._isNew &&
+        !row._isDeleted &&
+        row.parsedAttrs.instances.nodes.length === 0 &&
+        row.parsedAttrs.instances.edges.length === 0
           ? { ...row, _attrsPending: true }
           : row
       )

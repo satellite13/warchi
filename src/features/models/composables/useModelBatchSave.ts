@@ -170,7 +170,15 @@ export function buildBatchSaveRequest(
           nodeId: d.nodeId ?? null,
           // Unhydrated list rows have empty parsedAttrs — omit canvas so the
           // server keeps the stored instances (folder move / rename only).
-          attrs: d._attrsPending ? null : serializeDiagramAttrs(d.parsedAttrs),
+          // Where _attrsPending is set but the row still carries local canvas
+          // edits (e.g. after tab switching clobbers _attrsPending), send the
+          // instances so unsaved changes are not silently dropped.
+          attrs:
+            d._attrsPending &&
+            d.parsedAttrs.instances.nodes.length === 0 &&
+            d.parsedAttrs.instances.edges.length === 0
+              ? null
+              : serializeDiagramAttrs(d.parsedAttrs),
           baseUpdatedAt: d.updatedAt ?? null,
         })),
       delete: diagrams.filter(d => d._isDeleted && !d._isNew).map(d => d.id),

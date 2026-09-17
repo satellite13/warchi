@@ -21,6 +21,18 @@ export function saveJson<T>(key: string, value: T): void {
   }
 }
 
+/** Remove a stored key. Returns true if it existed and was removed. */
+export function removeJson(key: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const existed = window.localStorage.getItem(key) !== null
+    window.localStorage.removeItem(key)
+    return existed
+  } catch {
+    return false
+  }
+}
+
 /** Read a raw string from localStorage. Returns `fallback` if missing or on error. */
 export function loadString(key: string, fallback: string = ''): string {
   if (typeof window === 'undefined') return fallback

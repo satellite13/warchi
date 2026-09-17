@@ -382,6 +382,11 @@ export const modelsMessages = {
       removeLinkFromModel: 'Удалить из модели',
       leaveUnsavedText:
         'У вас есть несохранённые изменения. Если вы покинете страницу, они будут потеряны.',
+      draftTitle: 'Найден локальный черновик',
+      draftRestoreMessage:
+        'У этой модели есть несохранённые в браузере правки (черновик). Вернуть их поверх данных с сервера или использовать данные с сервера?',
+      draftRestore: 'Вернуть черновик',
+      draftUseServer: 'Использовать сервер',
       batchSaveConflictTitle: 'Конфликт при сохранении',
       batchSaveConflictIntro:
         '{count} объектов изменены на сервере с момента начала вашего редактирования. Сохранение отменено — выберите действие.',
@@ -1137,6 +1142,11 @@ export const modelsMessages = {
       removeLinkFromDiagram: 'Remove from diagram',
       removeLinkFromModel: 'Remove from model',
       leaveUnsavedText: 'You have unsaved changes. If you leave the page, they will be lost.',
+      draftTitle: 'Local draft found',
+      draftRestoreMessage:
+        'This model has unsaved browser edits (a draft). Restore them over the server data or use the server data?',
+      draftRestore: 'Restore draft',
+      draftUseServer: 'Use server data',
       batchSaveConflictTitle: 'Save conflict',
       batchSaveConflictIntro:
         '{count} object(s) changed on the server since you started editing. Save was aborted - pick an action.',

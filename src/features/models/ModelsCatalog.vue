@@ -176,6 +176,7 @@ async function handleImportSuccess(result: Extract<ModelPackageImportResult, { o
 }
 
 async function handleExport(item: ModelData) {
+  if (!hasGrant("model.export")) return;
   exportError.value = null;
   actionStatusMessage.value = null;
   try {

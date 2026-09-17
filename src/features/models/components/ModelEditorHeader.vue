@@ -7,6 +7,7 @@ import DiagramEditorHeaderShell from "@/components/layout/DiagramEditorHeaderShe
 import IconToolbar, { type ToolbarButton } from '@/components/layout/IconToolbar.vue'
 import DiagramCanvasSettings from "./DiagramCanvasSettings.vue"
 import { useFavorites } from '@/composables/useFavorites'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import type { EdgePathType } from "../composables/useModelToolbarState"
 
 import type { EditorDiagram } from '../types'
@@ -108,6 +109,7 @@ const props = withDefaults(
 
 const router = useRouter()
 const { t } = useI18n()
+const { hasGrant } = useFeatureGrants()
 const { isFavorite, toggleFavorite } = useFavorites()
 const isDiagramFavorite = computed(() =>
   props.selectedDiagramId ? isFavorite(props.selectedDiagramId) : false
@@ -262,11 +264,15 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     title: t('models.oefImportTitle'),
     disabled: !props.canEditModel || props.toolbarLocked,
   },
-  {
-    icon: 'download',
-    event: 'export-model-package',
-    title: t('toolbar.exportModelPackage'),
-  },
+  ...(hasGrant('model.export')
+    ? [
+        {
+          icon: 'download',
+          event: 'export-model-package',
+          title: t('toolbar.exportModelPackage'),
+        },
+      ]
+    : []),
   {
     icon: 'terminal',
     event: 'run-validation-script',

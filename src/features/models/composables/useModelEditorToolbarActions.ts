@@ -1,6 +1,7 @@
 import type { ComputedRef, Ref } from 'vue'
 import type { Router } from 'vue-router'
 import type { PermissionAction, PermissionResourceType } from '@/types/api'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { isSaveLockedToolbarEvent } from '../utils/modelEditorToolbarLock'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
@@ -63,6 +64,7 @@ export function useModelEditorToolbarActions(options: {
   state: Ref<ModelEditorState>
   t: Translate
 }) {
+  const { hasGrant } = useFeatureGrants()
   const handleToolbarAction = async (event: string) => {
     if (isSaveLockedToolbarEvent(event, options.isSaving.value)) return
     switch (event) {
@@ -216,6 +218,7 @@ export function useModelEditorToolbarActions(options: {
         }
         break
       case 'export-model-package': {
+        if (!hasGrant('model.export')) break
         const modelId = options.model.value?.id
         if (!modelId) break
         try {

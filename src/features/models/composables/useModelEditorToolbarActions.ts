@@ -175,6 +175,7 @@ export function useModelEditorToolbarActions(options: {
         break
       }
       case 'toggle-comments': {
+        if (!hasGrant('model.comments')) break
         options.commentsVisible.value = !options.commentsVisible.value
         break
       }
@@ -262,22 +263,19 @@ export function useModelEditorToolbarActions(options: {
         }
         break
       case 'open-model-doc': {
+        if (!hasGrant('model.wiki.create')) break
         const hasModelDoc = !!options.modelRootDocumentFileId.value
-        const canCreateWiki =
-          hasGrant('model.wiki.create') && options.canInspectDiagramJson.value
-        if (!canCreateWiki && !hasModelDoc) break
+        if (!hasModelDoc && !options.canInspectDiagramJson.value) break
         options.handleOpenModelDoc()
         break
       }
       case 'open-diagram-doc': {
         const d = options.activeDiagram.value
-        if (!d) break
+        if (!d || !hasGrant('model.wiki.create')) break
         const hasDiagramDoc =
           typeof d.parsedAttrs?.documentFileId === 'string' &&
           d.parsedAttrs.documentFileId.trim().length > 0
-        const canCreateWiki =
-          hasGrant('model.wiki.create') && options.canInspectDiagramJson.value
-        if (!canCreateWiki && !hasDiagramDoc) break
+        if (!hasDiagramDoc && !options.canInspectDiagramJson.value) break
         options.handleOpenDiagramDoc()
         break
       }

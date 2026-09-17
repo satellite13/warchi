@@ -52,7 +52,7 @@ describe('NavigationMenu', () => {
     vi.mocked(canViewAdminPanel).mockReset()
   })
 
-  it('shows only documentation to guests', () => {
+  it('shows only help to guests', () => {
     const wrapper = mountMenu()
     const destinations = wrapper.findAllComponents(RouterLinkStub).map((link) => link.props('to'))
 
@@ -91,6 +91,20 @@ describe('NavigationMenu', () => {
     expect(destinations).not.toContain('/types')
     expect(destinations).not.toContain('/shapes')
     expect(destinations).not.toContain('/validation-scripts')
+    expect(destinations).not.toContain('/wiki')
+  })
+
+  it('hides wiki nav when model.wiki.create grant is missing', async () => {
+    authState.currentUser.value = { id: 'user-1' }
+    vi.mocked(canViewAdminPanel).mockResolvedValue(false)
+    grantsState.hasGrant.mockImplementation((key: string) => key !== 'model.wiki.create')
+
+    const wrapper = mountMenu()
+    await flushPromises()
+
+    const destinations = wrapper.findAllComponents(RouterLinkStub).map((link) => link.props('to'))
+    expect(destinations).not.toContain('/wiki')
+    expect(destinations).toContain('/models')
   })
 
   it('shows the admin link when policy allows viewing the admin panel', async () => {

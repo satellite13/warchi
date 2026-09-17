@@ -44,5 +44,6 @@ describe('useFeatureGrants', () => {
   it('hasGrant returns false when logged out', () => {
     const { hasGrant } = useFeatureGrants()
     expect(hasGrant('model.create')).toBe(false)
+    expect(hasGrant('ui.languageSwitch')).toBe(false)
   })
 })

@@ -32,6 +32,8 @@ Product roles:
 | `reader` | Read access and a limited set of UI actions |
 | `viewer` | Minimal view |
 
+The `ui.languageSwitch` grant enables the RU/EN switcher in the header. Without it the UI stays in **Russian** (default for `reader` / `viewer` and guests; seeded for `architect` / `editor`).
+
 An administrator can:
 
 - edit the grant matrix for `architect` / `editor` / `reader` / `viewer`;

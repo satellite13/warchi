@@ -143,6 +143,7 @@ export const authMessages = {
         runValidationScripts: 'Запуск скриптов валидации',
         inspectJson: 'Просмотр JSON модели',
         createBaseline: 'Создание baseline',
+        comments: 'Комментарии к диаграмме',
         tree: {
           createRoot: 'Создание корневой папки',
           createChildFolder: 'Создание дочерней папки',
@@ -168,6 +169,12 @@ export const authMessages = {
       validationScript: {
         nav: 'Раздел скриптов валидации',
         create: 'Создание скрипта валидации',
+      },
+      ui: {
+        languageSwitch: 'Переключение языка (RU/EN)',
+      },
+      profile: {
+        apiKeys: 'API-ключи в профиле',
       },
     },
     adminRoleGrants: {
@@ -436,6 +443,7 @@ export const authMessages = {
         runValidationScripts: 'Run validation scripts',
         inspectJson: 'Inspect model JSON',
         createBaseline: 'Create baseline',
+        comments: 'Diagram comments',
         tree: {
           createRoot: 'Create root folder',
           createChildFolder: 'Create child folder',
@@ -461,6 +469,12 @@ export const authMessages = {
       validationScript: {
         nav: 'Validation scripts section',
         create: 'Create validation script',
+      },
+      ui: {
+        languageSwitch: 'Language switch (RU/EN)',
+      },
+      profile: {
+        apiKeys: 'API keys in profile',
       },
     },
     adminRoleGrants: {

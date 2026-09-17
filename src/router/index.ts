@@ -165,7 +165,8 @@ const router = createRouter({
     {
       path: "/wiki",
       name: "wiki",
-      component: () => import("../views/WikiView.vue")
+      component: () => import("../views/WikiView.vue"),
+      meta: { requiresFeatureGrant: "model.wiki.create" }
     },
     {
       path: "/home",

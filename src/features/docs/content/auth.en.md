@@ -38,12 +38,13 @@ Admin capabilities (users, deleted resources, diagram locks, grant matrix) requi
 - The `admin` role **always** receives the full grant catalog.
 - Admins configure the role matrix and user extras under [Administration → Role grants](/docs/admin).
 - In **phase 1**, grants only hide/show UI and soft-guard some routes; the API does **not** yet reject calls for a missing grant.
+- Examples: without `model.wiki.create` the Wiki nav item and `/wiki` route are hidden; without `model.comments` the comments panel and badges are hidden; without `profile.apiKeys` the profile API keys section is hidden (admin key revocation is unchanged).
 
 ## Route protection
 
 - Protected pages are unavailable without an active session.
 - Opening a protected route while unauthenticated redirects to login.
-- The **Documentation** section (`/docs`) is available **without signing in**. Guests see help in the header and a **Sign in** button (after login, the same page opens).
+- The **Help** section (`/docs`) is available **without signing in**. Guests see help in the header and a **Sign in** button (after login, the same page opens).
 - Admin routes are guarded by permission checks (`ADMIN_PANEL:VIEW`) via policy-based authorization.
 - Some catalog/tool routes also require a feature grant (missing grant redirects home); this is a client soft-guard, not a substitute for ACL.
 

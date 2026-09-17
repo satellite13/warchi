@@ -22,6 +22,9 @@ export const FEATURE_GRANT_KEYS = [
   'model.runValidationScripts',
   'model.inspectJson',
   'model.createBaseline',
+  'ui.languageSwitch',
+  'model.comments',
+  'profile.apiKeys',
 ] as const
 
 export type FeatureGrantKey = (typeof FEATURE_GRANT_KEYS)[number]

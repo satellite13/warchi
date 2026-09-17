@@ -9,10 +9,12 @@ import FavoriteDiagramsSection from "@/components/profile/FavoriteDiagramsSectio
 import UiIcon from "@/components/ui/UiIcon.vue"
 import { apiGet } from "../composables/useApi"
 import { useAuth } from "../composables/useAuth"
+import { useFeatureGrants } from "../composables/useFeatureGrants"
 import { useOidcAuth } from "../composables/useOidcAuth"
 import type { User } from "../types/entities"
 
 const { currentUser, updateMyProfile } = useAuth()
+const { hasGrant } = useFeatureGrants()
 const { ssoLogin, unlinkSso, getLinkStatus, fetchSsoConfig, oidcLinkStatus, ssoConfig } =
   useOidcAuth()
 const { t } = useI18n()
@@ -248,7 +250,7 @@ onMounted(async () => {
 
           <div class="profile-shell__main">
             <FavoriteDiagramsSection />
-            <ApiKeysSection />
+            <ApiKeysSection v-if="hasGrant('profile.apiKeys')" />
           </div>
         </div>
       </div>

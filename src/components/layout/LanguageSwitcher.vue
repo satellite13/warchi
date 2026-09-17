@@ -1,13 +1,23 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { useFeatureGrants } from "../../composables/useFeatureGrants";
 import { useLocale } from "../../composables/useLocale";
 
 const { currentLocale, setLocale, supportedLocales } = useLocale();
+const { hasGrant } = useFeatureGrants();
 const { t } = useI18n();
+
+const canSwitchLanguage = computed(() => hasGrant("ui.languageSwitch"));
 </script>
 
 <template>
-  <div class="language-switcher" role="group" :aria-label="t('common.languageSwitcher')">
+  <div
+    v-if="canSwitchLanguage"
+    class="language-switcher"
+    role="group"
+    :aria-label="t('common.languageSwitcher')"
+  >
     <button
       v-for="locale in supportedLocales"
       :key="locale"

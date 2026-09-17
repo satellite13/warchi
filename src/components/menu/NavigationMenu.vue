@@ -72,7 +72,12 @@ watch(
       <UiIcon name="menu_book" :alt="t('nav.docs')" />{{ t("nav.docs") }}
     </RouterLink>
     <template v-if="isSignedIn">
-      <RouterLink to="/wiki" class="app-nav__link" active-class="app-nav__link--active">
+      <RouterLink
+        v-if="hasGrant('model.wiki.create')"
+        to="/wiki"
+        class="app-nav__link"
+        active-class="app-nav__link--active"
+      >
         <UiIcon name="library_books" :alt="t('nav.wiki')" />{{ t("nav.wiki") }}
       </RouterLink>
       <RouterLink to="/profile" class="app-nav__link" active-class="app-nav__link--active">

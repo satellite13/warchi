@@ -1,18 +1,33 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { AUTH_CLEARED_EVENT } from "./composables/authStorage";
 import { useAuth } from "./composables/useAuth";
 import { useAvailabilityGuard } from "./composables/useAvailabilityGuard";
+import { useFeatureGrants } from "./composables/useFeatureGrants";
+import { useLocale } from "./composables/useLocale";
 import { useVersionCheck } from "./composables/useVersionCheck";
 
 const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
 const { isAuthenticated, loadCurrentUser } = useAuth();
+const { hasGrant } = useFeatureGrants();
+const { currentLocale, setLocale } = useLocale();
 const { outage, isOutage, isRetrying, retryNow } = useAvailabilityGuard();
 const { showNewVersionToast, newVersion } = useVersionCheck();
+
+/** Without ui.languageSwitch keep Russian (default for guests, reader, viewer). */
+watch(
+  () => hasGrant("ui.languageSwitch"),
+  (canSwitch) => {
+    if (!canSwitch && currentLocale.value !== "ru") {
+      setLocale("ru");
+    }
+  },
+  { immediate: true },
+);
 
 const handleAuthCleared = () => {
   if (route.name === "login" || route.meta.requiresAuth === false) return;

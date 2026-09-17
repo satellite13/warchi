@@ -54,7 +54,7 @@ export const validationScriptsMessages = {
       helpTitle: 'Справка по скриптам',
       apiHelp: {
         title: 'API скрипта',
-        moreDocs: 'Подробнее в документации',
+        moreDocs: 'Подробнее в справке',
         groups: {
           ctx: 'Контекст',
           report: 'Отчёт',
@@ -171,7 +171,7 @@ export const validationScriptsMessages = {
       helpTitle: 'Scripts help',
       apiHelp: {
         title: 'Script API',
-        moreDocs: 'Full documentation',
+        moreDocs: 'Full help',
         groups: {
           ctx: 'Context',
           report: 'Report',

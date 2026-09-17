@@ -59,7 +59,7 @@ const grantsDirty = computed(() => {
 })
 
 const roleOptions: UserRole[] = ['admin', 'architect', 'editor', 'reader', 'viewer']
-const grantCatalog = [...FEATURE_GRANT_KEYS]
+const grantCatalog: string[] = [...FEATURE_GRANT_KEYS]
 
 const roleBadgeClass: Record<UserRole, string> = {
   admin: 'role--admin',

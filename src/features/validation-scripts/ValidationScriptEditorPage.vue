@@ -5,11 +5,13 @@ import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ListDetailEditorLayout from '@/components/layout/ListDetailEditorLayout.vue'
 import SaveToast from '@/components/ui/SaveToast.vue'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import ValidationScriptSidebar from './components/ValidationScriptSidebar.vue'
 import ValidationScriptForm from './components/ValidationScriptForm.vue'
 import { useValidationScriptEditor } from './composables/useValidationScriptEditor'
 
 const { t } = useI18n()
+const { hasGrant } = useFeatureGrants()
 const {
   list,
   isLoading,
@@ -38,6 +40,11 @@ const {
   openDeleteConfirm,
   confirmDelete,
 } = useValidationScriptEditor()
+
+function onAddScript(): void {
+  if (!hasGrant('validationScript.create')) return
+  handleAdd()
+}
 </script>
 
 <template>
@@ -53,8 +60,9 @@ const {
         :scripts="list"
         :selected-script-id="selectedScriptId"
         :is-loading="isLoading"
+        :can-create="hasGrant('validationScript.create')"
         @select-script="handleSelect"
-        @add-script="handleAdd"
+        @add-script="onAddScript"
       />
     </template>
 

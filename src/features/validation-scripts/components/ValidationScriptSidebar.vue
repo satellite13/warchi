@@ -7,11 +7,15 @@ import { compareLocalizedEntityNames } from '@/utils/localeSort'
 import EditorSidebarShell from '@/components/list/EditorSidebarShell.vue'
 import SidebarListItem from '@/components/list/SidebarListItem.vue'
 
-const props = defineProps<{
-  scripts: ValidationScriptResponse[]
-  selectedScriptId: string | null
-  isLoading: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    scripts: ValidationScriptResponse[]
+    selectedScriptId: string | null
+    isLoading: boolean
+    canCreate?: boolean
+  }>(),
+  { canCreate: true },
+)
 
 const emit = defineEmits<{
   selectScript: [id: string]
@@ -50,6 +54,7 @@ const totalCount = computed(() => props.scripts.length)
   >
     <template #actions>
       <button
+        v-if="canCreate"
         type="button"
         class="btn--icon"
         :title="t('validationScripts.addScript')"

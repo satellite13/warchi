@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuth } from "../composables/useAuth";
+import { useFeatureGrants } from "../composables/useFeatureGrants";
 import { canViewAdminPanel } from "../composables/usePermissions";
 import { resolveLoginRedirect } from "./resolveLoginRedirect";
 import "./types";
@@ -99,27 +100,32 @@ const router = createRouter({
     {
       path: "/notations",
       name: "notations",
-      component: () => import("../views/NotationsView.vue")
+      component: () => import("../views/NotationsView.vue"),
+      meta: { requiresFeatureGrant: "notation.nav" }
     },
     {
       path: "/types",
       name: "types",
-      component: () => import("../views/TypesView.vue")
+      component: () => import("../views/TypesView.vue"),
+      meta: { requiresFeatureGrant: "type.nav" }
     },
     {
       path: "/shapes",
       name: "shapes",
-      component: () => import("../views/ShapesView.vue")
+      component: () => import("../views/ShapesView.vue"),
+      meta: { requiresFeatureGrant: "shape.nav" }
     },
     {
       path: "/validation-scripts",
       name: "validation-scripts",
-      component: () => import("../views/ValidationScriptsView.vue")
+      component: () => import("../views/ValidationScriptsView.vue"),
+      meta: { requiresFeatureGrant: "validationScript.nav" }
     },
     {
       path: "/notations/:id",
       name: "notation-editor",
-      component: () => import("../features/notations/NotationEditorPage.vue")
+      component: () => import("../features/notations/NotationEditorPage.vue"),
+      meta: { requiresFeatureGrant: "notation.nav" }
     },
     {
       path: "/docs",
@@ -212,6 +218,14 @@ router.beforeEach(async (to) => {
 
     const allowed = await canViewAdminPanel(currentUserId);
     if (!allowed) {
+      return { name: "home" };
+    }
+  }
+
+  const requiredGrant = to.meta.requiresFeatureGrant;
+  if (requiredGrant) {
+    const { hasGrant } = useFeatureGrants();
+    if (!hasGrant(requiredGrant)) {
       return { name: "home" };
     }
   }

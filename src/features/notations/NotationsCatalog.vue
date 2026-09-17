@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import type { NotationData } from "@/types/entities";
 import type { EntityListConfig } from "@/composables/useEntityList";
+import { useFeatureGrants } from "@/composables/useFeatureGrants";
 import EntityCatalog from "@/components/catalog/EntityCatalog.vue";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import { downloadNotationExport } from "@/features/notations/utils/notationExportDownload";
@@ -13,6 +14,7 @@ import NotationImportIconResolveDialog from "./components/NotationImportIconReso
 
 const { t } = useI18n();
 const router = useRouter();
+const { hasGrant } = useFeatureGrants();
 const exportError = ref<string | null>(null);
 const actionStatusMessage = ref<string | null>(null);
 const packageInputRef = ref<HTMLInputElement | null>(null);
@@ -55,7 +57,7 @@ async function handleExport(item: NotationData) {
 }
 
 function openPackagePicker() {
-  if (isImporting.value) return;
+  if (!hasGrant("notation.import") || isImporting.value) return;
   exportError.value = null;
   actionStatusMessage.value = null;
   const input = packageInputRef.value;
@@ -150,9 +152,10 @@ async function confirmIconResolve(remap: Record<string, string>): Promise<void> 
     :icon="DEFAULT_ENTITY_ICONS.notation"
     resource-type="NOTATION"
     :show-version-tree="true"
-    :show-create-from-version-button="true"
+    :show-create-from-version-button="hasGrant('notation.create')"
+    :can-create="hasGrant('notation.create')"
     can-export
-    can-import-package
+    :can-import-package="hasGrant('notation.import')"
     :action-error-message="exportError"
     :action-status-message="actionStatusMessage"
     :action-busy="isImporting"

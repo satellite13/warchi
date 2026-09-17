@@ -7,9 +7,19 @@ const authState = vi.hoisted(() => ({
   currentUser: { value: null as { id: string } | null },
 }))
 
+const grantsState = vi.hoisted(() => ({
+  hasGrant: vi.fn((_key: string) => true),
+}))
+
 vi.mock('../../composables/useAuth', () => ({
   useAuth: () => ({
     currentUser: authState.currentUser,
+  }),
+}))
+
+vi.mock('../../composables/useFeatureGrants', () => ({
+  useFeatureGrants: () => ({
+    hasGrant: grantsState.hasGrant,
   }),
 }))
 
@@ -37,6 +47,8 @@ function mountMenu() {
 describe('NavigationMenu', () => {
   beforeEach(() => {
     authState.currentUser.value = null
+    grantsState.hasGrant.mockReset()
+    grantsState.hasGrant.mockImplementation(() => true)
     vi.mocked(canViewAdminPanel).mockReset()
   })
 
@@ -56,9 +68,29 @@ describe('NavigationMenu', () => {
 
     const destinations = wrapper.findAllComponents(RouterLinkStub).map((link) => link.props('to'))
     expect(destinations).toContain('/models')
+    expect(destinations).toContain('/notations')
+    expect(destinations).toContain('/types')
+    expect(destinations).toContain('/shapes')
+    expect(destinations).toContain('/validation-scripts')
     expect(destinations).toContain('/docs')
     expect(destinations).toContain('/wiki')
     expect(destinations).toContain('/profile')
+  })
+
+  it('hides catalog nav links when feature grants are missing', async () => {
+    authState.currentUser.value = { id: 'user-1' }
+    vi.mocked(canViewAdminPanel).mockResolvedValue(false)
+    grantsState.hasGrant.mockImplementation((key: string) => key === 'model.create')
+
+    const wrapper = mountMenu()
+    await flushPromises()
+
+    const destinations = wrapper.findAllComponents(RouterLinkStub).map((link) => link.props('to'))
+    expect(destinations).toContain('/models')
+    expect(destinations).not.toContain('/notations')
+    expect(destinations).not.toContain('/types')
+    expect(destinations).not.toContain('/shapes')
+    expect(destinations).not.toContain('/validation-scripts')
   })
 
   it('shows the admin link when policy allows viewing the admin panel', async () => {

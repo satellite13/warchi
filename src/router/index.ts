@@ -53,6 +53,11 @@ const router = createRouter({
           path: "icons",
           name: "admin-icons",
           component: () => import("../views/AdminIconsView.vue")
+        },
+        {
+          path: "role-grants",
+          name: "admin-role-grants",
+          component: () => import("../views/AdminRoleGrantsView.vue")
         }
       ]
     },

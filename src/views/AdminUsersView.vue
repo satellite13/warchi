@@ -70,7 +70,7 @@ const roleBadgeClass: Record<UserRole, string> = {
 }
 
 const roleLabel = (role: UserRole): string => t(`featureGrants.roles.${role}`)
-const grantLabel = (key: string): string => t(`featureGrants.keys.${key}`)
+const grantLabel = (key: string): string => t(`featureGrants.${key}`)
 
 const stats = computed(() => {
   const total = users.value.length

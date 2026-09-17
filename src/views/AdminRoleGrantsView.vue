@@ -87,7 +87,7 @@ function applyMatrix(data: RoleFeatureGrantsMatrixResponse): void {
 }
 
 function grantLabel(key: string): string {
-  return t(`featureGrants.keys.${key}`)
+  return t(`featureGrants.${key}`)
 }
 
 function roleLabel(role: MatrixRole): string {

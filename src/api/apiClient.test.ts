@@ -226,7 +226,7 @@ describe('apiClient', () => {
   describe('401 token refresh', () => {
     it('triggers token refresh on 401 for non-public paths', async () => {
       const refreshResponse = {
-        user: { id: '1', email: 'test@test.com', role: 'USER' },
+        user: { id: '1', email: 'test@test.com', role: 'reader' },
       }
 
       let callCount = 0

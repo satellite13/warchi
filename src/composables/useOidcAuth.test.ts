@@ -31,7 +31,7 @@ function mockOidcUser() {
   return {
     id: 'u-1',
     email: 'test@example.com',
-    role: 'USER',
+    role: 'reader',
     firstName: 'Test',
     lastName: 'User',
   }

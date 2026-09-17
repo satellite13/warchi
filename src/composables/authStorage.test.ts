@@ -53,7 +53,7 @@ describe('authStorage', () => {
   describe('loadStoredUser / saveStoredUser', () => {
     it('saves and loads a user', async () => {
       const { loadStoredUser, saveStoredUser } = await loadModule()
-      const user = { id: 'u1', email: 'test@test.com', role: 'USER' as const }
+      const user = { id: 'u1', email: 'test@test.com', role: 'reader' as const }
 
       saveStoredUser(user)
       const loaded = loadStoredUser()
@@ -98,7 +98,7 @@ describe('authStorage', () => {
   describe('cookie-session storage contract', () => {
     it('persists only the UI user profile key, never JWT token fields', async () => {
       const { saveStoredUser, loadStoredUser } = await loadModule()
-      const user = { id: 'u1', email: 'test@test.com', role: 'USER' as const }
+      const user = { id: 'u1', email: 'test@test.com', role: 'reader' as const }
 
       saveStoredUser(user)
 

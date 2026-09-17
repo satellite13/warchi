@@ -41,17 +41,20 @@ const successMessage = ref<string | null>(null)
 const searchEmail = ref('')
 const apiKeysUserId = ref<string | null>(null)
 
-const roleOptions: UserRole[] = ['USER', 'ADMIN']
+const roleOptions: UserRole[] = ['admin', 'architect', 'editor', 'reader', 'viewer']
 
 const roleMeta: Record<UserRole, { label: string; cls: string }> = {
-  USER: { label: 'User', cls: 'role--user' },
-  ADMIN: { label: 'Admin', cls: 'role--admin' },
+  admin: { label: 'Admin', cls: 'role--admin' },
+  architect: { label: 'Architect', cls: 'role--user' },
+  editor: { label: 'Editor', cls: 'role--user' },
+  reader: { label: 'Reader', cls: 'role--user' },
+  viewer: { label: 'Viewer', cls: 'role--user' },
 }
 
 const stats = computed(() => {
   const total = users.value.length
   const active = users.value.filter((u) => u.isActive).length
-  const admins = users.value.filter((u) => u.role === 'ADMIN').length
+  const admins = users.value.filter((u) => u.role === 'admin').length
   return { total, active, inactive: total - active, admins }
 })
 

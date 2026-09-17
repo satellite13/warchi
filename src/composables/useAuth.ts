@@ -63,7 +63,7 @@ if (
 
 export function useAuth() {
   const isAuthenticated = computed(() => currentUser.value !== null);
-  const isAdmin = computed(() => currentUser.value?.role === "ADMIN");
+  const isAdmin = computed(() => currentUser.value?.role === "admin");
 
   async function login(email: string, password: string): Promise<AuthResult> {
     const result = await apiPost<AuthResponse>("/auth/login", { email, password });

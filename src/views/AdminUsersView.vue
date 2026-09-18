@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { apiGet, apiPut } from '../composables/useApi'
+import { apiDelete, apiGet, apiPut } from '../composables/useApi'
 import { pagedListParams } from '../api/queryHelpers'
 import { FEATURE_GRANT_KEYS } from '@/domain/featureGrants/catalog'
 import type { PaginatedResponse, User, UserRole } from '../types/entities'
@@ -126,6 +126,31 @@ const updateUser = async (userId: string, patch: UserUpdatePayload): Promise<voi
   users.value = users.value.map((item) =>
     item.id === userId ? normalizeUser(result.data) : item,
   )
+  isSavingId.value = null
+}
+
+const unlinkUserSso = async (user: EditableUser): Promise<void> => {
+  if (!user.oidcSub) return
+  if (!window.confirm(t('adminUsersOidc.unlinkConfirm', { email: user.email }))) return
+
+  isSavingId.value = user.id
+  errorMessage.value = null
+  successMessage.value = null
+
+  const result = await apiDelete<{ linked: boolean; oidcSub?: string | null }>(
+    `/admin/users/${user.id}/sso`,
+  )
+
+  if (!result.success) {
+    errorMessage.value = result.error.message
+    isSavingId.value = null
+    return
+  }
+
+  users.value = users.value.map((item) =>
+    item.id === user.id ? { ...item, oidcSub: null } : item,
+  )
+  successMessage.value = t('adminUsersOidc.unlinked')
   isSavingId.value = null
 }
 
@@ -321,9 +346,19 @@ onMounted(() => {
                 </div>
                 <div class="au-user__meta">
                   <span class="au-user__email">{{ user.email }}</span>
-                  <span v-if="user.oidcSub" class="au-user__oidc">
-                    {{ t('adminUsersOidc.linkedAs', { sub: user.oidcSub }) }}
-                  </span>
+                  <div v-if="user.oidcSub" class="au-user__oidc-row">
+                    <span class="au-user__oidc">
+                      {{ t('adminUsersOidc.linkedAs', { sub: user.oidcSub }) }}
+                    </span>
+                    <button
+                      type="button"
+                      class="au-btn-inline au-btn-inline--danger"
+                      :disabled="isSavingId === user.id"
+                      @click="unlinkUserSso(user)"
+                    >
+                      {{ t('adminUsersOidc.unlink') }}
+                    </button>
+                  </div>
                   <span class="au-user__id">{{ user.id }}</span>
                 </div>
               </div>
@@ -371,8 +406,12 @@ onMounted(() => {
                     <span class="au-profile__pos">{{
                       user.position || t('common.loadingDash')
                     }}</span>
+                    <span v-if="user.oidcSub" class="au-profile__sso-hint">
+                      {{ t('adminUsersOidc.profileManagedBySso') }}
+                    </span>
                   </div>
                   <button
+                    v-if="!user.oidcSub"
                     type="button"
                     class="au-btn-inline"
                     :disabled="isSavingId === user.id"
@@ -766,6 +805,14 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.au-user__oidc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .au-user__id {
   font-size: 11px;
   color: var(--text-subtle);
@@ -847,6 +894,15 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+.au-btn-inline--danger {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.au-btn-inline--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+
 /* ─── Profile cell ─────────────────────────────── */
 .au-profile {
   min-width: 200px;
@@ -870,6 +926,11 @@ onMounted(() => {
 .au-profile__pos {
   font-size: 11px;
   color: var(--text-subtle);
+}
+
+.au-profile__sso-hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .au-profile__form {

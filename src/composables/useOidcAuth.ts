@@ -100,7 +100,7 @@ export function useOidcAuth() {
     return false
   }
 
-  /** Unlink SSO. */
+  /** Unlink SSO (self-service). Backend returns 403 — use adminUnlinkSso. */
   async function unlinkSso(): Promise<boolean> {
     const result = await apiDelete<OidcStatus>("/auth/sso/unlink")
     if (result.success && result.data) {
@@ -108,6 +108,12 @@ export function useOidcAuth() {
       return true
     }
     return false
+  }
+
+  /** Admin: unlink SSO for a user. */
+  async function adminUnlinkSso(userId: string): Promise<boolean> {
+    const result = await apiDelete<OidcStatus>(`/admin/users/${encodeURIComponent(userId)}/sso`)
+    return result.success
   }
 
   /** Get SSO link status. */
@@ -125,6 +131,7 @@ export function useOidcAuth() {
     startLinkSso,
     processLinkCallback,
     unlinkSso,
+    adminUnlinkSso,
     getLinkStatus,
     fetchSsoConfig,
     oidcLinkStatus,

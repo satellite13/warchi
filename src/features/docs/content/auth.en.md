@@ -8,7 +8,7 @@ After a successful sign-in, the server creates a cookie session and the app stor
 
 When an administrator has enabled corporate SSO (OIDC), the login page shows an extra button labeled with the identity provider name. After a successful provider login, wArchi opens a normal cookie session — the rest of the app works the same as after password sign-in.
 
-In the profile (when SSO is enabled) you can **link** a provider account to an existing user or **unlink** it. Linking requires the SSO email to match the wArchi account email. Unlinking does not delete the local account and does not end the current session.
+In the profile (when SSO is enabled) you can **link** a provider account to an existing user. Linking requires the SSO email to match the wArchi account email. While SSO is linked, personal details (name, middle name, position) are **read-only** — they come from the IdP. Only an administrator can **unlink SSO** on the Users admin page; unlinking does not delete the local account and does not end the current session.
 
 ## Sign up
 

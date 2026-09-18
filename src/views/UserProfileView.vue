@@ -15,8 +15,7 @@ import type { User } from "../types/entities"
 
 const { currentUser, updateMyProfile } = useAuth()
 const { hasGrant } = useFeatureGrants()
-const { ssoLogin, unlinkSso, getLinkStatus, fetchSsoConfig, oidcLinkStatus, ssoConfig } =
-  useOidcAuth()
+const { startLinkSso, getLinkStatus, fetchSsoConfig, oidcLinkStatus, ssoConfig } = useOidcAuth()
 const { t } = useI18n()
 
 const firstName = ref("")
@@ -32,6 +31,9 @@ const savedFirstName = ref("")
 const savedLastName = ref("")
 const savedMiddleName = ref("")
 const savedPosition = ref("")
+
+const isSsoLinked = computed(() => oidcLinkStatus.value.linked)
+const personalFieldsReadonly = computed(() => isSsoLinked.value)
 
 const displayName = computed(() => {
   const parts = [firstName.value, lastName.value].map((s) => s.trim()).filter(Boolean)
@@ -74,6 +76,7 @@ const loadProfile = async (): Promise<void> => {
 }
 
 const saveProfile = async (): Promise<void> => {
+  if (personalFieldsReadonly.value) return
   if (!firstName.value.trim()) {
     errorMessage.value = t("auth.validationFirstNameRequired")
     return
@@ -113,17 +116,7 @@ const saveProfile = async (): Promise<void> => {
 const handleLinkSso = async (): Promise<void> => {
   if (!currentUser.value?.id) return
   errorMessage.value = null
-  await ssoLogin()
-}
-
-const handleUnlinkSso = async (): Promise<void> => {
-  const success = await unlinkSso()
-  if (success) {
-    successMessage.value = t("profile.ssoUnlinked")
-    errorMessage.value = null
-  } else {
-    errorMessage.value = t("profile.ssoUnlinkError")
-  }
+  await startLinkSso(currentUser.value.id)
 }
 
 onMounted(async () => {
@@ -164,7 +157,13 @@ onMounted(async () => {
             <section class="panel">
               <div class="panel__head">
                 <h2>{{ t("profile.personalTitle") }}</h2>
-                <p>{{ t("profile.personalSubtitle") }}</p>
+                <p>
+                  {{
+                    personalFieldsReadonly
+                      ? t("profile.personalSubtitleSso")
+                      : t("profile.personalSubtitle")
+                  }}
+                </p>
               </div>
 
               <form class="form" @submit.prevent="saveProfile">
@@ -175,7 +174,8 @@ onMounted(async () => {
                       v-model="firstName"
                       class="form-input form-input--lg"
                       type="text"
-                      :disabled="isLoading || isSaving"
+                      :disabled="isLoading || isSaving || personalFieldsReadonly"
+                      :readonly="personalFieldsReadonly"
                     />
                   </label>
                   <label class="field">
@@ -184,7 +184,8 @@ onMounted(async () => {
                       v-model="lastName"
                       class="form-input form-input--lg"
                       type="text"
-                      :disabled="isLoading || isSaving"
+                      :disabled="isLoading || isSaving || personalFieldsReadonly"
+                      :readonly="personalFieldsReadonly"
                     />
                   </label>
                 </div>
@@ -194,7 +195,8 @@ onMounted(async () => {
                     v-model="middleName"
                     class="form-input form-input--lg"
                     type="text"
-                    :disabled="isLoading || isSaving"
+                    :disabled="isLoading || isSaving || personalFieldsReadonly"
+                    :readonly="personalFieldsReadonly"
                   />
                 </label>
                 <label class="field">
@@ -203,14 +205,15 @@ onMounted(async () => {
                     v-model="position"
                     class="form-input form-input--lg"
                     type="text"
-                    :disabled="isLoading || isSaving"
+                    :disabled="isLoading || isSaving || personalFieldsReadonly"
+                    :readonly="personalFieldsReadonly"
                   />
                 </label>
 
                 <div v-if="errorMessage" class="form-error">{{ errorMessage }}</div>
                 <div v-if="successMessage" class="form-success">{{ successMessage }}</div>
 
-                <div class="form__actions">
+                <div v-if="!personalFieldsReadonly" class="form__actions">
                   <button
                     type="submit"
                     class="btn btn--primary"
@@ -233,9 +236,6 @@ onMounted(async () => {
                 <div v-if="oidcLinkStatus.linked" class="sso-linked">
                   <UiIcon name="verified_user" class="sso-icon" />
                   <span>{{ t("profile.ssoLinked") }}</span>
-                  <button type="button" class="btn btn--danger sso-unlink" @click="handleUnlinkSso">
-                    {{ t("profile.ssoUnlink") }}
-                  </button>
                 </div>
                 <div v-else class="sso-unlinked">
                   <UiIcon name="link" class="sso-icon" />

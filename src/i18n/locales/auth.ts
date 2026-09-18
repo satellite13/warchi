@@ -56,6 +56,8 @@ export const authMessages = {
       subtitle: 'Персональные данные и ключи доступа для MCP и внешних клиентов.',
       personalTitle: 'Личные данные',
       personalSubtitle: 'Имя и должность, которые видны в интерфейсе.',
+      personalSubtitleSso:
+        'Данные приходят из SSO и недоступны для редактирования. Отвязать SSO может только администратор.',
       middleName: 'Отчество',
       position: 'Должность',
       updated: 'Профиль обновлен',
@@ -116,6 +118,10 @@ export const authMessages = {
     },
     adminUsersOidc: {
       linkedAs: 'SSO: {sub}',
+      unlink: 'Отвязать SSO',
+      unlinkConfirm: 'Отвязать SSO у пользователя {email}?',
+      unlinked: 'SSO отвязан',
+      profileManagedBySso: 'Личные данные из SSO',
     },
     admin: {
       tabUsers: 'Пользователи',
@@ -356,6 +362,8 @@ export const authMessages = {
       subtitle: 'Personal details and access keys for MCP and external clients.',
       personalTitle: 'Personal details',
       personalSubtitle: 'Name and position shown across the UI.',
+      personalSubtitleSso:
+        'These fields come from SSO and cannot be edited. Only an administrator can unlink SSO.',
       middleName: 'Middle name',
       position: 'Position',
       updated: 'Profile updated',
@@ -416,6 +424,10 @@ export const authMessages = {
     },
     adminUsersOidc: {
       linkedAs: 'SSO: {sub}',
+      unlink: 'Unlink SSO',
+      unlinkConfirm: 'Unlink SSO for {email}?',
+      unlinked: 'SSO unlinked',
+      profileManagedBySso: 'Personal details from SSO',
     },
     admin: {
       tabUsers: 'Users',

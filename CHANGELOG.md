@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.18] - 2026-09-18
+
+### Fixed
+
+- Unsaved diagram canvas edits are no longer silently dropped when saving a model with a stale `_attrsPending` flag (e.g. after tab switching).
+- The model editor keeps a local draft in localStorage and offers to restore it on the next model open.
+
 ## [0.25.17] - 2026-09-16
 
 ### Fixed

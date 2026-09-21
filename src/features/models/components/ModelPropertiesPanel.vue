@@ -36,9 +36,15 @@ const props = withDefaults(
     wikiDocuments?: DocumentWikiItem[]
     onOpenNodeDocument?: (node: EditorNode) => void
     readOnly?: boolean
+    /** Грант model.wiki.create: без него кнопки wiki скрыты */
+    canAccessWiki?: boolean
+    /** Создание wiki (без существующего файла); требует EDIT + грант */
+    canCreateWiki?: boolean
   }>(),
   {
     readOnly: false,
+    canAccessWiki: true,
+    canCreateWiki: true,
     onOpenNodeDocument: undefined,
     diagrams: () => [],
     modelDocuments: () => [],
@@ -255,12 +261,13 @@ const nodeEditorBlocks = computed(
         </span>
       </div>
 
-      <!-- Documentation button (node only); при read-only без привязанного файла не предлагаем «создать» -->
+      <!-- Documentation button (node only); без гранта wiki скрываем полностью -->
       <button
         v-if="
           currentMode === 'node' &&
           selectedNode &&
-          (!readOnly || !!selectedNode.parsedAttrs.documentFileId)
+          canAccessWiki &&
+          (!!selectedNode.parsedAttrs.documentFileId || (!readOnly && canCreateWiki))
         "
         type="button"
         class="mp-doc-btn"

@@ -77,9 +77,10 @@ export interface User {
   oidcSub?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+  featureGrants?: string[]
 }
 
-export type UserRole = 'USER' | 'ADMIN'
+export type UserRole = 'admin' | 'architect' | 'editor' | 'reader' | 'viewer'
 
 export interface UserProfileForm {
   firstName: string

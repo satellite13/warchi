@@ -1,6 +1,7 @@
 import type { ComputedRef, Ref } from 'vue'
 import type { Router } from 'vue-router'
 import type { PermissionAction, PermissionResourceType } from '@/types/api'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { isSaveLockedToolbarEvent } from '../utils/modelEditorToolbarLock'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
@@ -63,6 +64,7 @@ export function useModelEditorToolbarActions(options: {
   state: Ref<ModelEditorState>
   t: Translate
 }) {
+  const { hasGrant } = useFeatureGrants()
   const handleToolbarAction = async (event: string) => {
     if (isSaveLockedToolbarEvent(event, options.isSaving.value)) return
     switch (event) {
@@ -173,6 +175,7 @@ export function useModelEditorToolbarActions(options: {
         break
       }
       case 'toggle-comments': {
+        if (!hasGrant('model.comments')) break
         options.commentsVisible.value = !options.commentsVisible.value
         break
       }
@@ -180,12 +183,15 @@ export function useModelEditorToolbarActions(options: {
         options.diagramNavigationOnlyMode.value = !options.diagramNavigationOnlyMode.value
         break
       case 'export-diagram-png':
+        if (!hasGrant('model.exportDiagramImage')) break
         await options.exportActiveDiagramAsPng()
         break
       case 'export-diagram-svg':
+        if (!hasGrant('model.exportDiagramImage')) break
         options.exportActiveDiagramAsSvg()
         break
       case 'share-diagram-image':
+        if (!hasGrant('model.exportDiagramImage')) break
         options.showDiagramImageShareModal.value = true
         break
       case 'copy-diagram-link': {
@@ -206,7 +212,7 @@ export function useModelEditorToolbarActions(options: {
         break
       }
       case 'import-oef':
-        if (options.canInspectDiagramJson.value) {
+        if (hasGrant('model.importOef') && options.canInspectDiagramJson.value) {
           const loadedSnapshot = await options.oefDetachedSnapshot.load()
           if (!loadedSnapshot) {
             options.setUiError(options.oefDetachedSnapshot.error.value ?? options.t('common.error'))
@@ -216,6 +222,7 @@ export function useModelEditorToolbarActions(options: {
         }
         break
       case 'export-model-package': {
+        if (!hasGrant('model.export')) break
         const modelId = options.model.value?.id
         if (!modelId) break
         try {
@@ -228,6 +235,7 @@ export function useModelEditorToolbarActions(options: {
         break
       }
       case 'run-validation-script':
+        if (!hasGrant('model.runValidationScripts')) break
         options.openValidationScriptsModal()
         break
       case 'close-diagram':
@@ -243,6 +251,7 @@ export function useModelEditorToolbarActions(options: {
         break
       case 'show-diagram-json':
         if (
+          hasGrant('model.inspectJson') &&
           options.model.value?.id &&
           (await options.checkPermission({
             resourceType: 'MODEL',
@@ -254,18 +263,19 @@ export function useModelEditorToolbarActions(options: {
         }
         break
       case 'open-model-doc': {
+        if (!hasGrant('model.wiki.create')) break
         const hasModelDoc = !!options.modelRootDocumentFileId.value
-        if (!options.canInspectDiagramJson.value && !hasModelDoc) break
+        if (!hasModelDoc && !options.canInspectDiagramJson.value) break
         options.handleOpenModelDoc()
         break
       }
       case 'open-diagram-doc': {
         const d = options.activeDiagram.value
-        if (!d) break
+        if (!d || !hasGrant('model.wiki.create')) break
         const hasDiagramDoc =
           typeof d.parsedAttrs?.documentFileId === 'string' &&
           d.parsedAttrs.documentFileId.trim().length > 0
-        if (!options.canInspectDiagramJson.value && !hasDiagramDoc) break
+        if (!hasDiagramDoc && !options.canInspectDiagramJson.value) break
         options.handleOpenDiagramDoc()
         break
       }

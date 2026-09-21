@@ -7,11 +7,15 @@ import { compareLocalizedEntityNames } from '@/utils/localeSort'
 import EditorSidebarShell from '@/components/list/EditorSidebarShell.vue'
 import SidebarListItem from '@/components/list/SidebarListItem.vue'
 
-const props = defineProps<{
-  shapes: NodeShapeResponse[]
-  selectedShapeId: string | null
-  isLoading: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    shapes: NodeShapeResponse[]
+    selectedShapeId: string | null
+    isLoading: boolean
+    canCreate?: boolean
+  }>(),
+  { canCreate: true },
+)
 
 const emit = defineEmits<{
   selectShape: [id: string]
@@ -46,6 +50,7 @@ const totalCount = computed(() => props.shapes.length)
   >
     <template #actions>
       <button
+        v-if="canCreate"
         type="button"
         class="btn--icon"
         :title="t('shapes.addShape')"

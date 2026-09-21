@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import { useFeatureGrants } from '../composables/useFeatureGrants'
 import { canViewAdminPanel } from '../composables/usePermissions'
 import { resolveLoginRedirect } from './resolveLoginRedirect'
 import './types'
@@ -54,6 +55,11 @@ const router = createRouter({
           name: 'admin-icons',
           component: () => import('../views/AdminIconsView.vue'),
         },
+        {
+          path: 'role-grants',
+          name: 'admin-role-grants',
+          component: () => import('../views/AdminRoleGrantsView.vue'),
+        },
       ],
     },
     {
@@ -75,16 +81,19 @@ const router = createRouter({
       path: '/models/:id/compare',
       name: 'model-visual-compare',
       component: () => import('../views/ModelVisualCompareView.vue'),
+      meta: { requiresFeatureGrant: 'model.compareVersions' },
     },
     {
       path: '/models/:id/diagram-compare',
       name: 'diagram-versions-compare',
       component: () => import('../views/DiagramVersionsCompareView.vue'),
+      meta: { requiresFeatureGrant: 'model.compareVersions' },
     },
     {
       path: '/models/:id/relation-matrix',
       name: 'model-relation-matrix',
       component: () => import('../views/ModelRelationMatrixView.vue'),
+      meta: { requiresFeatureGrant: 'model.relationMatrix' },
     },
     {
       path: '/models/:id/validation',
@@ -95,26 +104,31 @@ const router = createRouter({
       path: '/notations',
       name: 'notations',
       component: () => import('../views/NotationsView.vue'),
+      meta: { requiresFeatureGrant: 'notation.nav' },
     },
     {
       path: '/types',
       name: 'types',
       component: () => import('../views/TypesView.vue'),
+      meta: { requiresFeatureGrant: 'type.nav' },
     },
     {
       path: '/shapes',
       name: 'shapes',
       component: () => import('../views/ShapesView.vue'),
+      meta: { requiresFeatureGrant: 'shape.nav' },
     },
     {
       path: '/validation-scripts',
       name: 'validation-scripts',
       component: () => import('../views/ValidationScriptsView.vue'),
+      meta: { requiresFeatureGrant: 'validationScript.nav' },
     },
     {
       path: '/notations/:id',
       name: 'notation-editor',
       component: () => import('../features/notations/NotationEditorPage.vue'),
+      meta: { requiresFeatureGrant: 'notation.nav' },
     },
     {
       path: '/docs',
@@ -152,6 +166,7 @@ const router = createRouter({
       path: '/wiki',
       name: 'wiki',
       component: () => import('../views/WikiView.vue'),
+      meta: { requiresFeatureGrant: 'model.wiki.create' },
     },
     {
       path: '/home',
@@ -206,6 +221,14 @@ router.beforeEach(async to => {
 
     const allowed = await canViewAdminPanel(currentUserId)
     if (!allowed) {
+      return { name: 'home' }
+    }
+  }
+
+  const requiredGrant = to.meta.requiresFeatureGrant
+  if (requiredGrant) {
+    const { hasGrant } = useFeatureGrants()
+    if (!hasGrant(requiredGrant)) {
       return { name: 'home' }
     }
   }

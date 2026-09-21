@@ -1,4 +1,4 @@
-import { ref, computed, type Ref } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePersistedToolbarState } from '@/composables/usePersistedToolbarState'
 import type { ToolbarButton } from '@/components/layout/IconToolbar.vue'
@@ -27,7 +27,11 @@ function isEdgePathType(value: unknown): value is EdgePathType {
   return typeof value === 'string' && VALID_EDGE_TYPES.includes(value as EdgePathType)
 }
 
-export function useModelToolbarState(userId: Ref<string | null>, hasActiveDiagram: Ref<boolean>) {
+export function useModelToolbarState(
+  userId: Ref<string | null>,
+  hasActiveDiagram: Ref<boolean>,
+  canShowComments: Ref<boolean> = computed(() => true)
+) {
   const { t } = useI18n()
 
   const gridVisible = ref(true)
@@ -69,71 +73,84 @@ export function useModelToolbarState(userId: Ref<string | null>, hasActiveDiagra
     }
   )
 
-  const canvasToggleButtons = computed<ToolbarButton[]>(() => [
-    {
-      icon: 'grid_on',
-      event: 'toggle-grid',
-      title: t('toolbar.grid'),
-      active: gridVisible.value,
-      disabled: !hasActiveDiagram.value,
+  watch(
+    canShowComments,
+    allowed => {
+      if (!allowed) commentsVisible.value = false
     },
-    {
-      icon: 'map',
-      event: 'toggle-minimap',
-      title: t('toolbar.minimap'),
-      active: miniMapVisible.value,
-      disabled: !hasActiveDiagram.value,
-    },
-    {
-      icon: 'grid_3x3',
-      event: 'toggle-snap',
-      title: t('toolbar.snapToGrid'),
-      active: snapEnabled.value,
-      disabled: !hasActiveDiagram.value,
-    },
-    {
-      icon: 'align_justify_center',
-      event: 'toggle-align',
-      title: t('toolbar.smartAlign'),
-      active: alignEnabled.value,
-      disabled: !hasActiveDiagram.value,
-    },
-    {
-      icon: 'straighten',
-      event: 'toggle-rulers',
-      title: t('toolbar.rulers'),
-      active: rulersEnabled.value,
-      disabled: !hasActiveDiagram.value,
-    },
-    {
-      icon: 'push_pin',
-      event: 'toggle-lock-anchors',
-      title: t('toolbar.lockLinkAnchors'),
-      active: lockAnchorsEnabled.value,
-      disabled: !hasActiveDiagram.value,
-    },
-    {
-      icon: 'route',
-      event: 'toggle-outline',
-      title: t('toolbar.outline'),
-      active: attachToOutlineEnabled.value,
-      disabled: !hasActiveDiagram.value,
-    },
-    {
-      icon: 'join_inner',
-      event: 'toggle-auto-link-in-groups',
-      title: t('models.autoLinkInGroups'),
-      active: autoLinkInGroups.value,
-      disabled: !hasActiveDiagram.value,
-    },
-    {
-      icon: 'forum',
-      event: 'toggle-comments',
-      title: t('toolbar.comments'),
-      active: commentsVisible.value,
-      disabled: !hasActiveDiagram.value,
-    },
-  ])
+    { immediate: true }
+  )
+
+  const canvasToggleButtons = computed<ToolbarButton[]>(() => {
+    const buttons: ToolbarButton[] = [
+      {
+        icon: 'grid_on',
+        event: 'toggle-grid',
+        title: t('toolbar.grid'),
+        active: gridVisible.value,
+        disabled: !hasActiveDiagram.value,
+      },
+      {
+        icon: 'map',
+        event: 'toggle-minimap',
+        title: t('toolbar.minimap'),
+        active: miniMapVisible.value,
+        disabled: !hasActiveDiagram.value,
+      },
+      {
+        icon: 'grid_3x3',
+        event: 'toggle-snap',
+        title: t('toolbar.snapToGrid'),
+        active: snapEnabled.value,
+        disabled: !hasActiveDiagram.value,
+      },
+      {
+        icon: 'align_justify_center',
+        event: 'toggle-align',
+        title: t('toolbar.smartAlign'),
+        active: alignEnabled.value,
+        disabled: !hasActiveDiagram.value,
+      },
+      {
+        icon: 'straighten',
+        event: 'toggle-rulers',
+        title: t('toolbar.rulers'),
+        active: rulersEnabled.value,
+        disabled: !hasActiveDiagram.value,
+      },
+      {
+        icon: 'push_pin',
+        event: 'toggle-lock-anchors',
+        title: t('toolbar.lockLinkAnchors'),
+        active: lockAnchorsEnabled.value,
+        disabled: !hasActiveDiagram.value,
+      },
+      {
+        icon: 'route',
+        event: 'toggle-outline',
+        title: t('toolbar.outline'),
+        active: attachToOutlineEnabled.value,
+        disabled: !hasActiveDiagram.value,
+      },
+      {
+        icon: 'join_inner',
+        event: 'toggle-auto-link-in-groups',
+        title: t('models.autoLinkInGroups'),
+        active: autoLinkInGroups.value,
+        disabled: !hasActiveDiagram.value,
+      },
+    ]
+    if (canShowComments.value) {
+      buttons.push({
+        icon: 'forum',
+        event: 'toggle-comments',
+        title: t('toolbar.comments'),
+        active: commentsVisible.value,
+        disabled: !hasActiveDiagram.value,
+      })
+    }
+    return buttons
+  })
 
   const defaultLinkTypeOptions = computed<{ value: EdgePathType; label: string; icon: string }[]>(
     () => [

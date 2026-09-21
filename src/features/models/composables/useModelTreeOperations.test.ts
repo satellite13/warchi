@@ -8,6 +8,12 @@ vi.mock('@/composables/useApi', () => ({
   apiGet: vi.fn(),
 }))
 
+vi.mock('@/composables/useFeatureGrants', () => ({
+  useFeatureGrants: () => ({
+    hasGrant: () => true,
+  }),
+}))
+
 const makeNode = (
   id: string,
   parentNodeId: string | null,

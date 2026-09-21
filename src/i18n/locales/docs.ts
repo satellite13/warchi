@@ -1,9 +1,9 @@
 export const docsMessages = {
   ru: {
     docs: {
-      sidebarTitle: 'Документация',
+      sidebarTitle: 'Справка',
       notFound: 'Раздел не найден',
-      notFoundDesc: 'Запрашиваемый раздел документации не существует.',
+      notFoundDesc: 'Запрашиваемый раздел справки не существует.',
       loadError: 'Ошибка загрузки',
       loadErrorDesc: 'Не удалось загрузить содержимое раздела.',
       sections: {
@@ -46,9 +46,9 @@ export const docsMessages = {
   },
   en: {
     docs: {
-      sidebarTitle: 'Documentation',
+      sidebarTitle: 'Help',
       notFound: 'Section not found',
-      notFoundDesc: 'The requested documentation section does not exist.',
+      notFoundDesc: 'The requested help section does not exist.',
       loadError: 'Load error',
       loadErrorDesc: 'Failed to load section content.',
       sections: {

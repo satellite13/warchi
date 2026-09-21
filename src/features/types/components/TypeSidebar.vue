@@ -9,15 +9,19 @@ import EditorSidebarShell from '@/components/list/EditorSidebarShell.vue'
 import SidebarListItem from '@/components/list/SidebarListItem.vue'
 import CollapsibleSection from '@/components/ui/CollapsibleSection.vue'
 
-const props = defineProps<{
-  nodeTypes: TypeItem[]
-  linkTypes: TypeItem[]
-  currentUserId: string | null
-  selectedTypeId: string | null
-  isLoading: boolean
-  selectionMode: boolean
-  checkedIds: Set<string>
-}>()
+const props = withDefaults(
+  defineProps<{
+    nodeTypes: TypeItem[]
+    linkTypes: TypeItem[]
+    currentUserId: string | null
+    selectedTypeId: string | null
+    isLoading: boolean
+    selectionMode: boolean
+    checkedIds: Set<string>
+    canCreate?: boolean
+  }>(),
+  { canCreate: true },
+)
 
 const emit = defineEmits<{
   selectType: [id: string]
@@ -92,7 +96,7 @@ const linkTypesExpanded = ref(true)
         <UiIcon name="checklist" />
       </button>
       <button
-        v-if="!selectionMode"
+        v-if="!selectionMode && canCreate"
         type="button"
         class="btn--icon"
         :title="t('types.addNodeType')"
@@ -101,7 +105,7 @@ const linkTypesExpanded = ref(true)
         <UiIcon :name="DEFAULT_ENTITY_ICONS.nodeType" />
       </button>
       <button
-        v-if="!selectionMode"
+        v-if="!selectionMode && canCreate"
         type="button"
         class="btn--icon"
         :title="t('types.addLinkType')"

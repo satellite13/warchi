@@ -6,11 +6,13 @@ import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
 import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ListDetailEditorLayout from '@/components/layout/ListDetailEditorLayout.vue'
 import SaveToast from '@/components/ui/SaveToast.vue'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import ShapeSidebar from './components/ShapeSidebar.vue'
 import ShapeForm from './components/ShapeForm.vue'
 import { useShapeEditor } from './composables/useShapeEditor'
 
 const { t } = useI18n()
+const { hasGrant } = useFeatureGrants()
 const {
   list,
   isLoading,
@@ -46,6 +48,11 @@ const {
   openDeleteConfirm,
   confirmDelete,
 } = useShapeEditor()
+
+function onAddShape(): void {
+  if (!hasGrant('shape.create')) return
+  handleAdd()
+}
 </script>
 
 <template>
@@ -60,8 +67,9 @@ const {
         :shapes="list"
         :selected-shape-id="selectedShapeId"
         :is-loading="isLoading"
+        :can-create="hasGrant('shape.create')"
         @select-shape="handleSelect"
-        @add-shape="handleAdd"
+        @add-shape="onAddShape"
       />
     </template>
 

@@ -134,6 +134,20 @@ describe('useModelToolbarState', () => {
         expect(btn.disabled).toBe(false)
       }
     })
+
+    it('omits comments toggle when canShowComments is false', async () => {
+      const userId = ref<string | null>('test-user')
+      const hasActiveDiagram = ref(true)
+      const canShowComments = ref(false)
+      const state = useModelToolbarState(userId, hasActiveDiagram, canShowComments)
+
+      expect(state.commentsVisible.value).toBe(false)
+      expect(state.canvasToggleButtons.value.some((b) => b.event === 'toggle-comments')).toBe(false)
+
+      canShowComments.value = true
+      await nextTick()
+      expect(state.canvasToggleButtons.value.some((b) => b.event === 'toggle-comments')).toBe(true)
+    })
   })
 
   describe('defaultLinkTypeOptions', () => {

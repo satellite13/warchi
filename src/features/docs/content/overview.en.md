@@ -29,12 +29,12 @@ The application consists of several main sections available through the navigati
 | Types | Node/link type editor with fields (`icon`, `defaultDirectoryPath`, custom properties) |
 | Shapes | Custom node shape catalog with visual outline editor |
 | [Scripts](/docs/validationScripts) | JS on the open diagram: report, canvas `apply`, model queries |
-| Documentation | Product help section (available without signing in) |
+| Help | Product help section (available without signing in) |
 | Wiki | Entity-linked pages for models, notations, types, shapes, and other entities |
 
-## Documentation Section
+## Help Section
 
-The **Documentation** section is available without signing in: guests see help in the header plus **Sign in**. After login, the workspace sections appear in the menu.
+The **Help** section is available without signing in: guests see help in the header plus **Sign in**. After login, the workspace sections appear in the menu.
 
 This section includes focused pages:
 

@@ -6,9 +6,11 @@ import AppHeader from "../components/layout/AppHeader.vue"
 import MainLayout from "../layouts/MainLayout.vue"
 import AppFooter from "../components/layout/AppFooter.vue"
 import { useAuth } from "../composables/useAuth"
+import { useFeatureGrants } from "../composables/useFeatureGrants"
 import { useDashboard, type RecentCommentItem } from "../composables/useDashboard"
 import { useFavorites, type FavoriteDiagramItem } from "../composables/useFavorites"
 import { useActivityFormatting } from "../composables/useActivityFormatting"
+import type { FeatureGrantKey } from "@/domain/featureGrants/catalog"
 import { DEFAULT_ENTITY_ICONS } from "../config/iconOptions"
 import CompactEntityRow from "../components/list/CompactEntityRow.vue"
 import EmptyState from "../components/list/EmptyState.vue"
@@ -26,6 +28,7 @@ const changelogRaw = computed(() => {
   return changelogEn
 })
 const { currentUser } = useAuth()
+const { hasGrant } = useFeatureGrants()
 const { isLoading, stats, recentModels, recentNotations, recentDiagrams, recentComments } = useDashboard()
 const { favoriteIds, loadFavoriteDiagrams } = useFavorites()
 const favoriteDiagrams = ref<FavoriteDiagramItem[]>([])
@@ -69,93 +72,116 @@ const userDisplayName = computed(() => {
   return t("common.user")
 })
 
-const statCards = computed(() => [
-  {
-    key: "models",
-    icon: DEFAULT_ENTITY_ICONS.model,
-    label: t("home.models"),
-    value: stats.value.models,
-    color: "#7c5cfc",
-    route: "models"
-  },
-  {
-    key: "notations",
-    icon: DEFAULT_ENTITY_ICONS.notation,
-    label: t("home.notations"),
-    value: stats.value.notations,
-    color: "#2bb896",
-    route: "notations"
-  },
-  {
-    key: "nodeTypes",
-    icon: DEFAULT_ENTITY_ICONS.nodeType,
-    label: t("home.nodeTypes"),
-    value: stats.value.nodeTypes,
-    color: "#f59e42",
-    route: "types"
-  },
-  {
-    key: "linkTypes",
-    icon: DEFAULT_ENTITY_ICONS.link,
-    label: t("home.linkTypes"),
-    value: stats.value.linkTypes,
-    color: "#e05a9e",
-    route: "types"
-  }
-])
+const STAT_CARD_GRANTS: Partial<Record<string, FeatureGrantKey>> = {
+  notations: "notation.nav",
+  nodeTypes: "type.nav",
+  linkTypes: "type.nav",
+}
 
-const quickActions = computed(() => [
-  {
-    key: "create-model",
-    icon: "add_circle",
-    label: t("home.quickCreateModel"),
-    route: "models" as const,
-    color: "#7c5cfc",
-  },
-  {
-    key: "import-model",
-    icon: "upload",
-    label: t("home.quickImportModel"),
-    route: "models" as const,
-    query: { import: "package" },
-    color: "#7c5cfc",
-  },
-  {
-    key: "create-notation",
-    icon: "add_circle",
-    label: t("home.quickCreateNotation"),
-    route: "notations" as const,
-    color: "#2bb896",
-  },
-  {
-    key: "import-notation",
-    icon: "upload",
-    label: t("home.quickImportNotation"),
-    action: "import-notation" as const,
-    color: "#2bb896",
-  },
-  {
-    key: "type-editor",
-    icon: DEFAULT_ENTITY_ICONS.nodeType,
-    label: t("home.quickTypeEditor"),
-    route: "types" as const,
-    color: "#f59e42",
-  },
-  {
-    key: "shapes",
-    icon: "hexagon",
-    label: t("home.quickShapes"),
-    route: "shapes" as const,
-    color: "#3d8bfd",
-  },
-  {
-    key: "scripts",
-    icon: "terminal",
-    label: t("home.quickScripts"),
-    route: "validation-scripts" as const,
-    color: "#8b5cf6",
-  },
-])
+const QUICK_ACTION_GRANTS: Record<string, FeatureGrantKey> = {
+  "create-model": "model.create",
+  "import-model": "model.importPackage",
+  "create-notation": "notation.create",
+  "import-notation": "notation.import",
+  "type-editor": "type.nav",
+  shapes: "shape.nav",
+  scripts: "validationScript.nav",
+}
+
+const statCards = computed(() =>
+  [
+    {
+      key: "models",
+      icon: DEFAULT_ENTITY_ICONS.model,
+      label: t("home.models"),
+      value: stats.value.models,
+      color: "#7c5cfc",
+      route: "models",
+    },
+    {
+      key: "notations",
+      icon: DEFAULT_ENTITY_ICONS.notation,
+      label: t("home.notations"),
+      value: stats.value.notations,
+      color: "#2bb896",
+      route: "notations",
+    },
+    {
+      key: "nodeTypes",
+      icon: DEFAULT_ENTITY_ICONS.nodeType,
+      label: t("home.nodeTypes"),
+      value: stats.value.nodeTypes,
+      color: "#f59e42",
+      route: "types",
+    },
+    {
+      key: "linkTypes",
+      icon: DEFAULT_ENTITY_ICONS.link,
+      label: t("home.linkTypes"),
+      value: stats.value.linkTypes,
+      color: "#e05a9e",
+      route: "types",
+    },
+  ].filter(card => {
+    const grant = STAT_CARD_GRANTS[card.key]
+    return !grant || hasGrant(grant)
+  })
+)
+
+const quickActions = computed(() =>
+  [
+    {
+      key: "create-model",
+      icon: "add_circle",
+      label: t("home.quickCreateModel"),
+      route: "models" as const,
+      color: "#7c5cfc",
+    },
+    {
+      key: "import-model",
+      icon: "upload",
+      label: t("home.quickImportModel"),
+      route: "models" as const,
+      query: { import: "package" },
+      color: "#7c5cfc",
+    },
+    {
+      key: "create-notation",
+      icon: "add_circle",
+      label: t("home.quickCreateNotation"),
+      route: "notations" as const,
+      color: "#2bb896",
+    },
+    {
+      key: "import-notation",
+      icon: "upload",
+      label: t("home.quickImportNotation"),
+      action: "import-notation" as const,
+      color: "#2bb896",
+    },
+    {
+      key: "type-editor",
+      icon: DEFAULT_ENTITY_ICONS.nodeType,
+      label: t("home.quickTypeEditor"),
+      route: "types" as const,
+      color: "#f59e42",
+    },
+    {
+      key: "shapes",
+      icon: "hexagon",
+      label: t("home.quickShapes"),
+      route: "shapes" as const,
+      color: "#3d8bfd",
+    },
+    {
+      key: "scripts",
+      icon: "terminal",
+      label: t("home.quickScripts"),
+      route: "validation-scripts" as const,
+      color: "#8b5cf6",
+    },
+  ].filter(action => hasGrant(QUICK_ACTION_GRANTS[action.key]!))
+)
 
 
 const { formatRelativeDate } = useActivityFormatting(t, locale)
@@ -204,7 +230,7 @@ function commentExcerpt(bodyMd: string): string {
 }
 
 function openNotationPackagePicker() {
-  if (isImportingNotation.value) return
+  if (!hasGrant("notation.import") || isImportingNotation.value) return
   importErrorMessage.value = null
   importStatusMessage.value = null
   const input = notationPackageInputRef.value
@@ -219,6 +245,8 @@ function openNotationPackagePicker() {
 }
 
 function handleQuickAction(action: (typeof quickActions.value)[number]) {
+  const requiredGrant = QUICK_ACTION_GRANTS[action.key]
+  if (requiredGrant && !hasGrant(requiredGrant)) return
   if ("action" in action && action.action === "import-notation") {
     openNotationPackagePicker()
     return
@@ -235,7 +263,7 @@ async function onNotationPackageSelected(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ""
-  if (!file || isImportingNotation.value) return
+  if (!file || isImportingNotation.value || !hasGrant("notation.import")) return
 
   isImportingNotation.value = true
   importErrorMessage.value = null
@@ -285,6 +313,10 @@ async function onNotationPackageSelected(event: Event) {
 }
 
 async function confirmIconResolve(remap: Record<string, string>): Promise<void> {
+  if (!hasGrant("notation.import")) {
+    cancelResolve()
+    return
+  }
   const document = applyRemap(remap)
   isImportingNotation.value = true
   importStatusMessage.value = t("notations.packageImportProcessing")
@@ -372,7 +404,7 @@ const releaseNotes = computed(() => {
 
         <div class="main-grid">
           <div class="main-grid__left">
-            <section class="section section--compact">
+            <section v-if="quickActions.length > 0" class="section section--compact">
               <div class="section__header">
                 <UiIcon name="bolt" class="section__icon" />
                 <h2 class="section__title">{{ t("home.sectionQuickActions") }}</h2>
@@ -514,7 +546,7 @@ const releaseNotes = computed(() => {
               </ul>
             </section>
 
-            <section class="section">
+            <section v-if="hasGrant('notation.nav')" class="section">
               <div class="section__header">
                 <UiIcon name="account_tree" class="section__icon" />
                 <h2 class="section__title">{{ t("home.sectionRecentNotations") }}</h2>

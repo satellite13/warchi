@@ -75,6 +75,7 @@ import {
 import { canvasModelNodeIds, orphanedUntypedNodeIds } from './utils/orphanedDiagramOnlyNodes'
 import { getDiagramScopedLinkValues } from './utils/diagramScopedProperties'
 import { useAuth } from '@/composables/useAuth'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { usePermissions } from '@/composables/usePermissions'
 import { useCanShare } from '@/composables/useCanShare'
 import ModelEditorHeader from './components/ModelEditorHeader.vue'
@@ -237,6 +238,7 @@ const modelLiveSyncEnabled = computed(
 )
 
 const { currentUser } = useAuth()
+const { hasGrant } = useFeatureGrants()
 const { checkPermission } = usePermissions()
 const { t, locale } = useI18n()
 
@@ -261,8 +263,17 @@ const modelRootDocumentFileId = computed((): string | null => {
   }
 })
 
+const canAccessWiki = computed(() => hasGrant('model.wiki.create'))
+
+const canCreateWiki = computed(
+  () => canInspectDiagramJson.value && canAccessWiki.value
+)
+
+/** Wiki UI: grant required; create needs EDIT, open existing ok on VIEW */
 const showModelWikiHeaderButton = computed(
-  () => canInspectDiagramJson.value || !!modelRootDocumentFileId.value
+  () =>
+    canAccessWiki.value &&
+    (!!modelRootDocumentFileId.value || canInspectDiagramJson.value)
 )
 
 const {
@@ -332,7 +343,7 @@ const versionDiff = useModelVersionDiff()
 
 async function handleOpenCompareModal() {
   const modelId = state.value.modelId
-  if (!modelId) return
+  if (!modelId || !hasGrant('model.compareVersions')) return
   showCompareModal.value = true
   versionDiff.clearCompare()
   await Promise.all([
@@ -343,7 +354,7 @@ async function handleOpenCompareModal() {
 
 function handleOpenRelationMatrix(): void {
   const modelId = state.value.modelId
-  if (!modelId) return
+  if (!modelId || !hasGrant('model.relationMatrix')) return
   router.push({ name: 'model-relation-matrix', params: { id: modelId } })
 }
 
@@ -419,7 +430,9 @@ const activeDiagramDocumentFileId = computed((): string | null => {
 })
 
 const showDiagramWikiToolbarButton = computed(
-  () => canInspectDiagramJson.value || !!activeDiagramDocumentFileId.value
+  () =>
+    canAccessWiki.value &&
+    (!!activeDiagramDocumentFileId.value || canInspectDiagramJson.value)
 )
 
 const {
@@ -440,7 +453,12 @@ const {
   defaultLinkTypeOptions,
 } = useModelToolbarState(
   computed(() => currentUser.value?.id ?? null),
-  computed(() => !!activeDiagram.value)
+  computed(() => !!activeDiagram.value),
+  computed(() => hasGrant('model.comments')),
+)
+
+const commentsSurfaceVisible = computed(
+  () => hasGrant('model.comments') && commentsVisible.value
 )
 
 /** Версии текущей диаграммы (тот же model + name), от новых к старым по семверу */
@@ -571,6 +589,10 @@ watch(
   () => activeDiagram.value?.id ?? null,
   diagramId => {
     if (!diagramId || commentFocusApplied || !pendingCommentFocus) return
+    if (!hasGrant('model.comments')) {
+      commentFocusApplied = true
+      return
+    }
     commentFocusApplied = true
     if (!pendingCommentFocus.instanceId) return
     const focus = () => focusCommentInstance(pendingCommentFocus.instanceId!, pendingCommentFocus.targetType)
@@ -585,6 +607,7 @@ watch(
 
 /** Клик по бейджу: выделить элемент, показать его тред в панели комментариев */
 function onCommentBadgeClick(payload: { targetType: 'node' | 'edge'; instanceId: string }): void {
+  if (!hasGrant('model.comments')) return
   focusCommentInstance(payload.instanceId, payload.targetType)
   activeRightTab.value = 'comments'
 }
@@ -709,7 +732,7 @@ const baselineCreating = ref(false)
 const baselineError = ref<string | null>(null)
 async function handleCreateBaseline() {
   const diagram = activeDiagram.value
-  if (!diagram || isDiagramReadOnly.value) return
+  if (!diagram || isDiagramReadOnly.value || !hasGrant('model.createBaseline')) return
   baselineError.value = null
   baselineCreating.value = true
   try {
@@ -943,7 +966,7 @@ const rightPanelTabs = computed(() => {
   if (canShowTraceabilityTab.value) {
     tabs.push({ id: 'traceability', label: t('models.traceabilityTab'), icon: 'device_hub' })
   }
-  if (activeDiagram.value) {
+  if (activeDiagram.value && hasGrant('model.comments')) {
     tabs.push({ id: 'comments', label: t('comments.tab'), icon: 'forum' })
   }
   if (canShowStyleTab.value) {
@@ -1002,6 +1025,7 @@ const handleRenameModel = (nextName: string) => {
   if (error) setUiError(error)
 }
 const handleOpenNotationEditor = (notationId: string) => {
+  if (!hasGrant('notation.nav')) return
   router.push({ name: 'notation-editor', params: { id: notationId } })
 }
 const {
@@ -1043,6 +1067,7 @@ const {
   state,
   model,
   selectedDiagramId,
+  canEdit: canInspectDiagramJson,
   t: (key, params) => String(t(key, params ?? {})),
   setUiError,
   clearUiError: () => {
@@ -2661,7 +2686,7 @@ onBeforeUnmount(() => {
         :notation-id="activeDiagram?.notationId ?? ''"
         :notation-version="activeDiagram ? activeDiagramNotationVersion : ''"
         :notation-owner-info="activeDiagram ? activeDiagramNotationOwnerLabel : ''"
-        :can-open-notation="canOpenActiveDiagramNotation"
+        :can-open-notation="canOpenActiveDiagramNotation && hasGrant('notation.nav')"
         :diagram-versions="diagramVersionsForCurrentName"
         :selected-diagram-id="selectedDiagramId"
         :is-diagram-read-only="isDiagramReadOnly"
@@ -2674,7 +2699,7 @@ onBeforeUnmount(() => {
         :baseline-creating="baselineCreating"
         :baseline-error="baselineError"
         :is-admin="canInspectDiagramJson"
-        :show-compare-button="!!model?.id"
+        :show-compare-button="hasGrant('model.compareVersions') && !!model?.id"
         :model-id="model?.id ?? null"
         @action="handleToolbarAction"
         @rename-model="handleRenameModel"
@@ -2719,6 +2744,7 @@ onBeforeUnmount(() => {
             :model-name="model?.name"
             :sync-selection-enabled="selectionSyncEnabled"
             :navigation-only-mode="diagramNavigationOnlyMode"
+            :can-edit="canInspectDiagramJson"
             :loaded-children-for="loadedChildrenFor"
             :children-pages="childrenPages"
             :children-loading="partialStore.childrenLoading.value"
@@ -2819,7 +2845,7 @@ onBeforeUnmount(() => {
             :attach-to-outline-enabled="attachToOutlineEnabled"
             :remote-editor-pointer="remoteEditorPointer"
             :live-canvas-epoch="liveCanvasEpoch"
-            :comments-visible="commentsVisible"
+            :comments-visible="commentsSurfaceVisible"
             :comment-counts-by-instance="commentBadgeCounts"
             :comment-unresolved-counts-by-instance="commentBadgeUnresolvedCounts"
             @comment-badge-click="onCommentBadgeClick"
@@ -2930,6 +2956,8 @@ onBeforeUnmount(() => {
               :model-documents="modelDocuments"
               :wiki-documents="wikiDocumentsList"
               :read-only="isDiagramReadOnly"
+              :can-access-wiki="canAccessWiki"
+              :can-create-wiki="canCreateWiki"
               @bind-node-component="handleBindNodeComponent"
               @bind-link-relation="
                 id => selectedLink && !isDiagramReadOnly && bindLinkRelationFromPanel(id)
@@ -2943,7 +2971,8 @@ onBeforeUnmount(() => {
               @set-node-scoped-value="(k, v) => !isDiagramReadOnly && setNodeScopedValue(k, v)"
               @set-link-scoped-value="(k, v) => !isDiagramReadOnly && setLinkScopedValue(k, v)"
               @create-document-for-property="
-                (name, scope) => !isDiagramReadOnly && handleCreateDocumentForProperty(name, scope)
+                (name, scope) =>
+                  canCreateWiki && !isDiagramReadOnly && handleCreateDocumentForProperty(name, scope)
               "
               :on-open-node-document="handleOpenNodeDoc"
             />
@@ -2972,7 +3001,7 @@ onBeforeUnmount(() => {
               @add-node-to-diagram="handleTraceabilityAddNodeToDiagram"
             />
             <CommentsPanel
-              v-if="activeRightTab === 'comments' && activeDiagram"
+              v-if="activeRightTab === 'comments' && activeDiagram && hasGrant('model.comments')"
               ref="commentsPanelRef"
               :diagram-id="activeDiagram.id"
               :can-edit="canInspectDiagramJson"
@@ -3304,7 +3333,9 @@ onBeforeUnmount(() => {
     v-if="showDocModal"
     :title="docModalTitle"
     :file-id="docModalFileId"
-    :read-only="!canInspectDiagramJson"
+    :read-only="
+      !canInspectDiagramJson || (!docModalFileId && !hasGrant('model.wiki.create'))
+    "
     @saved="handleDocSaved"
     @close="handleDocModalClose"
   />

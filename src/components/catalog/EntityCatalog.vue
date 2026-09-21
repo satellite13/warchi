@@ -32,6 +32,8 @@ const props = defineProps<{
   showVersionTree?: boolean
   /** Показывать кнопку создания версии на базе выбранной (для моделей). */
   showCreateFromVersionButton?: boolean
+  /** Показывать кнопку создания сущности в тулбаре. */
+  canCreate?: boolean
   /** Показывать кнопку экспорта на карточках. */
   canExport?: boolean
   /** Карточка импорта ZIP-пакета (создаёт новую модель). */
@@ -43,6 +45,8 @@ const props = defineProps<{
   /** Долгая операция (импорт пакета) — блокирует каталог и скрывает empty state. */
   actionBusy?: boolean
 }>();
+
+const canCreateEntity = computed(() => props.canCreate !== false);
 
 const emit = defineEmits<{
   export: [item: VersionedEntity]
@@ -238,7 +242,11 @@ function handleExport(group: {
     <header class="home-header">
       <div class="catalog-toolbar">
         <div class="catalog-toolbar__actions">
-          <AppTooltip :text="t(`${i18nPrefix}.createDescription`)" placement="bottom">
+          <AppTooltip
+            v-if="canCreateEntity"
+            :text="t(`${i18nPrefix}.createDescription`)"
+            placement="bottom"
+          >
             <button
               type="button"
               class="btn btn--secondary btn--xs btn--toolbar"

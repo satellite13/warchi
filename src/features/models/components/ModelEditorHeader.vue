@@ -7,6 +7,7 @@ import DiagramEditorHeaderShell from "@/components/layout/DiagramEditorHeaderShe
 import IconToolbar, { type ToolbarButton } from '@/components/layout/IconToolbar.vue'
 import DiagramCanvasSettings from "./DiagramCanvasSettings.vue"
 import { useFavorites } from '@/composables/useFavorites'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import type { EdgePathType } from "../composables/useModelToolbarState"
 
 import type { EditorDiagram } from '../types'
@@ -108,6 +109,7 @@ const props = withDefaults(
 
 const router = useRouter()
 const { t } = useI18n()
+const { hasGrant } = useFeatureGrants()
 const { isFavorite, toggleFavorite } = useFavorites()
 const isDiagramFavorite = computed(() =>
   props.selectedDiagramId ? isFavorite(props.selectedDiagramId) : false
@@ -232,51 +234,67 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     disabled: !props.hasActiveDiagram,
   },
   { icon: 'separator', event: 'sep2', separator: true },
-  {
-    icon: 'image',
-    event: 'export-diagram-png',
-    title: t('toolbar.exportDiagramPng'),
-    disabled: !props.hasActiveDiagram,
-  },
-  {
-    icon: 'code',
-    event: 'export-diagram-svg',
-    title: t('toolbar.exportDiagramSvg'),
-    disabled: !props.hasActiveDiagram,
-  },
-  {
-    icon: 'ios_share',
-    event: 'share-diagram-image',
-    title: t('toolbar.shareDiagramImage'),
-    disabled: !props.hasActiveDiagram,
-  },
+  ...(hasGrant('model.exportDiagramImage')
+    ? [
+        {
+          icon: 'image',
+          event: 'export-diagram-png',
+          title: t('toolbar.exportDiagramPng'),
+          disabled: !props.hasActiveDiagram,
+        },
+        {
+          icon: 'code',
+          event: 'export-diagram-svg',
+          title: t('toolbar.exportDiagramSvg'),
+          disabled: !props.hasActiveDiagram,
+        },
+        {
+          icon: 'ios_share',
+          event: 'share-diagram-image',
+          title: t('toolbar.shareDiagramImage'),
+          disabled: !props.hasActiveDiagram,
+        },
+      ]
+    : []),
   {
     icon: 'link',
     event: 'copy-diagram-link',
     title: t('models.copyDiagramLink'),
     disabled: !props.hasActiveDiagram || !props.modelId,
   },
-  {
-    icon: 'upload_file',
-    event: 'import-oef',
-    title: t('models.oefImportTitle'),
-    disabled: !props.canEditModel || props.toolbarLocked,
-  },
-  {
-    icon: 'download',
-    event: 'export-model-package',
-    title: t('toolbar.exportModelPackage'),
-  },
-  {
-    icon: 'terminal',
-    event: 'run-validation-script',
-    title: props.hasActiveDiagram
-      ? t('validationScripts.toolbarRun')
-      : t('validationScripts.runNeedsDiagram'),
-    disabled: !props.hasActiveDiagram || props.toolbarLocked,
-  },
+  ...(hasGrant('model.importOef')
+    ? [
+        {
+          icon: 'upload_file',
+          event: 'import-oef',
+          title: t('models.oefImportTitle'),
+          disabled: !props.canEditModel || props.toolbarLocked,
+        },
+      ]
+    : []),
+  ...(hasGrant('model.export')
+    ? [
+        {
+          icon: 'download',
+          event: 'export-model-package',
+          title: t('toolbar.exportModelPackage'),
+        },
+      ]
+    : []),
+  ...(hasGrant('model.runValidationScripts')
+    ? [
+        {
+          icon: 'terminal',
+          event: 'run-validation-script',
+          title: props.hasActiveDiagram
+            ? t('validationScripts.toolbarRun')
+            : t('validationScripts.runNeedsDiagram'),
+          disabled: !props.hasActiveDiagram || props.toolbarLocked,
+        },
+      ]
+    : []),
   { icon: 'separator', event: 'sep3', separator: true },
-  ...(props.isAdmin
+  ...(props.isAdmin && hasGrant('model.inspectJson')
     ? [
         {
           icon: 'data_object',
@@ -317,12 +335,22 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     : []),
 ])
 
-const canCreateBaseline = computed(
+const canShowBaseline = computed(
   () =>
+    hasGrant('model.createBaseline') &&
     props.hasActiveDiagram &&
     !props.isDiagramReadOnly &&
-    (props.diagramVersions?.length ?? 0) >= 1 &&
-    !props.baselineCreating
+    (props.diagramVersions?.length ?? 0) >= 1
+)
+
+const canCreateBaseline = computed(() => canShowBaseline.value && !props.baselineCreating)
+
+const canShowRelationMatrix = computed(
+  () => hasGrant('model.relationMatrix') && !!props.modelId
+)
+
+const canShowDiagramCompare = computed(
+  () => hasGrant('model.compareVersions') && !!props.modelId
 )
 
 function spectatorInitials(name: string): string {
@@ -461,7 +489,7 @@ function spectatorInitials(name: string): string {
           <UiIcon name="compare_arrows" />
         </button>
       </AppTooltip>
-      <AppTooltip v-if="modelId" :text="t('models.relationMatrixOpen')" placement="bottom">
+      <AppTooltip v-if="canShowRelationMatrix" :text="t('models.relationMatrixOpen')" placement="bottom">
         <button type="button" class="deh-icon-btn" @click="emit('openRelationMatrix')">
           <UiIcon name="grid_view" />
         </button>
@@ -511,6 +539,7 @@ function spectatorInitials(name: string): string {
             <UiIcon :name="isDiagramFavorite ? 'favorite' : 'favorite_border'" />
           </button>
           <button
+            v-if="canShowBaseline"
             type="button"
             class="model-header__baseline-btn"
             :title="t('models.createBaseline')"
@@ -520,7 +549,7 @@ function spectatorInitials(name: string): string {
             <UiIcon name="bookmark_add" />
           </button>
           <button
-            v-if="modelId"
+            v-if="canShowDiagramCompare"
             type="button"
             class="model-header__baseline-btn"
             :title="t('models.compareDiagramVersions')"

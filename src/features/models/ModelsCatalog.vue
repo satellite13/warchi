@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import type { ModelData } from "@/types/entities";
 import type { EntityListConfig } from "@/composables/useEntityList";
+import { useFeatureGrants } from "@/composables/useFeatureGrants";
 import EntityCatalog from "@/components/catalog/EntityCatalog.vue";
 import { DEFAULT_ENTITY_ICONS } from "@/config/iconOptions";
 import {
@@ -21,6 +22,7 @@ import { findMissingIconsAfterModelImport } from "./utils/missingPackageIcons";
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
+const { hasGrant } = useFeatureGrants();
 const exportError = ref<string | null>(null);
 const actionStatusMessage = ref<string | null>(null);
 const packageInputRef = ref<HTMLInputElement | null>(null);
@@ -174,6 +176,7 @@ async function handleImportSuccess(result: Extract<ModelPackageImportResult, { o
 }
 
 async function handleExport(item: ModelData) {
+  if (!hasGrant("model.export")) return;
   exportError.value = null;
   actionStatusMessage.value = null;
   try {
@@ -186,7 +189,7 @@ async function handleExport(item: ModelData) {
 }
 
 function openPackagePicker() {
-  if (isImporting.value) return;
+  if (!hasGrant("model.importPackage") || isImporting.value) return;
   exportError.value = null;
   actionStatusMessage.value = null;
   const input = packageInputRef.value;
@@ -201,6 +204,7 @@ function openPackagePicker() {
 }
 
 async function consumeImportQuery() {
+  if (!hasGrant("model.importPackage")) return;
   if (!shouldOpenModelPackageImport(route.query)) return;
   const nextQuery = { ...route.query };
   delete nextQuery.import;
@@ -317,9 +321,10 @@ async function submitModelConflictRetry() {
     :icon="DEFAULT_ENTITY_ICONS.model"
     resource-type="MODEL"
     :show-version-tree="true"
-    :show-create-from-version-button="true"
-    can-export
-    can-import-package
+    :show-create-from-version-button="hasGrant('model.create')"
+    :can-create="hasGrant('model.create')"
+    :can-export="hasGrant('model.export')"
+    :can-import-package="hasGrant('model.importPackage')"
     :action-error-message="exportError"
     :action-status-message="actionStatusMessage"
     :action-busy="isImporting"

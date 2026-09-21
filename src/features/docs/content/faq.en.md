@@ -8,7 +8,7 @@ wArchi is a web application for managing architectural models. It allows you to 
 
 ### Can I read the help without signing in?
 
-Yes. The **Documentation** section is available without authentication. Guests see help in the header and a **Sign in** button.
+Yes. The **Help** section is available without authentication. Guests see help in the header and a **Sign in** button.
 
 ### Which browsers are supported?
 

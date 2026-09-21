@@ -35,7 +35,7 @@ import {
 const fakeUser = {
   id: 'u1',
   email: 'test@example.com',
-  role: 'USER' as const,
+  role: 'reader' as const,
   firstName: 'John',
   lastName: 'Doe',
 }
@@ -212,7 +212,7 @@ describe('useAuth', () => {
     it('is true for admin user', async () => {
       const adminResponse = {
         ...fakeAuthResponse,
-        user: { ...fakeUser, role: 'ADMIN' as const },
+        user: { ...fakeUser, role: 'admin' as const },
       }
       mockApiPost.mockResolvedValue({ success: true, data: adminResponse })
 

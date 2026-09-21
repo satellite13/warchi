@@ -8,6 +8,7 @@ import { apiPost } from '@/composables/useApi'
 import { serializeTypeAttrs, type CustomProperty } from '@/domain/attrs/notationAttrs'
 import { useCanShare } from '@/composables/useCanShare'
 import { useDirtySelectionGuard } from '@/composables/useDirtySelectionGuard'
+import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { useSaveErrorToast } from '@/composables/useSaveErrorToast'
 import { isSystemMarkedType } from '@/utils/systemMarkedType'
 import ListDetailEditorLayout from '@/components/layout/ListDetailEditorLayout.vue'
@@ -48,6 +49,7 @@ const {
 const { documentFileId, loadDocument, resetDocument } = useTypeDocument()
 
 const { t } = useI18n()
+const { hasGrant } = useFeatureGrants()
 
 const isSelectedTypeWikiReadOnly = computed(() => {
   const item = selectedType.value
@@ -184,6 +186,7 @@ function handleSelectType(id: string) {
 }
 
 function handleAddType(kind: 'node' | 'link') {
+  if (!hasGrant('type.create')) return
   requestAdd(`__add_${kind}`, () => addType(kind))
 }
 
@@ -286,6 +289,7 @@ function handleBatchShareDone() {
         :is-loading="isLoading"
         :selection-mode="selectionMode"
         :checked-ids="checkedTypeIds"
+        :can-create="hasGrant('type.create')"
         @select-type="handleSelectType"
         @add-type="handleAddType"
         @toggle-selection-mode="toggleSelectionMode"

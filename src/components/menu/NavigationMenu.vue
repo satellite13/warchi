@@ -3,10 +3,12 @@ import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuth } from "../../composables/useAuth";
+import { useFeatureGrants } from "../../composables/useFeatureGrants";
 import { canViewAdminPanel } from "../../composables/usePermissions";
 import { DEFAULT_ENTITY_ICONS } from "../../config/iconOptions";
 
 const { currentUser } = useAuth();
+const { hasGrant } = useFeatureGrants();
 const { t } = useI18n();
 const canViewAdmin = ref(false);
 const isSignedIn = computed(() => currentUser.value != null);
@@ -33,16 +35,36 @@ watch(
       <RouterLink to="/models" class="app-nav__link" active-class="app-nav__link--active">
         <UiIcon :name="DEFAULT_ENTITY_ICONS.model" :alt="t('nav.models')" />{{ t("nav.models") }}
       </RouterLink>
-      <RouterLink to="/notations" class="app-nav__link" active-class="app-nav__link--active">
+      <RouterLink
+        v-if="hasGrant('notation.nav')"
+        to="/notations"
+        class="app-nav__link"
+        active-class="app-nav__link--active"
+      >
         <UiIcon :name="DEFAULT_ENTITY_ICONS.notation" :alt="t('nav.notations')" />{{ t("nav.notations") }}
       </RouterLink>
-      <RouterLink to="/types" class="app-nav__link" active-class="app-nav__link--active">
+      <RouterLink
+        v-if="hasGrant('type.nav')"
+        to="/types"
+        class="app-nav__link"
+        active-class="app-nav__link--active"
+      >
         <UiIcon :name="DEFAULT_ENTITY_ICONS.nodeType" :alt="t('nav.types')" />{{ t("nav.types") }}
       </RouterLink>
-      <RouterLink to="/shapes" class="app-nav__link" active-class="app-nav__link--active">
+      <RouterLink
+        v-if="hasGrant('shape.nav')"
+        to="/shapes"
+        class="app-nav__link"
+        active-class="app-nav__link--active"
+      >
         <UiIcon name="hexagon" :alt="t('nav.shapes')" />{{ t("nav.shapes") }}
       </RouterLink>
-      <RouterLink to="/validation-scripts" class="app-nav__link" active-class="app-nav__link--active">
+      <RouterLink
+        v-if="hasGrant('validationScript.nav')"
+        to="/validation-scripts"
+        class="app-nav__link"
+        active-class="app-nav__link--active"
+      >
         <UiIcon name="terminal" :alt="t('nav.validationScripts')" />{{ t("nav.validationScripts") }}
       </RouterLink>
     </template>
@@ -50,7 +72,12 @@ watch(
       <UiIcon name="menu_book" :alt="t('nav.docs')" />{{ t("nav.docs") }}
     </RouterLink>
     <template v-if="isSignedIn">
-      <RouterLink to="/wiki" class="app-nav__link" active-class="app-nav__link--active">
+      <RouterLink
+        v-if="hasGrant('model.wiki.create')"
+        to="/wiki"
+        class="app-nav__link"
+        active-class="app-nav__link--active"
+      >
         <UiIcon name="library_books" :alt="t('nav.wiki')" />{{ t("nav.wiki") }}
       </RouterLink>
       <RouterLink to="/profile" class="app-nav__link" active-class="app-nav__link--active">

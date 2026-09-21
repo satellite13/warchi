@@ -4,19 +4,28 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-## [0.25.18] - 2026-09-18
-
 ### Fixed
 
 - Unsaved diagram canvas edits are no longer silently dropped when saving a model with a stale `_attrsPending` flag (e.g. after tab switching).
 - The model editor keeps a local draft in localStorage and offers to restore it on the next model open.
-
-## [0.25.17] - 2026-09-16
-
-### Fixed
-
 - Modals no longer close when selecting text and releasing the mouse on the dimmed overlay (e.g. create diagram).
 
+## [0.25.18] - 2026-09-21
+
+### Added
+- Role feature grants: role matrix and per-user allow-overrides in admin; UI gates for catalog, navigation, and model-editor actions.
+- Feature grants for language switch, diagram comments panel visibility, and profile API keys section.
+- Soft route guards for grant-gated pages (including Wiki).
+
+### Changed
+- In-app docs navigation label is now Help / «Справка».
+- SSO-linked personal profile fields are read-only; SSO unlink is available only to admins on the Users page.
+
+## [0.25.17] - 2026-09-15
+
+### Added
+- OEF import supports folder properties.
+- Model validation: auto-merge for duplicates, unused elements and diagram issues tabs, and persisted OEF merge decisions.
 
 ## [0.25.16] - 2026-09-08
 

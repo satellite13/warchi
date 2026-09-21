@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { apiGet, apiPut } from '../composables/useApi'
+import { apiDelete, apiGet, apiPut } from '../composables/useApi'
 import { pagedListParams } from '../api/queryHelpers'
+import { FEATURE_GRANT_KEYS } from '@/domain/featureGrants/catalog'
 import type { PaginatedResponse, User, UserRole } from '../types/entities'
 import { formatDate } from '../utils/formatDate'
 import { paginatedContent } from '../utils/paginatedResponse'
@@ -14,6 +15,10 @@ import AdminUserApiKeys from '@/components/admin/AdminUserApiKeys.vue'
 import SearchInput from '@/components/forms/SearchInput.vue'
 import ToggleSwitch from '@/components/forms/ToggleSwitch.vue'
 import { useUserProfileEdit, useUserPasswordEdit } from './composables/useUserAdminForms'
+
+type FeatureGrantAllowsResponse = {
+  grants: string[]
+}
 
 type EditableUser = User & {
   role: UserRole
@@ -40,18 +45,37 @@ const errorMessage = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const searchEmail = ref('')
 const apiKeysUserId = ref<string | null>(null)
+const grantsUserId = ref<string | null>(null)
+const grantsDraft = ref<Set<string>>(new Set())
+const grantsSaved = ref<Set<string>>(new Set())
+const grantsLoading = ref(false)
+const grantsSaving = ref(false)
+const grantsDirty = computed(() => {
+  if (grantsDraft.value.size !== grantsSaved.value.size) return true
+  for (const key of grantsDraft.value) {
+    if (!grantsSaved.value.has(key)) return true
+  }
+  return false
+})
 
-const roleOptions: UserRole[] = ['USER', 'ADMIN']
+const roleOptions: UserRole[] = ['admin', 'architect', 'editor', 'reader', 'viewer']
+const grantCatalog: string[] = [...FEATURE_GRANT_KEYS]
 
-const roleMeta: Record<UserRole, { label: string; cls: string }> = {
-  USER: { label: 'User', cls: 'role--user' },
-  ADMIN: { label: 'Admin', cls: 'role--admin' },
+const roleBadgeClass: Record<UserRole, string> = {
+  admin: 'role--admin',
+  architect: 'role--user',
+  editor: 'role--user',
+  reader: 'role--user',
+  viewer: 'role--user',
 }
+
+const roleLabel = (role: UserRole): string => t(`featureGrants.roles.${role}`)
+const grantLabel = (key: string): string => t(`featureGrants.${key}`)
 
 const stats = computed(() => {
   const total = users.value.length
   const active = users.value.filter((u) => u.isActive).length
-  const admins = users.value.filter((u) => u.role === 'ADMIN').length
+  const admins = users.value.filter((u) => u.role === 'admin').length
   return { total, active, inactive: total - active, admins }
 })
 
@@ -105,6 +129,31 @@ const updateUser = async (userId: string, patch: UserUpdatePayload): Promise<voi
   isSavingId.value = null
 }
 
+const unlinkUserSso = async (user: EditableUser): Promise<void> => {
+  if (!user.oidcSub) return
+  if (!window.confirm(t('adminUsersOidc.unlinkConfirm', { email: user.email }))) return
+
+  isSavingId.value = user.id
+  errorMessage.value = null
+  successMessage.value = null
+
+  const result = await apiDelete<{ linked: boolean; oidcSub?: string | null }>(
+    `/admin/users/${user.id}/sso`,
+  )
+
+  if (!result.success) {
+    errorMessage.value = result.error.message
+    isSavingId.value = null
+    return
+  }
+
+  users.value = users.value.map((item) =>
+    item.id === user.id ? { ...item, oidcSub: null } : item,
+  )
+  successMessage.value = t('adminUsersOidc.unlinked')
+  isSavingId.value = null
+}
+
 const handleRoleChange = async (user: EditableUser, event: Event): Promise<void> => {
   const target = event.target as HTMLSelectElement
   const role = target.value as UserRole
@@ -137,6 +186,67 @@ const {
 
 const toggleApiKeys = (userId: string): void => {
   apiKeysUserId.value = apiKeysUserId.value === userId ? null : userId
+  if (apiKeysUserId.value === userId) {
+    grantsUserId.value = null
+  }
+}
+
+const loadUserGrants = async (userId: string): Promise<void> => {
+  grantsLoading.value = true
+  errorMessage.value = null
+  const result = await apiGet<FeatureGrantAllowsResponse>(
+    `/admin/users/${userId}/feature-grant-allows`,
+  )
+  grantsLoading.value = false
+  if (!result.success) {
+    errorMessage.value = result.error.message
+    grantsDraft.value = new Set()
+    grantsSaved.value = new Set()
+    return
+  }
+  const grants = new Set(result.data.grants.filter((key) => grantCatalog.includes(key)))
+  grantsDraft.value = new Set(grants)
+  grantsSaved.value = new Set(grants)
+}
+
+const toggleGrants = async (userId: string): Promise<void> => {
+  if (grantsUserId.value === userId) {
+    grantsUserId.value = null
+    return
+  }
+  apiKeysUserId.value = null
+  grantsUserId.value = userId
+  await loadUserGrants(userId)
+}
+
+const toggleGrantKey = (key: string, checked: boolean): void => {
+  const next = new Set(grantsDraft.value)
+  if (checked) next.add(key)
+  else next.delete(key)
+  grantsDraft.value = next
+}
+
+const saveUserGrants = async (userId: string): Promise<void> => {
+  if (!grantsDirty.value || grantsSaving.value) return
+  grantsSaving.value = true
+  errorMessage.value = null
+  successMessage.value = null
+  const grants = [...grantsDraft.value].sort()
+  const result = await apiPut<FeatureGrantAllowsResponse>(
+    `/admin/users/${userId}/feature-grant-allows`,
+    { grants },
+  )
+  grantsSaving.value = false
+  if (!result.success) {
+    errorMessage.value = t('adminUsers.extraGrantsSaveError', {
+      message: result.error.message,
+    })
+    return
+  }
+  const savedGrants = new Set(result.data.grants)
+  grantsDraft.value = new Set(savedGrants)
+  grantsSaved.value = new Set(savedGrants)
+  successMessage.value = t('adminUsers.extraGrantsSaved')
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -214,6 +324,7 @@ onMounted(() => {
           <th>{{ t('adminUsers.profile') }}</th>
           <th>{{ t('adminUsers.password') }}</th>
           <th>{{ t('adminUsers.apiKeys') }}</th>
+          <th>{{ t('adminUsers.extraGrants') }}</th>
         </tr>
       </template>
       <tbody>
@@ -223,7 +334,8 @@ onMounted(() => {
             :class="{
               'au-table__row--saving': isSavingId === user.id,
               'au-table__row--off': !user.isActive,
-              'au-table__row--expanded': apiKeysUserId === user.id,
+              'au-table__row--expanded':
+                apiKeysUserId === user.id || grantsUserId === user.id,
             }"
           >
             <!-- User -->
@@ -234,9 +346,19 @@ onMounted(() => {
                 </div>
                 <div class="au-user__meta">
                   <span class="au-user__email">{{ user.email }}</span>
-                  <span v-if="user.oidcSub" class="au-user__oidc">
-                    {{ t('adminUsersOidc.linkedAs', { sub: user.oidcSub }) }}
-                  </span>
+                  <div v-if="user.oidcSub" class="au-user__oidc-row">
+                    <span class="au-user__oidc">
+                      {{ t('adminUsersOidc.linkedAs', { sub: user.oidcSub }) }}
+                    </span>
+                    <button
+                      type="button"
+                      class="au-btn-inline au-btn-inline--danger"
+                      :disabled="isSavingId === user.id"
+                      @click="unlinkUserSso(user)"
+                    >
+                      {{ t('adminUsersOidc.unlink') }}
+                    </button>
+                  </div>
                   <span class="au-user__id">{{ user.id }}</span>
                 </div>
               </div>
@@ -245,8 +367,8 @@ onMounted(() => {
             <!-- Role -->
             <td>
               <div class="au-role">
-                <span class="au-role__badge" :class="roleMeta[user.role].cls">
-                  {{ roleMeta[user.role].label }}
+                <span class="au-role__badge" :class="roleBadgeClass[user.role]">
+                  {{ roleLabel(user.role) }}
                 </span>
                 <select
                   class="au-role__select"
@@ -255,7 +377,7 @@ onMounted(() => {
                   @change="handleRoleChange(user, $event)"
                 >
                   <option v-for="role in roleOptions" :key="role" :value="role">
-                    {{ role }}
+                    {{ roleLabel(role) }}
                   </option>
                 </select>
               </div>
@@ -284,8 +406,12 @@ onMounted(() => {
                     <span class="au-profile__pos">{{
                       user.position || t('common.loadingDash')
                     }}</span>
+                    <span v-if="user.oidcSub" class="au-profile__sso-hint">
+                      {{ t('adminUsersOidc.profileManagedBySso') }}
+                    </span>
                   </div>
                   <button
+                    v-if="!user.oidcSub"
                     type="button"
                     class="au-btn-inline"
                     :disabled="isSavingId === user.id"
@@ -411,11 +537,79 @@ onMounted(() => {
                 }}
               </button>
             </td>
+
+            <!-- Extra grants -->
+            <td>
+              <button
+                type="button"
+                class="au-btn-inline"
+                :disabled="isSavingId === user.id"
+                @click="toggleGrants(user.id)"
+              >
+                {{
+                  grantsUserId === user.id
+                    ? t('adminUsers.extraGrantsHide')
+                    : t('adminUsers.extraGrantsShow')
+                }}
+              </button>
+            </td>
           </tr>
 
           <tr v-if="apiKeysUserId === user.id" class="au-table__expand">
-            <td colspan="7">
+            <td colspan="8">
               <AdminUserApiKeys :user-id="user.id" />
+            </td>
+          </tr>
+
+          <tr v-if="grantsUserId === user.id" class="au-table__expand">
+            <td colspan="8">
+              <section class="au-grants">
+                <header class="au-grants__header">
+                  <div>
+                    <h3 class="au-grants__title">{{ t('adminUsers.extraGrantsSection') }}</h3>
+                    <p class="au-grants__hint">{{ t('adminUsers.extraGrantsHint') }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn--primary btn--xs"
+                    :disabled="grantsLoading || grantsSaving || !grantsDirty"
+                    @click="saveUserGrants(user.id)"
+                  >
+                    {{
+                      grantsSaving
+                        ? t('adminUsers.extraGrantsSaving')
+                        : t('adminUsers.extraGrantsSave')
+                    }}
+                  </button>
+                </header>
+
+                <p v-if="grantsLoading" class="au-grants__state">
+                  {{ t('adminUsers.extraGrantsLoading') }}
+                </p>
+                <p v-else-if="grantCatalog.length === 0" class="au-grants__state">
+                  {{ t('adminUsers.extraGrantsEmpty') }}
+                </p>
+                <div v-else class="au-grants__grid">
+                  <label
+                    v-for="key in grantCatalog"
+                    :key="key"
+                    class="au-grants__item"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="grantsDraft.has(key)"
+                      :disabled="grantsSaving"
+                      @change="
+                        toggleGrantKey(key, ($event.target as HTMLInputElement).checked)
+                      "
+                    />
+                    <span class="au-grants__item-text">
+                      <span class="au-grants__item-label">{{ grantLabel(key) }}</span>
+                      <span class="au-grants__item-key">{{ key }}</span>
+                    </span>
+                  </label>
+                </div>
+              </section>
             </td>
           </tr>
         </template>
@@ -611,6 +805,14 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.au-user__oidc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .au-user__id {
   font-size: 11px;
   color: var(--text-subtle);
@@ -692,6 +894,15 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+.au-btn-inline--danger {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.au-btn-inline--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+
 /* ─── Profile cell ─────────────────────────────── */
 .au-profile {
   min-width: 200px;
@@ -715,6 +926,11 @@ onMounted(() => {
 .au-profile__pos {
   font-size: 11px;
   color: var(--text-subtle);
+}
+
+.au-profile__sso-hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .au-profile__form {
@@ -743,6 +959,89 @@ onMounted(() => {
 .au-pwd__actions {
   display: flex;
   gap: 5px;
+}
+
+/* ─── Extra grants ─────────────────────────────── */
+.au-grants {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.au-grants__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.au-grants__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--base-text);
+}
+
+.au-grants__hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.au-grants__state {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.au-grants__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.au-grants__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.au-grants__item:hover {
+  background: var(--surface-muted);
+}
+
+.au-grants__item input {
+  margin-top: 2px;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+
+.au-grants__item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.au-grants__item-label {
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--base-text);
+}
+
+.au-grants__item-key {
+  font-size: 11px;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
 }
 
 .au-empty__icon {

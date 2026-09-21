@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.21] - 2026-09-21
+
+### Fixed
+- Helm chart version synced with package.json for production deploy.
+
 ## [0.25.20] - 2026-09-21
 
 ### Fixed

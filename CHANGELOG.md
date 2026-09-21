@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.19] - 2026-09-21
+
+### Fixed
+- New app version shows an informer instead of forcing an automatic reload.
+- Batch save no longer drops diagram canvas edits when `_attrsPending` is stale.
+- Closing a modal no longer happens when a text selection ends on the overlay.
+
 ## [0.25.18] - 2026-09-21
 
 ### Added

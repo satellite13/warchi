@@ -3,6 +3,8 @@ import { defineComponent, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useVersionCheck } from './useVersionCheck'
 
+type MutableEnv = Record<string, string | boolean | undefined>
+
 describe('useVersionCheck', () => {
   const originalEnv = { ...import.meta.env }
 
@@ -23,10 +25,11 @@ describe('useVersionCheck', () => {
   })
 
   it('shows an informer without auto-reloading when a newer version is published', async () => {
-    import.meta.env.DEV = false
-    import.meta.env.APP_VERSION = '0.25.17'
-    import.meta.env.APP_BUILD_TIME = '2026-09-01T00:00:00Z'
-    import.meta.env.BASE_URL = '/'
+    const env = import.meta.env as MutableEnv
+    env.DEV = false
+    env.APP_VERSION = '0.25.17'
+    env.APP_BUILD_TIME = '2026-09-01T00:00:00Z'
+    env.BASE_URL = '/'
 
     let api: ReturnType<typeof useVersionCheck> | null = null
     const Host = defineComponent({
@@ -40,7 +43,8 @@ describe('useVersionCheck', () => {
     await vi.waitFor(() => expect(api?.showNewVersionToast.value).toBe(true))
     await nextTick()
 
-    expect(api?.newVersion.value).toBe('9.9.9')
+    expect(api).not.toBeNull()
+    expect(api!.newVersion.value).toBe('9.9.9')
     expect(window.location.reload).not.toHaveBeenCalled()
   })
 })

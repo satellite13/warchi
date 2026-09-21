@@ -1,7 +1,7 @@
 {
   "name": "warchi",
   "private": true,
-  "version": "0.25.19",
+  "version": "0.25.20",
   "type": "module",
   "engines": {
     "node": ">=20.19.0 <21 || >=22.12.0"

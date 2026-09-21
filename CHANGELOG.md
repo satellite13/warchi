@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.20] - 2026-09-21
+
+### Fixed
+- Production build no longer fails type-checking on the version-check unit test.
+
 ## [0.25.19] - 2026-09-21
 
 ### Fixed

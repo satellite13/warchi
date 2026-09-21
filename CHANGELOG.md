@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.18] - 2026-09-21
+
+### Added
+- Role feature grants: role matrix and per-user allow-overrides in admin; UI gates for catalog, navigation, and model-editor actions.
+- Feature grants for language switch, diagram comments panel visibility, and profile API keys section.
+- Soft route guards for grant-gated pages (including Wiki).
+
+### Changed
+- In-app docs navigation label is now Help / «Справка».
+- SSO-linked personal profile fields are read-only; SSO unlink is available only to admins on the Users page.
+
 ## [0.25.17] - 2026-09-15
 
 ### Added

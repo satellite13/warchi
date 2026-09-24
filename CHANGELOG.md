@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.22] - 2026-09-24
+
 ### Changed
 - License switched from AGPL-3.0-or-later + commercial dual licensing to MIT.
 

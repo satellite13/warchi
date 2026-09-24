@@ -2,7 +2,7 @@
   "name": "warchi",
   "private": true,
   "license": "MIT",
-  "version": "0.25.21",
+  "version": "0.25.22",
   "type": "module",
   "engines": {
     "node": ">=20.19.0 <21 || >=22.12.0"

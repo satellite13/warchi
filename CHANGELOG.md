@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.23] - 2026-09-24
+
+### Changed
+- App typography switched to Inter: base font replaced from Outfit, semantic text utilities (heading4, caption, body) added.
+
 ## [0.25.22] - 2026-09-24
 
 ### Changed

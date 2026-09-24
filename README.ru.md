@@ -26,7 +26,7 @@ English version: `README.md`
 
 ## Требования
 
-- Node.js 18+
+- Node.js `>=20.19.0 <21 || >=22.12.0` (контролируется `engines` и prebuild-проверкой)
 - npm 9+
 - NPM-пакет Papirus (`@ngroznykh/papirus`) для рендеринга canvas/диаграмм
 
@@ -121,12 +121,11 @@ BLUE_GREEN=true BG_SWITCH=false IMAGE_TAG=0.0.22 ./scripts/deploy.sh
 
 ## Лицензия
 
-Проект использует dual licensing:
+Проект распространяется под лицензией MIT.
 
-- `AGPL-3.0-or-later` для open-source использования
-- Коммерческая лицензия для проприетарного/закрытого коммерческого использования
+Ранее проект был под двойной лицензией AGPL-3.0-or-later + коммерческая; с 2026-09-24 — MIT.
 
 См.:
 
 - `LICENSE` / `LICENSE.ru.md`
-- `LICENSE_COMMERCIAL.md` / `LICENSE_COMMERCIAL.ru.md`
+- Вопросы по лицензированию: `nikolay@groznykh.ru`

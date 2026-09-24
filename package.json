@@ -1,6 +1,7 @@
 {
   "name": "warchi",
   "private": true,
+  "license": "MIT",
   "version": "0.25.21",
   "type": "module",
   "engines": {

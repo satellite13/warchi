@@ -26,7 +26,7 @@ Frontend SPA for architectural modeling workflows: managing models, notations, v
 
 ## Requirements
 
-- Node.js 18+
+- Node.js `>=20.19.0 <21 || >=22.12.0` (enforced by `engines` and the prebuild check)
 - npm 9+
 - Papirus NPM package (`@ngroznykh/papirus`)
 
@@ -121,12 +121,11 @@ For public release preparation, see:
 
 ## License
 
-This project uses dual licensing:
+This project is licensed under the MIT License.
 
-- `AGPL-3.0-or-later` for open-source usage
-- Commercial license for proprietary/closed-source commercial usage
+Previously it was dual-licensed under AGPL-3.0-or-later with a commercial option; since 2026-09-24 the project is MIT.
 
 See:
 
 - `LICENSE`
-- `LICENSE_COMMERCIAL.md`
+- Licensing questions: `nikolay@groznykh.ru`

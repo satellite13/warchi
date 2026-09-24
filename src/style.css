@@ -78,7 +78,8 @@ body {
     --btn-height: 38px;
 
     /* Typography */
-    --base-font: "Outfit", system-ui, -apple-system, sans-serif;
+    --font-family: 'Inter', sans-serif;
+    --base-font: var(--font-family);
     --base-font-weight: 400;
     --small-font-size: 11px;
     --medium-font-size: 13px;

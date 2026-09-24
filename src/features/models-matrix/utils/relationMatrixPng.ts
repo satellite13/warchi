@@ -41,7 +41,7 @@ function drawCenteredText(
   const clipped = text.length > 22 ? `${text.slice(0, 20)}...` : text
   ctx.save()
   ctx.fillStyle = "#1a1a1a"
-  ctx.font = "12px Outfit, sans-serif"
+  ctx.font = "12px Inter, sans-serif"
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
   ctx.fillText(clipped, x + width / 2, y + height / 2)
@@ -70,7 +70,7 @@ export async function exportRelationMatrixPng(params: {
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
   ctx.fillStyle = "#1a1a1a"
-  ctx.font = "600 15px Outfit, sans-serif"
+  ctx.font = "600 15px Inter, sans-serif"
   ctx.fillText(params.title, PADDING, PADDING - 6 + 16)
 
   const baseX = PADDING

@@ -1,0 +1,40 @@
+/*
+ * Семантические текстовые классы-утилиты.
+ * Импортируется последним в main.ts — при равной специфичности утилиты побеждают
+ * стили компонентов и страниц.
+ */
+
+.text-heading4 {
+  font-family: var(--font-family);
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 500;
+}
+
+.text-caption {
+  font-family: var(--font-family);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+.text-caption-bold {
+  font-family: var(--font-family);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.text-body-base {
+  font-family: var(--font-family);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.text-body-strong {
+  font-family: var(--font-family);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}

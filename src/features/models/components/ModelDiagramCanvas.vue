@@ -58,6 +58,7 @@ import {
   resolveCompatibleNotationComponents,
   resolveInstanceComponentId,
 } from '../modelAttrs'
+import { applyMinSizeConstraint } from './minSizeConstraint'
 import {
   guestCenter,
   pickNearestOutlineHost,
@@ -1259,18 +1260,6 @@ const getComponentMinDimensions = (instance: DiagramNodeInstance) => {
   }
 }
 
-function applyMinSizeConstraint(node: DiagramNode, instance: DiagramNodeInstance) {
-  const original = node.getContentMinSize.bind(node)
-  node.getContentMinSize = (ctx: CanvasRenderingContext2D) => {
-    const contentMin = original(ctx)
-    const compMin = getComponentMinDimensions(instance)
-    return {
-      width: Math.max(contentMin.width, compMin.width),
-      height: Math.max(contentMin.height, compMin.height),
-    }
-  }
-}
-
 function applyTransformLock(node: DiagramNode, instance: DiagramNodeInstance): void {
   node.resizeHandlesEnabled = getEffectiveStyle(instance)?.lockTransform !== true
 }
@@ -1599,7 +1588,7 @@ function createInstanceNode(instance: DiagramNodeInstance): DiagramNode {
     composite,
     specialRectangleShape,
   })
-  applyMinSizeConstraint(node, instance)
+  applyMinSizeConstraint(node, instance, getComponentMinDimensions)
   applyTransformLock(node, instance)
   return node
 }
@@ -1729,7 +1718,7 @@ function syncDiagram() {
       if (typeof ds?.labelGap === 'number') {
         existing.labelGap = ds.labelGap
       }
-      applyMinSizeConstraint(existing, instance)
+      applyMinSizeConstraint(existing, instance, getComponentMinDimensions)
       applyTransformLock(existing, instance)
     } else {
       renderer.addNode(createInstanceNode(instance))

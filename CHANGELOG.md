@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.24] - 2026-09-25
+
+### Fixed
+- Composite shapes with text: narrowing them by resize now wraps text by words and grows the height instead of stretching the width to one unwrapped line (papirus 0.9.15).
+
 ## [0.25.23] - 2026-09-24
 
 ### Changed

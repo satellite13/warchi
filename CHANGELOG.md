@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.25.25] - 2026-10-13
+
+### Fixed
+- Outline connect: the port marker stays visible under the pointer. The crosshair cursor no longer covers it, and the marker keeps a fixed screen size with a white ring so it stays readable at any zoom (papirus 0.9.16).
+
 ## [0.25.24] - 2026-09-25
 
 ### Fixed

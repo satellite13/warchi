@@ -38,6 +38,8 @@ export interface TypeParsedAttrs {
   /** SVG icon name from public/icons/ for tree display */
   icon?: string
   documentFileId?: string
+  /** Скрыть элементы этого типа в дереве модели для ролей ниже админа (attrs.hideInTree). */
+  hideInTree?: boolean
   customProperties?: CustomProperty[]
   system?: boolean | { hiddenTreeRootType?: boolean }
   kind?: string

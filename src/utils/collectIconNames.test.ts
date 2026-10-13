@@ -10,7 +10,7 @@ describe('collectIconNames', () => {
           iconName: 'acme-app',
           compositeContent: { type: 'icon', source: '/icons/bound.svg' },
         },
-      }),
+      })
     ).toEqual(expect.arrayContaining(['folder', 'acme-app', 'bound']))
   })
 })

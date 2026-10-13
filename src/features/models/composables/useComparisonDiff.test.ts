@@ -159,14 +159,14 @@ describe('useComparisonDiff', () => {
         id: 'ld-1',
         modelId: 'model-1',
         attrs: diagramAttrs('ll-1', 'ln-a', 'ln-b'),
-      }),
+      })
     )
     const rightDiagram = toEditorDiagram(
       createDiagram({
         id: 'rd-1',
         modelId: 'model-2',
         attrs: diagramAttrs('rl-1', 'rn-a', 'rn-b'),
-      }),
+      })
     )
 
     const scope = effectScope()
@@ -189,8 +189,12 @@ describe('useComparisonDiff', () => {
         selectedElement: ref(null),
       })
 
-      expect(diff.leftCanvasDiffState.value.diffStateByEdgeInstanceId['edge-inst-1']).toBeUndefined()
-      expect(diff.rightCanvasDiffState.value.diffStateByEdgeInstanceId['edge-inst-1']).toBeUndefined()
+      expect(
+        diff.leftCanvasDiffState.value.diffStateByEdgeInstanceId['edge-inst-1']
+      ).toBeUndefined()
+      expect(
+        diff.rightCanvasDiffState.value.diffStateByEdgeInstanceId['edge-inst-1']
+      ).toBeUndefined()
       expect(diff.leftCanvasDiffState.value.diffStateByModelLinkId['ll-1']).toBeUndefined()
       expect(diff.rightCanvasDiffState.value.diffStateByModelLinkId['rl-1']).toBeUndefined()
     })
@@ -225,7 +229,7 @@ describe('useComparisonDiff', () => {
       modelNodeA: string,
       modelNodeB: string,
       fromPort: string,
-      toPort: string,
+      toPort: string
     ) =>
       JSON.stringify({
         instances: {
@@ -249,14 +253,14 @@ describe('useComparisonDiff', () => {
       createDiagram({
         id: 'ld-1',
         attrs: diagramAttrs('ll-1', 'ln-a', 'ln-b', 'left', 'right'),
-      }),
+      })
     )
     const rightDiagram = toEditorDiagram(
       createDiagram({
         id: 'rd-1',
         modelId: 'model-2',
         attrs: diagramAttrs('rl-1', 'rn-a', 'rn-b', 'top', 'bottom'),
-      }),
+      })
     )
 
     const scope = effectScope()
@@ -279,9 +283,11 @@ describe('useComparisonDiff', () => {
         selectedElement: ref(null),
       })
 
-      expect(diff.leftCanvasDiffState.value.diffStateByEdgeInstanceId['edge-inst-1']).toBe('modified')
+      expect(diff.leftCanvasDiffState.value.diffStateByEdgeInstanceId['edge-inst-1']).toBe(
+        'modified'
+      )
       expect(diff.rightCanvasDiffState.value.diffStateByEdgeInstanceId['edge-inst-1']).toBe(
-        'modified',
+        'modified'
       )
     })
     scope.stop()

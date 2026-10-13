@@ -69,7 +69,7 @@ const totalCount = computed(() => props.shapes.length)
         :title="shape.name || t('common.unnamed')"
         icon="hexagon"
         :active="selectedShapeId === shape.id"
-        :locked="!canEditByAccessPermission(shape.accessPermission)"
+        :locked="!canEditByAccessPermission(shape)"
         :lock-title="t('shapes.noEditRights')"
         :animation-index="idx"
         @click="emit('selectShape', shape.id)"

@@ -2,7 +2,10 @@ import { computed, onScopeDispose, ref, watch, type Ref } from 'vue'
 import type { ApiError } from '@/composables/useApi'
 import type { LinkResponse, NodeResponse } from '@/types/api'
 import type { ModelEditorState } from '../types'
-import { isDiagramOnlyEdgeModelLinkId, isDiagramOnlyNodeModelNodeId } from '../utils/diagramOnlyInstances'
+import {
+  isDiagramOnlyEdgeModelLinkId,
+  isDiagramOnlyNodeModelNodeId,
+} from '../utils/diagramOnlyInstances'
 import { DiagramAttrsLoadError, ensureDiagramAttrsLoaded } from './ensureDiagramAttrs'
 import { resolveModelLinks, resolveModelNodes } from './modelScopedApi'
 import type { useModelPartialStore } from './useModelPartialStore'
@@ -66,17 +69,31 @@ export function useDiagramScope(options: {
   const progress = ref<DiagramScopeProgress | null>(null)
   const error = ref<DiagramScopeError | null>(null)
   const ready = ref<Pick<DiagramScopeSession, 'modelId' | 'diagramId' | 'guard'> | null>(null)
+  /**
+   * Scope of an in-flight refresh of an already-ready diagram. While set, the canvas
+   * stays mounted and the incoming data is merged in place instead of remounting.
+   */
+  const refreshing = ref<{ modelId: string; diagramId: string } | null>(null)
+  let refreshingOwner: DiagramScopeSession | null = null
   let active: DiagramScopeSession | null = null
 
   const isReady = (): boolean => {
     // State replacement makes the computed refs observe partial-store resets even though
     // ModelPartialStore itself is intentionally not a reactive proxy.
     void options.state.value.nodes
-    return (
+    if (
       ready.value !== null &&
       options.state.value.modelId === ready.value.modelId &&
       options.selectedDiagramId.value === ready.value.diagramId &&
       options.partialStore.store.isRequestCurrent(ready.value.guard)
+    ) {
+      return true
+    }
+    const pending = refreshing.value
+    return (
+      pending !== null &&
+      options.state.value.modelId === pending.modelId &&
+      options.selectedDiagramId.value === pending.diagramId
     )
   }
   const diagramScopeReady = computed(isReady)
@@ -105,9 +122,19 @@ export function useDiagramScope(options: {
     progress.value = null
     error.value = null
     ready.value = null
+    refreshingOwner = null
+    refreshing.value = null
   }
 
   const open = async (diagramId: string, externalSignal?: AbortSignal): Promise<void> => {
+    const previousReady = ready.value
+    const previousReadyCurrent =
+      previousReady !== null && options.partialStore.store.isRequestCurrent(previousReady.guard)
+    const previousScope =
+      refreshing.value ??
+      (previousReadyCurrent
+        ? { modelId: previousReady.modelId, diagramId: previousReady.diagramId }
+        : null)
     cancel()
     const modelId = options.state.value.modelId
     if (!modelId || options.selectedDiagramId.value !== diagramId || externalSignal?.aborted) return
@@ -118,6 +145,15 @@ export function useDiagramScope(options: {
       guard: options.partialStore.store.beginRequest('diagram-scope'),
     }
     active = session
+    // Refresh of the already-mounted scope: keep the canvas mounted, data merges in place.
+    if (
+      previousScope &&
+      previousScope.modelId === modelId &&
+      previousScope.diagramId === diagramId
+    ) {
+      refreshing.value = { modelId, diagramId }
+      refreshingOwner = session
+    }
     if (externalSignal) {
       const abortFromExternal = (): void => {
         if (active === session) cancel()
@@ -232,6 +268,13 @@ export function useDiagramScope(options: {
     } finally {
       session.releaseExternalAbort?.()
       if (isCurrent(session)) progress.value = null
+      // Release the keep-mounted marker once this session ends; `ready` (on success)
+      // or the error overlay (on failure) takes over. Guarded by owner so a superseding
+      // same-scope open's marker is not wiped by a stale session finishing late.
+      if (refreshingOwner === session) {
+        refreshingOwner = null
+        refreshing.value = null
+      }
     }
   }
 

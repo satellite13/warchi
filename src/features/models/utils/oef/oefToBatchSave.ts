@@ -35,10 +35,7 @@ import {
 } from './oefEntityName'
 import { resolveOefEntityMatches } from './oefEntityReuse'
 import { buildOrganizationImportPlan } from './organizationImport'
-import {
-  createDefaultOefReuseSettings,
-  type OefReuseSettings,
-} from './reuseSettings'
+import { createDefaultOefReuseSettings, type OefReuseSettings } from './reuseSettings'
 import {
   buildDisallowedOefLinkGroupKey,
   isOefLinkAllowedByRelationRules,
@@ -95,6 +92,7 @@ export type OefImportBuildWarningCode =
   | 'linkMatchedIgnoringLabel'
   | 'directoryMatchAmbiguous'
   | 'nodeAutoMergedFromDecision'
+  | 'parallelLinkSkipped'
 
 export type OefImportBuildWarning = {
   code: OefImportBuildWarningCode
@@ -133,6 +131,8 @@ export type BuildOefBatchSaveParams = {
   diagramVersion?: string
   force?: boolean
   nodeTypePropertyDefaultsById?: Record<string, Record<string, unknown>>
+  /** Типы узлов с hideInTree: узлы таких типов при импорте получают attrs.system.hideInTree = true */
+  nodeTypeHideInTreeById?: Record<string, boolean>
   componentPropertyDefaultsById?: Record<string, Record<string, unknown>>
   relationPropertyDefaultsById?: Record<string, Record<string, unknown>>
   nodeTypeCustomPropertiesById?: Record<string, CustomProperty[]>
@@ -648,6 +648,13 @@ export async function buildOefBatchSaveRequest(
             syncedAt,
           },
         }
+        // Дефолт из типа узла: существующий явный override (true/false) не перетираем.
+        if (
+          params.nodeTypeHideInTreeById?.[mapped.nodeTypeId] === true &&
+          existing.parsedAttrs.system?.hideInTree === undefined
+        ) {
+          nextAttrs.system = { ...existing.parsedAttrs.system, hideInTree: true }
+        }
         request.nodes.update.push({
           id: existing.id,
           name: normalizedName || existing.name,
@@ -697,28 +704,36 @@ export async function buildOefBatchSaveRequest(
       orgParentKey != null && params.directoryNodeTypeId
         ? (dirTempByKey.get(orgParentKey) ?? parentNodeId)
         : parentNodeId
+    const nodeAttrs = makeNodeAttrs(
+      params.notationId,
+      mapped.componentId,
+      nextTreeOrder(orgParentKey ?? null),
+      merged.typeValues,
+      merged.componentValues,
+      {
+        entityId: node.sourceElementId,
+        properties: node.properties ?? {},
+      },
+      syncedAt
+    )
+    if (params.nodeTypeHideInTreeById?.[mapped.nodeTypeId] === true) {
+      nodeAttrs.system = { ...nodeAttrs.system, hideInTree: true }
+    }
     request.nodes.create.push({
       tempId,
       name: name || node.sourceElementId.slice(0, OEF_ENTITY_NAME_MAX_LENGTH),
       nodeTypeId: mapped.nodeTypeId,
       parentNodeId: resolvedParent,
-      attrs: serializeNodeAttrs(
-        makeNodeAttrs(
-          params.notationId,
-          mapped.componentId,
-          nextTreeOrder(orgParentKey ?? null),
-          merged.typeValues,
-          merged.componentValues,
-          {
-            entityId: node.sourceElementId,
-            properties: node.properties ?? {},
-          },
-          syncedAt
-        )
-      ),
+      attrs: serializeNodeAttrs(nodeAttrs),
     })
     nodeTempBySourceElementId.set(node.sourceElementId, tempId)
   }
+
+  // The model cannot hold parallel links (same source+target+type) — batch-save
+  // rejects them, so duplicate OEF relationships are skipped (first wins).
+  const usedLinkEndpointKeys = new Set<string>()
+  const linkEndpointKey = (sourceId: string, targetId: string, linkTypeId: string): string =>
+    `${sourceId}::${targetId}::${linkTypeId}`
 
   for (const link of params.draft.links) {
     await yieldToEventLoop()
@@ -823,11 +838,18 @@ export async function buildOefBatchSaveRequest(
       const targetMapped = targetElementType
         ? params.mapping.elementTypeMap[targetElementType]
         : undefined
+      // Junctions are context-dependent (bind to host edges) — the ArchiMate junction
+      // relation rules are incomplete for them, so their links are exempt from the
+      // relation-rule check and are always imported.
+      const isJunction = (type: string | undefined): boolean =>
+        type === 'AndJunction' || type === 'OrJunction'
+      const junctionLink = isJunction(sourceElementType) || isJunction(targetElementType)
       if (
         sourceElementType &&
         targetElementType &&
         sourceMapped?.componentId &&
-        targetMapped?.componentId
+        targetMapped?.componentId &&
+        !junctionLink
       ) {
         const allowed = isOefLinkAllowedByRelationRules({
           fromComponentId: sourceMapped.componentId,
@@ -879,6 +901,16 @@ export async function buildOefBatchSaveRequest(
         message: `Property "${failure.propertyName}" value "${failure.rawValue}" is not a valid ${failure.targetType}`,
       })
     }
+    const linkKey = linkEndpointKey(sourceId, targetId, mapped.linkTypeId)
+    if (usedLinkEndpointKeys.has(linkKey)) {
+      warnings.push({
+        code: 'parallelLinkSkipped',
+        sourceId: link.sourceRelationshipId,
+        message: `Parallel link "${link.sourceRelationshipId}" skipped (${link.sourceElementId} -> ${link.targetElementId}, type ${link.sourceType}) already created in this batch`,
+      })
+      continue
+    }
+    usedLinkEndpointKeys.add(linkKey)
     request.links.create.push({
       tempId,
       sourceId,
@@ -894,7 +926,9 @@ export async function buildOefBatchSaveRequest(
     linkTempBySourceRelationshipId.set(link.sourceRelationshipId, tempId)
   }
 
-  for (const { propertyName, count } of aggregateUnmatchedPropertyNames(allUnmatchedPropertyNames)) {
+  for (const { propertyName, count } of aggregateUnmatchedPropertyNames(
+    allUnmatchedPropertyNames
+  )) {
     warnings.push({
       code: 'propertyUnmatched',
       message: `OEF property "${propertyName}" did not match any custom property (${count})`,
@@ -1030,7 +1064,12 @@ export async function buildOefBatchSaveRequest(
         modelLinkId,
         sourceInstanceId,
         targetInstanceId,
-        ...(edgeLabel ? { attrs: { label: edgeLabel } } : {}),
+        // OEF import renders connections as polylines (ломаные), not bezier curves —
+        // without an explicit edgeType the canvas falls back to 'bezier'.
+        attrs: {
+          ...(edgeLabel ? { label: edgeLabel } : {}),
+          diagramStyle: { edgeType: 'polyline' },
+        },
       })
     }
 

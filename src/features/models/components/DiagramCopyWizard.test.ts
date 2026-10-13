@@ -132,7 +132,9 @@ describe('DiagramCopyWizard folder picker', () => {
     folderTestState.rootError = null
     folderTestState.rootFailedPage = null
     folderTestState.rootLoading = false
-    folderTestState.availableModels.value = [{ id: 'target-model', name: 'Target', version: '1.0.0' }]
+    folderTestState.availableModels.value = [
+      { id: 'target-model', name: 'Target', version: '1.0.0' },
+    ]
     folderTestState.targetModelId.value = 'target-model'
     folderTestState.setModel.mockClear()
     folderTestState.loadRoot.mockClear()
@@ -192,7 +194,8 @@ describe('DiagramCopyWizard folder picker', () => {
           BaseModal: modalStub,
           SearchableSelect: true,
           DiagramCopyFolderPicker: {
-            template: '<fieldset class="diagram-copy-folder-picker"><legend>folder</legend></fieldset>',
+            template:
+              '<fieldset class="diagram-copy-folder-picker"><legend>folder</legend></fieldset>',
           },
         },
       },

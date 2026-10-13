@@ -3,9 +3,7 @@ import type { DiagramAttrs } from '../modelAttrs'
 import type { EditorLink, EditorNode, ModelEditorState } from '../types'
 import { validateRequiredCustomProperties } from '../utils/requiredCustomPropertiesValidation'
 
-export type PrepareModelSaveValidationResult =
-  | { ok: true }
-  | { ok: false; error: string }
+export type PrepareModelSaveValidationResult = { ok: true } | { ok: false; error: string }
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 
@@ -14,11 +12,8 @@ export type ModelSaveValidationCandidates = {
   links: EditorLink[]
 }
 
-const isChanged = (row: {
-  _isNew?: boolean
-  _isDirty?: boolean
-  _isDeleted?: boolean
-}): boolean => Boolean((row._isNew || row._isDirty) && !row._isDeleted)
+const isChanged = (row: { _isNew?: boolean; _isDirty?: boolean; _isDeleted?: boolean }): boolean =>
+  Boolean((row._isNew || row._isDirty) && !row._isDeleted)
 
 /**
  * Collect entities whose required custom properties may have changed in this save.
@@ -30,12 +25,8 @@ export function collectModelSaveValidationCandidates(
 ): ModelSaveValidationCandidates {
   const nodesById = new Map(state.nodes.map(node => [node.id, node]))
   const linksById = new Map(state.links.map(link => [link.id, link]))
-  const nodeCandidates = new Map(
-    state.nodes.filter(isChanged).map(node => [node.id, node])
-  )
-  const linkCandidates = new Map(
-    state.links.filter(isChanged).map(link => [link.id, link])
-  )
+  const nodeCandidates = new Map(state.nodes.filter(isChanged).map(node => [node.id, node]))
+  const linkCandidates = new Map(state.links.filter(isChanged).map(link => [link.id, link]))
 
   for (const diagram of state.diagrams) {
     if (!isChanged(diagram) || diagram._attrsPending) continue

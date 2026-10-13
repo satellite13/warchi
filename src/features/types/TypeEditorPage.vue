@@ -11,6 +11,7 @@ import { useDirtySelectionGuard } from '@/composables/useDirtySelectionGuard'
 import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { useSaveErrorToast } from '@/composables/useSaveErrorToast'
 import { isSystemMarkedType } from '@/utils/systemMarkedType'
+import { canEditByAccessPermission } from '@/utils/accessPermission'
 import ListDetailEditorLayout from '@/components/layout/ListDetailEditorLayout.vue'
 import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
@@ -55,7 +56,7 @@ const isSelectedTypeWikiReadOnly = computed(() => {
   const item = selectedType.value
   if (!item || item._isNew) return false
   if (isSystemMarkedType(item)) return true
-  return item.accessPermission === 'VIEW'
+  return !canEditByAccessPermission(item)
 })
 
 const showTypeWikiToolbarButton = computed(() => {
@@ -63,7 +64,7 @@ const showTypeWikiToolbarButton = computed(() => {
   if (!item) return false
   if (item._isNew) return true
   const hasDoc = !!(documentFileId.value ?? item.parsedAttrs.documentFileId)
-  return item.accessPermission !== 'VIEW' || hasDoc
+  return canEditByAccessPermission(item) || hasDoc
 })
 
 onMounted(() => {
@@ -160,8 +161,17 @@ function handleDefaultDirectoryPathUpdate(value: string) {
   markTypeDirty(selectedType.value)
 }
 
-function handleIconUpdate(value: string) {
+function handleHideInTreeUpdate(value: boolean) {
   if (!selectedType.value || !canEditSelectedType.value || selectedType.value.kind !== 'node') return
+  if (value) {
+    selectedType.value.parsedAttrs.hideInTree = true
+  } else {
+    delete selectedType.value.parsedAttrs.hideInTree
+  }
+  markTypeDirty(selectedType.value)
+}
+
+function handleIconUpdate(value: string) {  if (!selectedType.value || !canEditSelectedType.value || selectedType.value.kind !== 'node') return
   const normalized = value.trim()
   if (!normalized) {
     delete selectedType.value.parsedAttrs.icon
@@ -198,7 +208,12 @@ function discardAndSwitch() {
 }
 
 const isTypeInUse = computed(() => typeUsages.value.length > 0)
-const canEditSelectedType = computed(() => !isSystemMarkedType(selectedType.value))
+const canEditSelectedType = computed(() => {
+  const item = selectedType.value
+  if (!item || isSystemMarkedType(item)) return false
+  if (item._isNew) return true
+  return canEditByAccessPermission(item)
+})
 const { canShare: canShareBase } = useCanShare(selectedType)
 const canShareSelectedType = computed(
   () => canShareBase.value && !selectedType.value?._isNew && canEditSelectedType.value,
@@ -314,6 +329,7 @@ function handleBatchShareDone() {
       @open-doc="openDocModal"
       @update-name="handleTypeNameUpdate"
       @update-default-directory-path="handleDefaultDirectoryPathUpdate"
+      @update-hide-in-tree="handleHideInTreeUpdate"
       @update-icon="handleIconUpdate"
       :on-mutate-property="handleMutateProperty"
       @add-property="addCustomProperty(selectedType)"

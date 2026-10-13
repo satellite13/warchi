@@ -10,12 +10,7 @@ export function isFullyInside(inner: BoundsBox, outer: BoundsBox): boolean {
 }
 
 export function boxesOverlap(a: BoundsBox, b: BoundsBox): boolean {
-  return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
-  )
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 }
 
 export function centerInside(inner: BoundsBox, outer: BoundsBox): boolean {

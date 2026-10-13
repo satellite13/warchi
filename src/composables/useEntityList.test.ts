@@ -50,7 +50,7 @@ vi.mock('./useApi', () => ({
 }))
 
 // We need to mock onMounted so it doesn't auto-call loadItems
-vi.mock('vue', async (importOriginal) => {
+vi.mock('vue', async importOriginal => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
@@ -147,7 +147,7 @@ describe('useEntityList', () => {
       const groups = list.filteredItems.value
       expect(groups).toHaveLength(2)
 
-      const alphaGroup = groups.find((g) => g.name === 'Alpha')
+      const alphaGroup = groups.find(g => g.name === 'Alpha')
       expect(alphaGroup).toBeDefined()
       expect(alphaGroup!.versions[0].version).toBe('2.0.0')
       expect(alphaGroup!.versions[1].version).toBe('1.0.0')
@@ -156,10 +156,7 @@ describe('useEntityList', () => {
 
   describe('searchQuery', () => {
     it('filters groups by search query', async () => {
-      const items = [
-        makeItem('1', 'Alpha', '1.0.0'),
-        makeItem('2', 'Beta', '1.0.0'),
-      ]
+      const items = [makeItem('1', 'Alpha', '1.0.0'), makeItem('2', 'Beta', '1.0.0')]
       mockApiGet.mockResolvedValue({ success: true, data: { content: items } })
 
       const list = useEntityList(makeConfig())
@@ -319,7 +316,10 @@ describe('useEntityList', () => {
       list.renameName.value = 'NewName'
       await list.renameItem()
 
-      expect(mockApiPut).toHaveBeenCalledWith('/models/1', expect.objectContaining({ name: 'NewName' }))
+      expect(mockApiPut).toHaveBeenCalledWith(
+        '/models/1',
+        expect.objectContaining({ name: 'NewName' })
+      )
       expect(list.items.value[0].name).toBe('NewName')
     })
   })
@@ -420,7 +420,7 @@ describe('useEntityList', () => {
 
       list.handleVersionChange('Alpha', '1.0.0')
 
-      const group = list.filteredItems.value.find((g) => g.name === 'Alpha')!
+      const group = list.filteredItems.value.find(g => g.name === 'Alpha')!
       const selected = list.getSelectedItem(group)
       expect(selected?.version).toBe('1.0.0')
     })
@@ -435,7 +435,7 @@ describe('useEntityList', () => {
 
       // Clear selection to force fallback
       list.selectedVersionByName.value = {}
-      const group = list.filteredItems.value.find((g) => g.name === 'Alpha')!
+      const group = list.filteredItems.value.find(g => g.name === 'Alpha')!
       const selected = list.getSelectedItem(group)
       // Falls back to first in sorted list (2.0.0 is first since sorted desc)
       expect(selected).toBeDefined()

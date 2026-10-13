@@ -30,6 +30,10 @@ export type ModelNodeAttrs = {
   documentFileId?: string
   /** Свойства, перенесённые из OEF-импорта (папочные маркеры плагина и т.п.) */
   oef?: OefNodeAttrs
+  /** Скоуп org-tree-sync (`dpc.autoCreated` = узел управляется синхронизацией) */
+  dpc?: Record<string, unknown>
+  /** Системные маркеры wArchi (`system.hiddenTreeRoot` = скрытый корень дерева модели) */
+  system?: Record<string, unknown>
 }
 
 export type ModelLinkAttrs = {
@@ -39,6 +43,8 @@ export type ModelLinkAttrs = {
   typeProperties: Record<string, unknown>
   /** OEF identity: entityId = id связи (relationship) из exchange XML. */
   oef?: OefNodeAttrs
+  /** Скоуп org-tree-sync для автосозданных связей */
+  dpc?: Record<string, unknown>
 }
 
 export type ScopedCustomValues = Record<string, Record<string, Record<string, unknown>>>
@@ -59,7 +65,8 @@ export type DiagramNodeInstanceAttrs = JsonObject & {
 export const parseBoundaryAttach = (value: unknown): BoundaryAttach | undefined => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const record = value as Record<string, unknown>
-  const hostInstanceId = typeof record.hostInstanceId === 'string' ? record.hostInstanceId.trim() : ''
+  const hostInstanceId =
+    typeof record.hostInstanceId === 'string' ? record.hostInstanceId.trim() : ''
   const param = record.param
   if (!hostInstanceId || typeof param !== 'number' || !Number.isFinite(param)) return undefined
   return { hostInstanceId, param }
@@ -246,6 +253,14 @@ export const parseNodeAttrs = (raw: string | null | undefined): ModelNodeAttrs =
   if (oef) {
     result.oef = oef
   }
+  const dpc = toClonedRecord(data.dpc)
+  if (Object.keys(dpc).length > 0) {
+    result.dpc = dpc
+  }
+  const system = toClonedRecord(data.system)
+  if (Object.keys(system).length > 0) {
+    result.system = system
+  }
   return result
 }
 
@@ -284,6 +299,10 @@ export const parseLinkAttrs = (raw: string | null | undefined): ModelLinkAttrs =
   const oef = parseOefAttrs(data.oef)
   if (oef) {
     result.oef = oef
+  }
+  const dpc = toClonedRecord(data.dpc)
+  if (Object.keys(dpc).length > 0) {
+    result.dpc = dpc
   }
   return result
 }
@@ -358,7 +377,7 @@ export type ResolveInstanceComponentIdInput = {
 
 /** Prefer per-instance visual binding, then node-level default for the notation. */
 export const resolveInstanceComponentId = (
-  input: ResolveInstanceComponentIdInput,
+  input: ResolveInstanceComponentIdInput
 ): string | null => {
   const notationId = input.notationId
   const fromInstance = input.instance?.attrs?.notationComponentId

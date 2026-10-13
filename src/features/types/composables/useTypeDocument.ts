@@ -152,7 +152,7 @@ export function useTypeDocument() {
       // arepos returns ListResponse { items, total, page, size }
       const result = await apiFetch<PaginatedResponse<FileVersionResponse> | FileVersionResponse[]>(
         `/files/${fileId}/versions`,
-        { method: 'GET' },
+        { method: 'GET' }
       )
       if (result.success) {
         const versions = paginatedContent(result.data)

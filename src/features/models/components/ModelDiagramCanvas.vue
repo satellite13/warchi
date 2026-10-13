@@ -14,11 +14,15 @@ import {
   RulersOverlay,
   InteractionManager,
   TextLabel,
+  CContainer,
+  CShape,
+  CText,
+  normalizeSides,
   type TextStyle,
   type TextLabelOptions,
   type EdgePathType,
   type EdgeStyle,
-  type CContainer,
+  type Bounds,
   type ViewportState,
   isNodeEdgeEndpoint,
 } from '@ngroznykh/papirus'
@@ -89,7 +93,11 @@ import {
 } from '../composables/useDiagramSelectionBridge'
 import { useDiagramHistoryPersist } from '../composables/useDiagramHistoryPersist'
 import { useDiagramViewportControls } from '../composables/useDiagramViewportControls'
-import { getDiagramScopedLinkValues, getDiagramScopedNodeValues } from '../utils/diagramScopedProperties'
+import {
+  getDiagramScopedLinkValues,
+  getDiagramScopedNodeValues,
+  setDiagramScopedNodeValue,
+} from '../utils/diagramScopedProperties'
 import { resolveDiagramNodeLabelTemplate } from '../utils/nodeLabelTemplate'
 import {
   buildModelEdgeDisplayLabel,
@@ -269,6 +277,7 @@ const emit = defineEmits<{
   ]
   findInTree: [modelNodeId: string]
   nodeLabelChange: [modelNodeId: string, newLabel: string]
+  nodePropertyChange: [modelNodeId: string, key: string, value: unknown]
   openDiagram: [diagramId: string]
   openDocument: [fileId: string]
   requestDeleteNodeFromDiagram: [instanceId: string]
@@ -2028,6 +2037,222 @@ function handleCanvasDoubleClickOpenDirectory(event: MouseEvent) {
   emit('findInTree', entity.modelNodeId)
 }
 
+// ── Inline editing of composite bound text fields (double click) ──
+
+type CompositeFieldHit = {
+  component: CText
+  bounds: Bounds
+}
+
+/**
+ * papirus CContainer caches flex layout in runtime-only fields that are not
+ * part of the public typings; we need them to compute the absolute world
+ * bounds of a hit text component (to position the inline editor overlay).
+ */
+type PapirusContainerLayout = {
+  _layoutChildren?: CContainer['children'] | null
+  _cachedBounds?: Array<{ x: number; y: number; width: number; height: number }> | null
+}
+
+function pointInBounds(point: { x: number; y: number }, bounds: Bounds): boolean {
+  return (
+    point.x >= bounds.x &&
+    point.x <= bounds.x + bounds.width &&
+    point.y >= bounds.y &&
+    point.y <= bounds.y + bounds.height
+  )
+}
+
+/**
+ * Mirrors papirus hit-testing (CompositeNode.getComponentAtPoint) but also
+ * returns the absolute world bounds of the hit CText — and only for texts
+ * bound to a custom property (the engine edits `__name__` itself).
+ */
+function hitTestCompositeBoundField(
+  container: CContainer,
+  point: { x: number; y: number },
+  bounds: Bounds
+): CompositeFieldHit | null {
+  if (container.style.visible === false) return null
+  const layout = container as unknown as PapirusContainerLayout
+  const children = layout._layoutChildren
+  const childBounds = layout._cachedBounds
+  if (!children || !childBounds) return null
+  for (let i = children.length - 1; i >= 0; i--) {
+    const child = children[i]
+    const relative = childBounds[i]
+    if (!child || child.style.visible === false || !relative) continue
+    const absolute: Bounds = {
+      x: bounds.x + relative.x,
+      y: bounds.y + relative.y,
+      width: relative.width,
+      height: relative.height,
+    }
+    if (child instanceof CContainer) {
+      const nested = hitTestCompositeBoundField(child, point, absolute)
+      if (nested) return nested
+      continue
+    }
+    if (child instanceof CShape) {
+      const content = child.content
+      if (content) {
+        const pad = normalizeSides(child.padding)
+        const borderWidth = child.borderWidth
+        const contentBounds: Bounds = {
+          x: absolute.x + pad.left + borderWidth,
+          y: absolute.y + pad.top + borderWidth,
+          width: Math.max(0, absolute.width - pad.left - pad.right - borderWidth * 2),
+          height: Math.max(0, absolute.height - pad.top - pad.bottom - borderWidth * 2),
+        }
+        const nested = hitTestCompositeBoundField(content, point, contentBounds)
+        if (nested) return nested
+      }
+      continue
+    }
+    if (child instanceof CText) {
+      const bindTo = child.bindToProperty
+      if (!bindTo || bindTo === BIND_TO_NAME) continue
+      if (!pointInBounds(point, absolute)) continue
+      return { component: child, bounds: absolute }
+    }
+  }
+  return null
+}
+
+function handleCanvasDoubleClickEditCompositeField(event: MouseEvent) {
+  if (!renderer || !props.activeDiagram) return
+  if (props.readOnly || props.navigationOnlyMode) return
+  if (renderer.blocksDiagramPointerAtScreen(event.clientX, event.clientY)) return
+  const worldPoint = renderer.screenToWorld(event.clientX, event.clientY)
+  const hitElement = renderer.getElementAtPoint(worldPoint)
+  if (!(hitElement instanceof CompositeNode)) return
+  if (hitElement.usesExternalLabel()) return
+  const hit = hitTestCompositeBoundField(
+    hitElement.content,
+    worldPoint,
+    hitElement.getLabelContainerBounds(hitElement.getBounds())
+  )
+  if (!hit) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  startCompositeFieldEditor(hitElement, hit)
+}
+
+let activeFieldEditor: HTMLTextAreaElement | null = null
+
+function removeCompositeFieldEditor() {
+  activeFieldEditor?.remove()
+  activeFieldEditor = null
+}
+
+function commitCompositeFieldValue(
+  modelNodeId: string,
+  instanceId: string | undefined,
+  key: string,
+  value: string
+) {
+  const modelNode = nodeById.value.get(modelNodeId)
+  const notationId = activeNotationId.value
+  const componentId = getComponentIdForInstance(modelNodeId, instanceId)
+  if (modelNode && notationId && componentId && props.activeDiagram) {
+    const isComponentProp = getNodeComponentCustomProperties(modelNodeId, instanceId).some(
+      property => property.name === key
+    )
+    if (isComponentProp) {
+      const next = cloneDiagramAttrs()
+      const changed = setDiagramScopedNodeValue({
+        diagram: next,
+        modelNodeId,
+        notationId,
+        componentId,
+        key,
+        value,
+        nodeAttrsFallback: modelNode.parsedAttrs,
+        instanceId,
+      })
+      if (changed) emit('updateDiagram', next)
+      return
+    }
+  }
+  emit('nodePropertyChange', modelNodeId, key, value)
+}
+
+function startCompositeFieldEditor(papNode: CompositeNode, hit: CompositeFieldHit) {
+  const entity = nodeIdToInstance.get(papNode.id)
+  if (!entity) return
+  const key = hit.component.bindToProperty
+  if (!key || key === BIND_TO_NAME) return
+  if (!renderer) return
+
+  const mergedValues = getNodeScopedPropertyValues(entity.modelNodeId, entity.instanceId)
+  const rawValue = mergedValues[key]
+  const initialText = rawValue == null ? '' : String(rawValue)
+
+  removeCompositeFieldEditor()
+  const zoom = renderer.zoom
+  const topLeft = renderer.worldToScreen(hit.bounds.x, hit.bounds.y)
+  const fontSize = Math.max(10, Math.min(28, (hit.component.fontSize || 14) * zoom))
+  const minHeight = Math.max(24, hit.bounds.height * zoom)
+
+  const textarea = document.createElement('textarea')
+  textarea.value = initialText
+  textarea.rows = 1
+  textarea.spellcheck = false
+  textarea.setAttribute('aria-label', `Edit ${key}`)
+  textarea.style.cssText = `
+    position: fixed;
+    left: ${topLeft.x}px;
+    top: ${topLeft.y}px;
+    width: ${Math.max(60, hit.bounds.width * zoom)}px;
+    min-height: ${minHeight}px;
+    z-index: 10001;
+    padding: 0 2px;
+    border: 1px solid #6366f1;
+    border-radius: 4px;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);
+    background: #ffffff;
+    color: #0f172a;
+    font: ${hit.component.fontStyle || 'normal'} ${hit.component.fontWeight || 'normal'} ${fontSize}px/1.3 sans-serif;
+    text-align: ${hit.component.align};
+    resize: none;
+    overflow: hidden;
+    outline: none;
+  `
+  const autoSize = () => {
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.max(minHeight, textarea.scrollHeight)}px`
+  }
+  let finished = false
+  const finish = (commit: boolean) => {
+    if (finished) return
+    finished = true
+    const value = textarea.value
+    removeCompositeFieldEditor()
+    if (commit && value !== initialText) {
+      commitCompositeFieldValue(entity.modelNodeId, entity.instanceId, key, value)
+    }
+  }
+  textarea.addEventListener('input', autoSize)
+  textarea.addEventListener('keydown', event => {
+    event.stopPropagation()
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      finish(false)
+      return
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      finish(true)
+    }
+  })
+  textarea.addEventListener('blur', () => finish(true))
+  document.body.appendChild(textarea)
+  activeFieldEditor = textarea
+  autoSize()
+  textarea.focus()
+  textarea.select()
+}
+
 function getCompositeRoleNameText(node: CompositeNode): string | null {
   const visit = (value: unknown): string | null => {
     if (!value || typeof value !== 'object') return null
@@ -2808,6 +3033,7 @@ function initRenderer(
   lastActiveDiagramId = props.activeDiagram?.id ?? null
   r.getCanvas().addEventListener('click', handleCanvasClickPrioritizeEdge)
   r.getCanvas().addEventListener('dblclick', handleCanvasDoubleClickOpenDirectory, true)
+  r.getCanvas().addEventListener('dblclick', handleCanvasDoubleClickEditCompositeField, true)
   window.addEventListener('mouseup', handleCanvasMouseUpSyncEditablePolyline)
 
   // Always enable interactions: when readOnly or navigationOnlyMode use navigationOnly (zoom/pan only, no edit)
@@ -3282,7 +3508,9 @@ function cleanupRendererBeforeDestroy(currentRenderer: DiagramRenderer) {
   }
   currentRenderer.getCanvas().removeEventListener('click', handleCanvasClickPrioritizeEdge)
   currentRenderer.getCanvas().removeEventListener('dblclick', handleCanvasDoubleClickOpenDirectory, true)
+  currentRenderer.getCanvas().removeEventListener('dblclick', handleCanvasDoubleClickEditCompositeField, true)
   window.removeEventListener('mouseup', handleCanvasMouseUpSyncEditablePolyline)
+  removeCompositeFieldEditor()
   renderer = null
   interactionManager = null
   emit('canvasContextChange', { renderer: null, interactionManager: null })
@@ -3625,7 +3853,9 @@ defineExpose({
 .diagram-canvas__comment-badges {
   position: absolute;
   inset: 0;
-  z-index: 12;
+  /* Ниже палитры/тумблера в HUD (z-index: 6), чтобы бейджи при скролле
+     уезжали под панель, а не «пролетали» поверх неё; выше канвы. */
+  z-index: 5;
   pointer-events: none;
 }
 

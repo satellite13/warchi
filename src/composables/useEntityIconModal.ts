@@ -7,7 +7,7 @@ import type { EntityListConfig } from './useEntityList'
 
 export function useEntityIconModal<T extends VersionedEntity>(
   config: EntityListConfig<T>,
-  items: Ref<T[]>,
+  items: Ref<T[]>
 ) {
   const { t } = useI18n()
   const modal = useModalState<T>()
@@ -51,7 +51,7 @@ export function useEntityIconModal<T extends VersionedEntity>(
       const body = config.buildUpdateAttrsRequest(item, nextAttrsStr)
       const result = await apiPut<T>(`/${config.endpoint}/${item.id}`, body)
       if (!result.success) throw new Error(result.error.message)
-      items.value = items.value.map((i) => (i.id === item.id ? result.data : i))
+      items.value = items.value.map(i => (i.id === item.id ? result.data : i))
       closeIconModal()
     } catch (e) {
       modal.error.value = e instanceof Error ? e.message : t('common.errorSave')

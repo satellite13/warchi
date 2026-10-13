@@ -12,7 +12,9 @@ import {
 import type { DiagramStyle, CustomProperty } from '@/domain/attrs/notationAttrs'
 import type { TextLabelOptions } from '@ngroznykh/papirus'
 
-function makeCustomProp(overrides: Partial<CustomProperty> & { id: string; name: string }): CustomProperty {
+function makeCustomProp(
+  overrides: Partial<CustomProperty> & { id: string; name: string }
+): CustomProperty {
   return {
     type: 'string',
     required: false,
@@ -163,9 +165,7 @@ describe('buildEdgeLabel', () => {
     const ds: DiagramStyle = { labelTemplate: '#{code}+${protocol}' }
     const linkTypeProps = [makeCustomProp({ id: 't1', name: 'code', defaultValue: 'HTTP' })]
     const relationProps = [makeCustomProp({ id: 'r1', name: 'protocol', defaultValue: '1.0' })]
-    const result = expectTextLabelOptions(
-      buildEdgeLabel('Link', ds, relationProps, linkTypeProps)
-    )
+    const result = expectTextLabelOptions(buildEdgeLabel('Link', ds, relationProps, linkTypeProps))
     expect(result.text).toBe('HTTP+1.0')
     expect(result.editableText).toBe('Link')
   })

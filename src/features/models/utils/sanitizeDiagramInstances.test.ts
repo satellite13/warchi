@@ -176,7 +176,11 @@ describe('sanitizeDiagramInstancesForModel', () => {
         _isDeleted: true,
       },
     ]
-    const { changed, removedEdges, nextAttrs } = sanitizeDiagramInstancesForModel(attrs, nodes, links)
+    const { changed, removedEdges, nextAttrs } = sanitizeDiagramInstancesForModel(
+      attrs,
+      nodes,
+      links
+    )
     expect(changed).toBe(true)
     expect(removedEdges).toBe(1)
     expect(nextAttrs.instances.edges).toHaveLength(1)

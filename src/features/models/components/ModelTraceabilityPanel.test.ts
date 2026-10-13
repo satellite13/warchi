@@ -217,8 +217,14 @@ describe('ModelTraceabilityPanel lazy branches', () => {
     await nextTick()
 
     const rootDrag = dragDataTransfer()
-    dispatchDragStart(wrapper.get('[data-testid="trace-node-drag-root"]').element, rootDrag.dataTransfer)
-    expect(rootDrag.dataTransfer.setData).toHaveBeenCalledWith('application/x-model-node-id', 'root')
+    dispatchDragStart(
+      wrapper.get('[data-testid="trace-node-drag-root"]').element,
+      rootDrag.dataTransfer
+    )
+    expect(rootDrag.dataTransfer.setData).toHaveBeenCalledWith(
+      'application/x-model-node-id',
+      'root'
+    )
     expect(rootDrag.dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'node:root')
     expect(rootDrag.dataTransfer.effectAllowed).toBe('copy')
 
@@ -429,19 +435,16 @@ describe('ModelTraceabilityPanel lazy branches', () => {
       token: 1,
       generation: 1,
     })
-    lazyState.branchStates.set('root', branchState([
-      neighbor('root-a', 'root', 'a', 'a'),
-      neighbor('root-b', 'root', 'b', 'b'),
-    ]))
-    lazyState.branchStates.set('a', branchState([
-      neighbor('a-shared', 'a', 'shared', 'shared'),
-    ]))
-    lazyState.branchStates.set('b', branchState([
-      neighbor('b-shared', 'b', 'shared', 'shared'),
-    ]))
-    lazyState.branchStates.set('shared', branchState([
-      neighbor('shared-leaf', 'shared', 'leaf', 'leaf'),
-    ]))
+    lazyState.branchStates.set(
+      'root',
+      branchState([neighbor('root-a', 'root', 'a', 'a'), neighbor('root-b', 'root', 'b', 'b')])
+    )
+    lazyState.branchStates.set('a', branchState([neighbor('a-shared', 'a', 'shared', 'shared')]))
+    lazyState.branchStates.set('b', branchState([neighbor('b-shared', 'b', 'shared', 'shared')]))
+    lazyState.branchStates.set(
+      'shared',
+      branchState([neighbor('shared-leaf', 'shared', 'leaf', 'leaf')])
+    )
     const wrapper = mountPanel()
     await nextTick()
 
@@ -473,13 +476,17 @@ describe('ModelTraceabilityPanel lazy branches', () => {
       token: 1,
       generation: 1,
     })
-    lazyState.branchStates.set('root', branchState([
-      neighbor('parallel-1', 'root', 'child', 'child'),
-      neighbor('parallel-2', 'root', 'child', 'child'),
-    ]))
-    lazyState.branchStates.set('child', branchState([
-      neighbor('child-leaf', 'child', 'leaf', 'leaf'),
-    ]))
+    lazyState.branchStates.set(
+      'root',
+      branchState([
+        neighbor('parallel-1', 'root', 'child', 'child'),
+        neighbor('parallel-2', 'root', 'child', 'child'),
+      ])
+    )
+    lazyState.branchStates.set(
+      'child',
+      branchState([neighbor('child-leaf', 'child', 'leaf', 'leaf')])
+    )
     const wrapper = mountPanel()
     await nextTick()
 
@@ -488,8 +495,7 @@ describe('ModelTraceabilityPanel lazy branches', () => {
         .findAll('.tb__link')
         .find(
           item =>
-            item.text().includes('Root → child') &&
-            item.attributes('aria-expanded') === 'false'
+            item.text().includes('Root → child') && item.attributes('aria-expanded') === 'false'
         )
       expect(toggle).toBeDefined()
       await toggle!.trigger('click')
@@ -556,7 +562,9 @@ describe('ModelTraceabilityPanel lazy branches', () => {
     expect(wrapper.findAll('.tb--depth-capped')).toHaveLength(2)
     const cappedChildContainers = wrapper.findAll('.tb__children--depth-capped')
     expect(cappedChildContainers).toHaveLength(1)
-    for (const branch of wrapper.findAll('.tb--depth-capped').filter(branch => branch.find('.tb__link').exists())) {
+    for (const branch of wrapper
+      .findAll('.tb--depth-capped')
+      .filter(branch => branch.find('.tb__link').exists())) {
       expect(branch.find('.tb__children--depth-capped').exists()).toBe(true)
     }
 

@@ -19,8 +19,17 @@ export type MergePairIds = {
   dropId: string
 }
 
-export function fetchValidationReport(modelId: string): Promise<ApiResult<ValidationReport>> {
-  return apiGet<ValidationReport>(`/models/${encodePath(modelId)}/validation-report`)
+export function fetchValidationReport(
+  modelId: string,
+  params?: { offset?: number; limit?: number }
+): Promise<ApiResult<ValidationReport>> {
+  const query = new URLSearchParams()
+  if (params?.offset != null) query.set('offset', String(params.offset))
+  if (params?.limit != null) query.set('limit', String(params.limit))
+  const qs = query.toString()
+  return apiGet<ValidationReport>(
+    `/models/${encodePath(modelId)}/validation-report${qs ? `?${qs}` : ''}`
+  )
 }
 
 export type AutoMergeLock = {

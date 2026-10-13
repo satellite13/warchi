@@ -196,9 +196,7 @@ describe('useModelEditorToolbarActions', () => {
   it('blocks run-validation-script without model.runValidationScripts grant', async () => {
     const scope = effectScope()
     await scope.run(async () => {
-      grantsState.hasGrant.mockImplementation(
-        (key: string) => key !== 'model.runValidationScripts'
-      )
+      grantsState.hasGrant.mockImplementation((key: string) => key !== 'model.runValidationScripts')
       const openValidationScriptsModal = vi.fn()
       const api = useModelEditorToolbarActions(
         buildOptions({ openValidationScriptsModal }) as never
@@ -225,6 +223,35 @@ describe('useModelEditorToolbarActions', () => {
 
       expect(checkPermission).not.toHaveBeenCalled()
       expect(openDiagramJson).not.toHaveBeenCalled()
+    })
+    scope.stop()
+  })
+
+  it('focuses diagram in tree on show-diagram-in-tree when a diagram is selected', async () => {
+    const scope = effectScope()
+    await scope.run(async () => {
+      const selectedDiagramId = ref<string | null>('d-1')
+      const focusDiagramInTree = vi.fn(async () => undefined)
+      const api = useModelEditorToolbarActions(
+        buildOptions({ selectedDiagramId, focusDiagramInTree }) as never
+      )
+
+      await api.handleToolbarAction('show-diagram-in-tree')
+
+      expect(focusDiagramInTree).toHaveBeenCalledWith('d-1')
+    })
+    scope.stop()
+  })
+
+  it('does not focus diagram in tree when no diagram is selected', async () => {
+    const scope = effectScope()
+    await scope.run(async () => {
+      const focusDiagramInTree = vi.fn(async () => undefined)
+      const api = useModelEditorToolbarActions(buildOptions({ focusDiagramInTree }) as never)
+
+      await api.handleToolbarAction('show-diagram-in-tree')
+
+      expect(focusDiagramInTree).not.toHaveBeenCalled()
     })
     scope.stop()
   })

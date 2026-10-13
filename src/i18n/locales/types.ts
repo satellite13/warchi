@@ -23,6 +23,10 @@ export const typesMessages = {
       main: 'Основные',
       directory: 'Директория',
       directoryExample: 'Например: Домены/Продажи/Лиды',
+      hideInTree: 'Скрыть в дереве',
+      hideInTreeToggle: 'Скрывать элементы этого типа в дереве модели',
+      hideInTreeHint:
+        'Элементы этого типа не показываются в дереве модели пользователям с ролью ниже админа. При OEF-импорте узлам такого типа по умолчанию проставляется маркер system.hideInTree.',
       icon: 'Иконка',
       iconSearchPlaceholder: 'Поиск иконки...',
       iconClear: 'Сбросить',
@@ -99,7 +103,8 @@ export const typesMessages = {
       docNotSaved: 'Документ не сохранен',
       docEmpty: 'Документация пока не создана.',
       docLoadError: 'Не удалось загрузить документ.',
-      docBrokenRef: 'Документ не найден — возможно, ссылка устарела. Вы можете создать новый документ.',
+      docBrokenRef:
+        'Документ не найден — возможно, ссылка устарела. Вы можете создать новый документ.',
       docCreateNew: 'Создать новый документ',
       docSaveError: 'Ошибка сохранения документа: {message}',
       docLoadVersionError: 'Не удалось загрузить версию документа.',
@@ -137,7 +142,8 @@ export const typesMessages = {
       errorSave: 'Ошибка сохранения',
       errorDelete: 'Ошибка удаления',
       docLinkRegisterFailed: 'Не удалось привязать документ к форме: {message}',
-      outlineHint: 'Перетащите точку — переместить. Двойной клик по ребру — добавить точку. Двойной клик по точке — удалить (не менее 3 точек). ПКМ по ребру — в кривую Безье / в линию.',
+      outlineHint:
+        'Перетащите точку — переместить. Двойной клик по ребру — добавить точку. Двойной клик по точке — удалить (не менее 3 точек). ПКМ по ребру — в кривую Безье / в линию.',
       convertToBezier: 'В кривую Безье',
       convertToLine: 'В линию',
       unsavedChangesTitle: 'Несохранённые изменения',
@@ -179,6 +185,10 @@ export const typesMessages = {
       main: 'Main',
       directory: 'Directory',
       directoryExample: 'For example: Domains/Sales/Leads',
+      hideInTree: 'Hide in tree',
+      hideInTreeToggle: 'Hide elements of this type in the model tree',
+      hideInTreeHint:
+        'Elements of this type are hidden from the model tree for users with a role below admin. OEF import stamps nodes of such types with the system.hideInTree marker by default.',
       icon: 'Icon',
       iconSearchPlaceholder: 'Search icon...',
       iconClear: 'Clear',
@@ -198,8 +208,7 @@ export const typesMessages = {
       notUsed: 'Not used',
       requiredShort: 'Req.',
       systemShort: 'Sys.',
-      systemTypeReadOnly:
-        'System type is view-only. Delete, edit, and sharing are unavailable.',
+      systemTypeReadOnly: 'System type is view-only. Delete, edit, and sharing are unavailable.',
       removeProperty: 'Remove property',
       propertyNamePlaceholder: 'Property name',
       regexOptional: 'Regex (optional)',
@@ -255,7 +264,8 @@ export const typesMessages = {
       docNotSaved: 'Document not saved',
       docEmpty: 'No documentation created yet.',
       docLoadError: 'Failed to load document.',
-      docBrokenRef: 'Document not found — the reference may be outdated. You can create a new document.',
+      docBrokenRef:
+        'Document not found — the reference may be outdated. You can create a new document.',
       docCreateNew: 'Create new document',
       docSaveError: 'Failed to save document: {message}',
       docLoadVersionError: 'Failed to load document version.',
@@ -293,7 +303,8 @@ export const typesMessages = {
       errorSave: 'Save failed',
       errorDelete: 'Delete failed',
       docLinkRegisterFailed: 'Could not link the document to the shape: {message}',
-      outlineHint: 'Drag a point to move. Double-click on an edge to add a point. Double-click on a point to delete (min 3 points). Right-click on an edge — convert to Bezier / line.',
+      outlineHint:
+        'Drag a point to move. Double-click on an edge to add a point. Double-click on a point to delete (min 3 points). Right-click on an edge — convert to Bezier / line.',
       convertToBezier: 'Convert to Bezier',
       convertToLine: 'Convert to line',
       unsavedChangesTitle: 'Unsaved changes',

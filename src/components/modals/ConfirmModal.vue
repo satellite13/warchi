@@ -30,6 +30,8 @@ const { t } = useI18n()
 <template>
   <BaseModal :title="title" :max-width="maxWidth" @close="emit('close')">
     <p class="confirm-modal__text">{{ message }}</p>
+    <!-- Optional warning banner above the footer (e.g. node-used-on-diagrams notice). -->
+    <slot name="warning" />
     <template #footer>
       <button type="button" class="btn btn--secondary" @click="emit('close')">
         {{ cancelLabel || t('common.cancel') }}

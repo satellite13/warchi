@@ -1,5 +1,9 @@
 import type { DiagramAttrs, DiagramNodeInstance } from '../modelAttrs'
-import { EDGE_ANCHOR_SIZE, getHostEdgeInstanceId, isEdgeAnchorInstance } from './diagramOnlyInstances'
+import {
+  EDGE_ANCHOR_SIZE,
+  getHostEdgeInstanceId,
+  isEdgeAnchorInstance,
+} from './diagramOnlyInstances'
 
 export type EdgeMidpoint = { x: number; y: number }
 

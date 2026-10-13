@@ -133,7 +133,7 @@ describe('resolveNewNotationBoundEntities', () => {
         buildCreateRequest: entity => ({ name: entity.name }),
         onRemapId: vi.fn(),
         onProgress: vi.fn(),
-      }),
+      })
     ).rejects.toThrow(/Actor/)
 
     expect(first.id).toBe('created-1')

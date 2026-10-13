@@ -99,7 +99,10 @@ const readLegacyLinkScopedValues = (
   return linkAttrs.relationProperties[notationId]?.[relationId] ?? {}
 }
 
-const mergeScopedMaps = (base: ScopedCustomValues, overlay: ScopedCustomValues): ScopedCustomValues => {
+const mergeScopedMaps = (
+  base: ScopedCustomValues,
+  overlay: ScopedCustomValues
+): ScopedCustomValues => {
   const result: ScopedCustomValues = cloneJson(base)
   for (const [notationId, byEntity] of Object.entries(overlay)) {
     if (!result[notationId]) result[notationId] = {}
@@ -274,4 +277,3 @@ export const setDiagramScopedLinkValue = ({
   target[key] = value
   return true
 }
-

@@ -16,9 +16,7 @@ vi.mock('@/features/models-validation/composables/useAllDiagramReferences', () =
 
 const loadRefsMock = vi.mocked(loadAllDiagramReferences)
 
-function mountGroup(
-  props: InstanceType<typeof ValidationDuplicateGroup>['$props']
-) {
+function mountGroup(props: InstanceType<typeof ValidationDuplicateGroup>['$props']) {
   const i18n = createI18n({
     legacy: false,
     locale: 'en',
@@ -32,6 +30,9 @@ function mountGroup(
           validationReportKeep: 'Will remain',
           validationReportMergeInto: 'Merge into remaining',
           validationReportInFolder: 'in folder {name}',
+          validationReportInArchive: 'Archive',
+          validationReportAutoCreatedHint:
+            'Element created automatically (OEF import). Keep this copy.',
         },
       },
     },
@@ -46,7 +47,9 @@ function mountGroup(
 describe('ValidationDuplicateGroup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    loadRefsMock.mockResolvedValue([{ id: 'd1', name: 'Landscape', version: '1', notationId: 'nt', nodeId: 'n1' }])
+    loadRefsMock.mockResolvedValue([
+      { id: 'd1', name: 'Landscape', version: '1', notationId: 'nt', nodeId: 'n1' },
+    ])
   })
 
   it('renders title, copies badge and muted parent, then emits merge', async () => {
@@ -70,15 +73,69 @@ describe('ValidationDuplicateGroup', () => {
 
     await wrapper.get('.validation-duplicate-group__merge').trigger('click')
 
-    expect(wrapper.emitted('merge')?.[0]).toEqual([
-      { keepId: 'n1', dropId: 'n2', kind: 'node' },
-    ])
+    expect(wrapper.emitted('merge')?.[0]).toEqual([{ keepId: 'n1', dropId: 'n2', kind: 'node' }])
 
     const radios = wrapper.findAll('input[type="radio"]')
     expect(radios).toHaveLength(2)
     await radios[1]!.setValue()
     expect(wrapper.findAll('.validation-duplicate-group__details--keep')).toHaveLength(1)
     expect(wrapper.findAll('.validation-duplicate-group__merge')).toHaveLength(1)
+  })
+
+  it('defaults keep to the auto-created member even when it is last', async () => {
+    const wrapper = mountGroup({
+      modelId: 'm1',
+      kind: 'node',
+      title: 'Application · CRM',
+      count: 2,
+      nodeMembers: [
+        { id: 'n1', name: 'CRM', parentId: null, parentName: null, diagramCount: 5 },
+        { id: 'n2', name: 'CRM', parentId: null, parentName: null, autoCreated: true },
+      ],
+    })
+
+    await wrapper.get('.validation-duplicate-group__merge').trigger('click')
+
+    expect(wrapper.emitted('merge')?.[0]).toEqual([{ keepId: 'n2', dropId: 'n1', kind: 'node' }])
+  })
+
+  it('marks auto-created members with an "A" badge and hint tooltip', () => {
+    const wrapper = mountGroup({
+      modelId: 'm1',
+      kind: 'node',
+      title: 'Application · CRM',
+      count: 2,
+      nodeMembers: [
+        { id: 'n1', name: 'CRM', parentId: null, parentName: null, diagramCount: 5 },
+        { id: 'n2', name: 'CRM', parentId: null, parentName: null, autoCreated: true },
+      ],
+    })
+
+    const badges = wrapper.findAll('.validation-duplicate-group__auto')
+    expect(badges).toHaveLength(1)
+    expect(badges[0].text()).toBe('А')
+    expect(badges[0].attributes('title')).toContain('created automatically')
+  })
+
+  it('marks auto-created link members with the badge and defaults keep to them', async () => {
+    const wrapper = mountGroup({
+      modelId: 'm1',
+      kind: 'link',
+      title: 'CRM → ERP · Serving',
+      count: 2,
+      linkMembers: [
+        { id: 'l1', diagramCount: 4 },
+        { id: 'l2', diagramCount: 0, autoCreated: true },
+      ],
+    })
+
+    const badges = wrapper.findAll('.validation-duplicate-group__auto')
+    expect(badges).toHaveLength(1)
+    expect(badges[0].attributes('title')).toContain('created automatically')
+
+    await wrapper.get('.validation-duplicate-group__merge').trigger('click')
+
+    expect(wrapper.emitted('merge')?.[0]).toEqual([{ keepId: 'l2', dropId: 'l1', kind: 'link' }])
   })
 
   it('navigates to the editor on node name click', async () => {
@@ -139,9 +196,7 @@ describe('ValidationDuplicateGroup', () => {
     })
 
     await wrapper.get('.validation-duplicate-group__merge').trigger('click')
-    expect(wrapper.emitted('merge')?.[0]).toEqual([
-      { keepId: 'l1', dropId: 'l2', kind: 'link' },
-    ])
+    expect(wrapper.emitted('merge')?.[0]).toEqual([{ keepId: 'l1', dropId: 'l2', kind: 'link' }])
 
     const details = wrapper.get('details')
     details.element.open = true
@@ -155,5 +210,76 @@ describe('ValidationDuplicateGroup', () => {
       params: { id: 'm1' },
       query: { diagramId: 'd2', linkId: 'l1' },
     })
+  })
+
+  it('does not let an archived member be the survivor and disables its radio', async () => {
+    const wrapper = mountGroup({
+      modelId: 'm1',
+      kind: 'node',
+      title: 'Application · CRM',
+      count: 3,
+      nodeMembers: [
+        { id: 'n1', name: 'CRM', parentId: null, parentName: null, diagramCount: 1 },
+        {
+          id: 'n2',
+          name: 'CRM',
+          parentId: 'arch',
+          parentName: 'Archive',
+          inArchive: true,
+          autoCreated: true,
+        },
+        { id: 'n3', name: 'CRM', parentId: 'arch', parentName: 'Archive', inArchive: true },
+      ],
+    })
+
+    const radios = wrapper.findAll('input[type="radio"]')
+    expect(radios[0].attributes('disabled')).toBeUndefined()
+    expect(radios[1].attributes('disabled')).toBeDefined()
+    expect(radios[2].attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Archive')
+
+    await wrapper.get('.validation-duplicate-group__merge').trigger('click')
+
+    expect(wrapper.emitted('merge')?.[0]).toEqual([{ keepId: 'n1', dropId: 'n2', kind: 'node' }])
+  })
+
+  it('prefers a non-archived auto-created member over an archived live one', async () => {
+    const wrapper = mountGroup({
+      modelId: 'm1',
+      kind: 'node',
+      title: 'Application · CRM',
+      count: 2,
+      nodeMembers: [
+        {
+          id: 'n1',
+          name: 'CRM',
+          parentId: 'arch',
+          parentName: 'Archive',
+          inArchive: true,
+          diagramCount: 9,
+        },
+        { id: 'n2', name: 'CRM', parentId: null, parentName: null, autoCreated: true },
+      ],
+    })
+
+    await wrapper.get('.validation-duplicate-group__merge').trigger('click')
+
+    expect(wrapper.emitted('merge')?.[0]).toEqual([{ keepId: 'n2', dropId: 'n1', kind: 'node' }])
+  })
+
+  it('does not offer merge when every member is archived', () => {
+    const wrapper = mountGroup({
+      modelId: 'm1',
+      kind: 'node',
+      title: 'Application · CRM',
+      count: 2,
+      nodeMembers: [
+        { id: 'n1', name: 'CRM', parentId: 'arch', parentName: 'Archive', inArchive: true },
+        { id: 'n2', name: 'CRM', parentId: 'arch', parentName: 'Archive', inArchive: true },
+      ],
+    })
+
+    expect(wrapper.findAll('.validation-duplicate-group__merge')).toHaveLength(0)
+    expect(wrapper.findAll('.validation-duplicate-group__details--keep')).toHaveLength(0)
   })
 })

@@ -7,7 +7,9 @@ import type { EditorDiagram } from '../types'
 import type { ModelData } from '@/types/entities'
 
 function getBackgroundColor(): string {
-  return getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff'
+  return (
+    getComputedStyle(document.documentElement).getPropertyValue('--base-bg').trim() || '#ffffff'
+  )
 }
 
 export function useModelDiagramExport(

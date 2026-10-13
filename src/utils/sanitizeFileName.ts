@@ -37,7 +37,7 @@ const CYRILLIC_TO_LATIN: Record<string, string> = {
 
 function transliterateToLatin(value: string): string {
   return [...value]
-    .map((char) => {
+    .map(char => {
       const lower = char.toLowerCase()
       const mapped = CYRILLIC_TO_LATIN[lower]
       if (mapped === undefined) return char

@@ -37,17 +37,14 @@ export function toElkLayoutOptions(
   const edgeRouting = ui.edgeRouting
   if (mode === 'overlap') {
     const opts: ElkLayoutOptions = {
-      'elk.algorithm': ui.sporeCompaction
-        ? 'org.eclipse.elk.sporeCompaction'
-        : 'sporeOverlap',
+      'elk.algorithm': ui.sporeCompaction ? 'org.eclipse.elk.sporeCompaction' : 'sporeOverlap',
       'elk.edgeRouting': edgeRouting,
       'elk.spacing.nodeNode': String(ui.nodeNodeSpacing),
     }
     return opts
   }
 
-  const direction =
-    ui.direction === 'AUTO' ? (resolvedDirection ?? 'RIGHT') : ui.direction
+  const direction = ui.direction === 'AUTO' ? (resolvedDirection ?? 'RIGHT') : ui.direction
   const opts: ElkLayoutOptions = {
     'elk.algorithm': 'layered',
     'elk.direction': direction,

@@ -86,9 +86,7 @@ describe('useDetachedModelLinks', () => {
 
     await loader.load()
     expect(
-      mergeDetachedModelLinks(loader.links.value, [
-        { ...staleCleanPartial, _isDeleted: true },
-      ])
+      mergeDetachedModelLinks(loader.links.value, [{ ...staleCleanPartial, _isDeleted: true }])
     ).toEqual([])
 
     // Successful save removes the local tombstone; the next detached operation must

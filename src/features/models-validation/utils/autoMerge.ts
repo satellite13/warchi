@@ -224,12 +224,18 @@ async function mergeLinkGroup(
   return mergedMembers > 0 ? { status: 'merged' } : { status: 'nothing' }
 }
 
-function pickMostUsed<T extends { id: string; diagramCount?: number }>(
-  members: T[]
-): T | undefined {
+function pickMostUsed<
+  T extends { id: string; diagramCount?: number; autoCreated?: boolean; inArchive?: boolean },
+>(members: T[]): T | undefined {
   if (members.length < 2) return undefined
-  return [...members].sort(
-    (a, b) => (b.diagramCount ?? 0) - (a.diagramCount ?? 0) || a.id.localeCompare(b.id)
+  // Ноды в папке «Archive» — устаревшие копии, их нельзя сделать survivor'ом.
+  const eligible = members.filter(member => !member.inArchive)
+  if (eligible.length === 0) return undefined
+  return [...eligible].sort(
+    (a, b) =>
+      Number(!!b.autoCreated) - Number(!!a.autoCreated) ||
+      (b.diagramCount ?? 0) - (a.diagramCount ?? 0) ||
+      a.id.localeCompare(b.id)
   )[0]
 }
 

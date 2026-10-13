@@ -5,6 +5,7 @@ import {
 } from '../utils/applyPendingDiagramSwitch'
 import { removeOrphanEdgeAnchors } from '../utils/edgeAnchorSync'
 import type { EditorDiagram, ModelEditorState } from '../types'
+import type { DiagramNodeInstance } from '../modelAttrs'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
 
@@ -36,9 +37,9 @@ export function useModelEditorEntityDelete(options: {
   selectedEdgeInstanceId: Ref<string | null>
   selectedCanvasElementId: Ref<string | null>
   diagramInteractionManager: Ref<{ history?: DiagramHistory } | null>
-  isNoteInstance: (instance: any) => boolean
-  isContainerInstance: (instance: any) => boolean
-  isEdgeAnchorInstance: (instance: any) => boolean
+  isNoteInstance: (instance: DiagramNodeInstance) => boolean
+  isContainerInstance: (instance: DiagramNodeInstance) => boolean
+  isEdgeAnchorInstance: (instance: DiagramNodeInstance) => boolean
   isDiagramNoteModelNodeId: (nodeId: string) => boolean
   isDiagramContainerModelNodeId: (nodeId: string) => boolean
   isEdgeAnchorModelNodeId: (nodeId: string) => boolean
@@ -231,7 +232,8 @@ export function useModelEditorEntityDelete(options: {
         options.selectedModelLinkId.value = null
         options.selectedEdgeInstanceId.value = null
       }
-      if (options.selectedCanvasElementId.value?.startsWith('edge-')) options.selectedCanvasElementId.value = null
+      if (options.selectedCanvasElementId.value?.startsWith('edge-'))
+        options.selectedCanvasElementId.value = null
       options.markDiagramDirty(diagram.id)
     }
 
@@ -321,7 +323,10 @@ export function useModelEditorEntityDelete(options: {
     if (showLinkDeleteModal.value || showNodeDeleteModal.value || shouldSkipDeleteHotkey(event))
       return
 
-    if (options.selectedModelNodeIds.value.length > 0 || options.selectedInstanceIds.value.length > 0) {
+    if (
+      options.selectedModelNodeIds.value.length > 0 ||
+      options.selectedInstanceIds.value.length > 0
+    ) {
       event.preventDefault()
       openNodeDeleteDialog(
         options.selectedModelNodeIds.value,
@@ -333,7 +338,10 @@ export function useModelEditorEntityDelete(options: {
 
     if (!options.selectedModelLinkId.value) return
     event.preventDefault()
-    openLinkDeleteDialog(options.selectedModelLinkId.value, options.selectedEdgeInstanceId.value ?? undefined)
+    openLinkDeleteDialog(
+      options.selectedModelLinkId.value,
+      options.selectedEdgeInstanceId.value ?? undefined
+    )
   }
 
   const handleRequestDeleteNodeFromDiagram = (instanceId: string) => {

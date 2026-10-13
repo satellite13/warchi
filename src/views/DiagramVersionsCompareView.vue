@@ -14,6 +14,7 @@ import type {
 } from '@/types/api'
 import { type CompareSharedData, loadCompareSharedData } from '@/api/loadCompareSharedData'
 import DualDiagramCompareView from '@/features/models/components/DualDiagramCompareView.vue'
+import SearchableSelect, { type SelectOption } from '@/components/forms/SearchableSelect.vue'
 import { fetchAllByModelId } from '@/features/models/composables/modelEditorLoadModel'
 import { compareVersions } from '@/utils/version'
 import {
@@ -98,6 +99,16 @@ const diagramNames = computed(() => {
   versionData.value?.diagrams.forEach(d => names.add(d.name))
   return Array.from(names).sort()
 })
+
+/** Опции выбора диаграммы для кастомного селекта с поиском. */
+const diagramNameOptions = computed((): SelectOption[] =>
+  diagramNames.value.map(name => ({ id: name, label: name })),
+)
+
+/** Опции выбора версии для кастомного селекта с поиском. */
+const versionOptions = computed((): SelectOption[] =>
+  diagramsWithName.value.map(d => ({ id: d.id, label: d.version })),
+)
 
 const leftDiagramRaw = computed((): DiagramResponse | null => {
   const list = versionData.value?.diagrams ?? []
@@ -203,33 +214,43 @@ watch(
     <template #before-swap>
       <div class="ddc-pick">
         <span class="ddc-pick__label">{{ t('models.compareDiagramName') }}</span>
-        <select v-model="diagramName" class="ddc-pick__select">
-          <option v-for="name in diagramNames" :key="name" :value="name">{{ name }}</option>
-        </select>
+        <SearchableSelect
+          v-model="diagramName"
+          class="ddc-pick__searchable"
+          :options="diagramNameOptions"
+          :disabled="loading || diagramNameOptions.length === 0"
+          :placeholder="t('models.compareDiagramName')"
+          :search-placeholder="t('common.search')"
+          :empty-text="t('common.nothingFound')"
+        />
       </div>
 
       <div class="ddc-pick">
         <span class="ddc-pick__label">{{ t('models.compareVersionLeft') }}</span>
-        <select
+        <SearchableSelect
           v-model="leftDiagramId"
-          class="ddc-pick__select"
+          class="ddc-pick__searchable"
+          :options="versionOptions"
           :disabled="loading || !diagramsWithName.length"
-        >
-          <option v-for="d in diagramsWithName" :key="d.id" :value="d.id">{{ d.version }}</option>
-        </select>
+          :placeholder="t('models.compareSelectVersion')"
+          :search-placeholder="t('common.search')"
+          :empty-text="t('common.nothingFound')"
+        />
       </div>
     </template>
 
     <template #after-swap>
       <div class="ddc-pick">
         <span class="ddc-pick__label">{{ t('models.compareVersionRight') }}</span>
-        <select
+        <SearchableSelect
           v-model="rightDiagramId"
-          class="ddc-pick__select"
+          class="ddc-pick__searchable"
+          :options="versionOptions"
           :disabled="loading || !diagramsWithName.length"
-        >
-          <option v-for="d in diagramsWithName" :key="d.id" :value="d.id">{{ d.version }}</option>
-        </select>
+          :placeholder="t('models.compareSelectVersion')"
+          :search-placeholder="t('common.search')"
+          :empty-text="t('common.nothingFound')"
+        />
       </div>
     </template>
   </DualDiagramCompareView>

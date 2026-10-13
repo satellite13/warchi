@@ -1,12 +1,12 @@
 import { markRaw, reactive } from 'vue'
-import type { DiagramResponse, LinkResponse, NodeResponse } from "@/types/api"
-import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from "../modelAttrs"
-import type { EditorDiagram, EditorLink, EditorNode } from "../types"
+import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
+import { parseDiagramAttrs, parseLinkAttrs, parseNodeAttrs } from '../modelAttrs'
+import type { EditorDiagram, EditorLink, EditorNode } from '../types'
 import {
   applyDefaultsToEditorLink,
   applyDefaultsToEditorNode,
   type EditorDefaultsCatalog,
-} from "../utils/syncDefaultsOnLoad"
+} from '../utils/syncDefaultsOnLoad'
 
 function materializeEditorEntity<T extends { parsedAttrs: object }>(entity: T): T {
   const materialized = reactive(entity) as T

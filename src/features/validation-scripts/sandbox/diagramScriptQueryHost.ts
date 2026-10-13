@@ -15,9 +15,7 @@ export type DiagramScriptQueryRequest = {
   args: Record<string, unknown>
 }
 
-export type DiagramScriptQueryResult =
-  | { data: unknown }
-  | { error: string }
+export type DiagramScriptQueryResult = { data: unknown } | { error: string }
 
 export type DiagramScriptNeighborOptions = {
   direction: 'outgoing' | 'incoming'
@@ -108,7 +106,7 @@ export function createDiagramScriptQueryHost(deps: DiagramScriptQueryHostDeps) {
           limit,
         })
         if (!result.success) return { error: apiErrorMessage(result) }
-        const hits = (result.data.hits ?? []).filter((hit) => matchesSearchType(hit, type))
+        const hits = (result.data.hits ?? []).filter(hit => matchesSearchType(hit, type))
         return { data: hits }
       }
       case 'linksBetween': {
@@ -122,7 +120,7 @@ export function createDiagramScriptQueryHost(deps: DiagramScriptQueryHostDeps) {
         })
         if (!result.success) return { error: apiErrorMessage(result) }
         const pair = new Set([a, b])
-        const links = result.data.links.filter((link) => {
+        const links = result.data.links.filter(link => {
           if (!pair.has(link.sourceId) || !pair.has(link.targetId)) return false
           return matchesLinkType(link.linkTypeId, linkType)
         })

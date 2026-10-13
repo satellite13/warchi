@@ -33,9 +33,9 @@ export function buildVersionTree<T extends WithSourceId>(items: T[]): VersionTre
   }
   function build(parentKey: string | null): VersionTreeNode<T>[] {
     const list = childrenByParent.get(parentKey) ?? []
-    return list.map((item) => ({
+    return list.map(item => ({
       item,
-      children: build(item.id)
+      children: build(item.id),
     }))
   }
   return build(null)

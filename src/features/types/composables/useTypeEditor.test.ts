@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { effectScope } from 'vue'
 import { apiDelete, apiGet, apiPost, apiPut } from '@/composables/useApi'
 import { useTypeEditor, type TypeItem } from './useTypeEditor'
 
@@ -11,7 +12,7 @@ vi.mock('vue-i18n', async importOriginal => {
         if (!params) return key
         return Object.entries(params).reduce(
           (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-          key,
+          key
         )
       },
     }),
@@ -80,7 +81,7 @@ describe('useTypeEditor', () => {
   })
 
   it('addType creates a new selected item and marks the editor dirty', () => {
-    const editor = useTypeEditor()
+    const editor = effectScope().run(() => useTypeEditor())!
 
     editor.addType('node')
 
@@ -90,7 +91,7 @@ describe('useTypeEditor', () => {
   })
 
   it('markTypeDirty marks existing types dirty without snapshot comparison', () => {
-    const editor = useTypeEditor()
+    const editor = effectScope().run(() => useTypeEditor())!
     editor.nodeTypes.value = [existingType()]
 
     editor.selectType('type-1')
@@ -105,7 +106,7 @@ describe('useTypeEditor', () => {
   })
 
   it('addCustomProperty and removeCustomProperty mark existing types dirty', () => {
-    const editor = useTypeEditor()
+    const editor = effectScope().run(() => useTypeEditor())!
     const item = existingType({ parsedAttrs: { customProperties: [] } })
     editor.nodeTypes.value = [item]
     editor.selectType('type-1')
@@ -125,7 +126,7 @@ describe('useTypeEditor', () => {
   })
 
   it('saveType posts new node types and replaces the local item', async () => {
-    const editor = useTypeEditor()
+    const editor = effectScope().run(() => useTypeEditor())!
     editor.addType('node')
     const item = editor.selectedType.value!
     item.name = 'Created'
@@ -148,7 +149,7 @@ describe('useTypeEditor', () => {
   })
 
   it('saveType clears dirty flags after successful updates', async () => {
-    const editor = useTypeEditor()
+    const editor = effectScope().run(() => useTypeEditor())!
     const item = existingType({ name: 'Renamed', _isDirty: true })
     editor.nodeTypes.value = [item]
     editor.selectType('type-1')
@@ -168,7 +169,7 @@ describe('useTypeEditor', () => {
   })
 
   it('deleteType calls the API and removes existing types', async () => {
-    const editor = useTypeEditor()
+    const editor = effectScope().run(() => useTypeEditor())!
     const item = existingType()
     editor.nodeTypes.value = [item]
     vi.mocked(apiDelete).mockResolvedValue(ok(undefined))
@@ -180,12 +181,26 @@ describe('useTypeEditor', () => {
   })
 
   it('loadUsages fetches notations and matching elements', async () => {
-    const editor = useTypeEditor()
+    const editor = effectScope().run(() => useTypeEditor())!
     const item = existingType()
     vi.mocked(apiGet)
-      .mockResolvedValueOnce(ok(page([{ id: 'notation-1', name: 'Notation', version: '1.0.0', ownerId: 'owner-1' }])))
       .mockResolvedValueOnce(
-        ok(page([{ id: 'component-1', name: 'Component', version: '1.0.0', notationId: 'notation-1', ownerId: 'owner-1', nodeTypeId: 'type-1', attrs: '{"paletteMaterialIcon":"hub"}' }]))
+        ok(page([{ id: 'notation-1', name: 'Notation', version: '1.0.0', ownerId: 'owner-1' }]))
+      )
+      .mockResolvedValueOnce(
+        ok(
+          page([
+            {
+              id: 'component-1',
+              name: 'Component',
+              version: '1.0.0',
+              notationId: 'notation-1',
+              ownerId: 'owner-1',
+              nodeTypeId: 'type-1',
+              attrs: '{"paletteMaterialIcon":"hub"}',
+            },
+          ])
+        )
       )
 
     await editor.loadUsages(item)
@@ -203,7 +218,7 @@ describe('useTypeEditor', () => {
   })
 
   it('loadUsages ignores components from soft-deleted or invisible notations', async () => {
-    const editor = useTypeEditor()
+    const editor = effectScope().run(() => useTypeEditor())!
     const item = existingType()
     vi.mocked(apiGet)
       // Active notations list does not include the deleted notation.
@@ -220,8 +235,8 @@ describe('useTypeEditor', () => {
               nodeTypeId: 'type-1',
               attrs: null,
             },
-          ]),
-        ),
+          ])
+        )
       )
 
     await editor.loadUsages(item)

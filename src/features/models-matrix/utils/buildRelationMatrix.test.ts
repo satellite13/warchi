@@ -18,7 +18,12 @@ const createNode = (id: string, name: string, nodeTypeId: string): EditorNode =>
   },
 })
 
-const createLink = (id: string, sourceId: string, targetId: string, linkTypeId: string): EditorLink => ({
+const createLink = (
+  id: string,
+  sourceId: string,
+  targetId: string,
+  linkTypeId: string
+): EditorLink => ({
   id,
   sourceId,
   targetId,
@@ -44,13 +49,41 @@ const linkTypes: LinkTypeResponse[] = [
 ]
 
 const components: ComponentResponse[] = [
-  { id: 'c-service', notationId: 'n1', nodeTypeId: 'service', name: 'AppComponent', version: '1.0.0', ownerId: 'u1' },
-  { id: 'c-db', notationId: 'n1', nodeTypeId: 'db', name: 'DbComponent', version: '1.0.0', ownerId: 'u1' },
+  {
+    id: 'c-service',
+    notationId: 'n1',
+    nodeTypeId: 'service',
+    name: 'AppComponent',
+    version: '1.0.0',
+    ownerId: 'u1',
+  },
+  {
+    id: 'c-db',
+    notationId: 'n1',
+    nodeTypeId: 'db',
+    name: 'DbComponent',
+    version: '1.0.0',
+    ownerId: 'u1',
+  },
 ]
 
 const relations: RelationResponse[] = [
-  { id: 'r-sync', notationId: 'n1', linkTypeId: 'sync', name: 'SyncRelation', version: '1.0.0', ownerId: 'u1' },
-  { id: 'r-async', notationId: 'n1', linkTypeId: 'async', name: 'AsyncRelation', version: '1.0.0', ownerId: 'u1' },
+  {
+    id: 'r-sync',
+    notationId: 'n1',
+    linkTypeId: 'sync',
+    name: 'SyncRelation',
+    version: '1.0.0',
+    ownerId: 'u1',
+  },
+  {
+    id: 'r-async',
+    notationId: 'n1',
+    linkTypeId: 'async',
+    name: 'AsyncRelation',
+    version: '1.0.0',
+    ownerId: 'u1',
+  },
 ]
 
 const baseFilters: RelationMatrixFilters = {
@@ -99,16 +132,15 @@ describe('buildRelationMatrix', () => {
         selectedRelationIds: ['sync'],
         allowedOnly: false,
       },
-      nodes: [
-        createNode('n1', 'A', 'service'),
-        createNode('n2', 'B', 'db'),
-      ],
+      nodes: [createNode('n1', 'A', 'service'), createNode('n2', 'B', 'db')],
       links: [createLink('l1', 'n1', 'n2', 'sync')],
       nodeTypes,
       linkTypes,
       components,
       relations,
-      relationRules: [{ relationId: 'r-sync', fromComponentId: 'c-service', toComponentId: 'c-db' }],
+      relationRules: [
+        { relationId: 'r-sync', fromComponentId: 'c-service', toComponentId: 'c-db' },
+      ],
       notations: [],
     })
 
@@ -129,14 +161,8 @@ describe('buildRelationMatrix', () => {
         selectedRelationIds: ['other', 'sync'],
         allowedOnly: false,
       },
-      nodes: [
-        createNode('n1', 'A', 'service'),
-        createNode('n2', 'B', 'db'),
-      ],
-      links: [
-        createLink('l1', 'n1', 'n2', 'sync'),
-        createLink('l2', 'n1', 'n2', 'other'),
-      ],
+      nodes: [createNode('n1', 'A', 'service'), createNode('n2', 'B', 'db')],
+      links: [createLink('l1', 'n1', 'n2', 'sync'), createLink('l2', 'n1', 'n2', 'other')],
       nodeTypes,
       linkTypes,
       components,
@@ -153,10 +179,7 @@ describe('buildRelationMatrix', () => {
   })
 
   it('allowedOnly drops cells that are not allowed by rules', () => {
-    const nodes = [
-      createNode('n1', 'A', 'service'),
-      createNode('n2', 'B', 'db'),
-    ]
+    const nodes = [createNode('n1', 'A', 'service'), createNode('n2', 'B', 'db')]
     const links = [createLink('l1', 'n1', 'n2', 'sync')]
     const filters = {
       ...baseFilters,
@@ -180,7 +203,9 @@ describe('buildRelationMatrix', () => {
 
     const withRule = buildRelationMatrix({
       ...input,
-      relationRules: [{ relationId: 'r-sync', fromComponentId: 'c-service', toComponentId: 'c-db' }],
+      relationRules: [
+        { relationId: 'r-sync', fromComponentId: 'c-service', toComponentId: 'c-db' },
+      ],
     })
     expect(withRule.cells[relationMatrixCellKey('service', 'db')]?.total).toBe(1)
   })

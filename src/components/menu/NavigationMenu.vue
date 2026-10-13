@@ -13,14 +13,30 @@ const { t } = useI18n();
 const canViewAdmin = ref(false);
 const isSignedIn = computed(() => currentUser.value != null);
 
+// Ключ учитывает эффективную роль: при «посмотреть глазами другой роли»
+// id не меняется, но role/roleOverride — да, и чек нужно перевыполнить.
+const adminCheckKey = computed(() => {
+  const user = currentUser.value;
+  if (!user) return "";
+  return `${user.id}:${user.role ?? ""}:${user.roleOverride ?? ""}`;
+});
+
+let adminCheckSeq = 0;
+
 watch(
-  () => currentUser.value?.id,
-  async (userId) => {
-    if (!userId) {
+  adminCheckKey,
+  async (key) => {
+    const seq = ++adminCheckSeq;
+    const userId = currentUser.value?.id;
+    if (!key || !userId) {
       canViewAdmin.value = false;
       return;
     }
-    canViewAdmin.value = await canViewAdminPanel(userId);
+    const allowed = await canViewAdminPanel(userId);
+    // Игнорируем устаревший ответ при быстрых переключениях роли.
+    if (seq === adminCheckSeq) {
+      canViewAdmin.value = allowed;
+    }
   },
   { immediate: true }
 );
@@ -80,7 +96,12 @@ watch(
       >
         <UiIcon name="library_books" :alt="t('nav.wiki')" />{{ t("nav.wiki") }}
       </RouterLink>
-      <RouterLink to="/profile" class="app-nav__link" active-class="app-nav__link--active">
+      <RouterLink
+        v-if="hasGrant('profile.nav')"
+        to="/profile"
+        class="app-nav__link"
+        active-class="app-nav__link--active"
+      >
         <UiIcon name="account_circle" :alt="t('nav.profile')" />{{ t("nav.profile") }}
       </RouterLink>
       <RouterLink v-if="canViewAdmin" to="/admin" class="app-nav__link" active-class="app-nav__link--active">

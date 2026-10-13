@@ -1,78 +1,78 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mockApiDelete = vi.fn();
-const mockApiGet = vi.fn();
-const mockApiPost = vi.fn();
+const mockApiDelete = vi.fn()
+const mockApiGet = vi.fn()
+const mockApiPost = vi.fn()
 
-vi.mock("./useApi", () => ({
+vi.mock('./useApi', () => ({
   apiDelete: (...args: unknown[]) => mockApiDelete(...args),
   apiGet: (...args: unknown[]) => mockApiGet(...args),
-  apiPost: (...args: unknown[]) => mockApiPost(...args)
-}));
+  apiPost: (...args: unknown[]) => mockApiPost(...args),
+}))
 
-vi.mock("vue-i18n", () => ({
-  useI18n: () => ({ t: (key: string) => key })
-}));
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}))
 
-import { useAccessShares } from "./useAccessShares";
+import { useAccessShares } from './useAccessShares'
 
-describe("useAccessShares", () => {
+describe('useAccessShares', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    vi.clearAllMocks()
+  })
 
-  it("loads public shares from arepos ListResponse items", async () => {
+  it('loads public shares from arepos ListResponse items', async () => {
     mockApiGet.mockImplementation((url: string) => {
-      if (url === "/access/shares/NOTATION/notation-1") {
+      if (url === '/access/shares/NOTATION/notation-1') {
         return Promise.resolve({
           success: true,
           data: {
             items: [
               {
-                id: "share-1",
-                resourceType: "NOTATION",
-                resourceId: "notation-1",
+                id: 'share-1',
+                resourceType: 'NOTATION',
+                resourceId: 'notation-1',
                 granteeUserId: null,
-                grantedByUserId: "owner-1",
-                permission: "VIEW",
+                grantedByUserId: 'owner-1',
+                permission: 'VIEW',
                 createdAt: null,
-                updatedAt: null
-              }
+                updatedAt: null,
+              },
             ],
             total: 1,
             page: 0,
-            size: 1
-          }
-        });
+            size: 1,
+          },
+        })
       }
 
-      if (url === "/users/owner-1/public") {
+      if (url === '/users/owner-1/public') {
         return Promise.resolve({
           success: true,
           data: {
-            id: "owner-1",
-            email: "owner@example.com",
+            id: 'owner-1',
+            email: 'owner@example.com',
             firstName: null,
             lastName: null,
-            middleName: null
-          }
-        });
+            middleName: null,
+          },
+        })
       }
 
-      return Promise.resolve({ success: false, error: { status: 404, message: "Not found" } });
-    });
+      return Promise.resolve({ success: false, error: { status: 404, message: 'Not found' } })
+    })
 
-    const { loadShares, shares } = useAccessShares();
+    const { loadShares, shares } = useAccessShares()
 
-    await loadShares("NOTATION", "notation-1");
+    await loadShares('NOTATION', 'notation-1')
 
-    expect(shares.value).toHaveLength(1);
+    expect(shares.value).toHaveLength(1)
     expect(shares.value[0]).toMatchObject({
-      id: "share-1",
+      id: 'share-1',
       granteeUserId: null,
-      granteeDisplayName: "share.allUsers",
-      grantedByDisplayName: "owner@example.com",
-      permissionLabel: "share.viewOnly"
-    });
-  });
-});
+      granteeDisplayName: 'share.allUsers',
+      grantedByDisplayName: 'owner@example.com',
+      permissionLabel: 'share.viewOnly',
+    })
+  })
+})

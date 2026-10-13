@@ -105,9 +105,7 @@ export function isDirectoryNoteInstance(instance: DiagramNodeInstance): boolean 
 }
 
 export function isDiagramOnlyVisualInstance(instance: DiagramNodeInstance): boolean {
-  return (
-    isNoteInstance(instance) || isContainerInstance(instance) || isEdgeAnchorInstance(instance)
-  )
+  return isNoteInstance(instance) || isContainerInstance(instance) || isEdgeAnchorInstance(instance)
 }
 
 /** Raw note text; pass `fallback` for empty/missing (e.g. i18n default). */

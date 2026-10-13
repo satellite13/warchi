@@ -8,9 +8,7 @@ function ok<T>(data: T) {
 
 describe('createDiagramScriptQueryHost', () => {
   it('neighbors forwards linkType and page', async () => {
-    const fetchNeighbors = vi.fn().mockResolvedValue(
-      ok({ content: [], last: true })
-    )
+    const fetchNeighbors = vi.fn().mockResolvedValue(ok({ content: [], last: true }))
     const search = vi.fn()
     const resolveLinks = vi.fn()
     const host = createDiagramScriptQueryHost({
@@ -80,10 +78,7 @@ describe('createDiagramScriptQueryHost', () => {
       args: { a: 'a', b: 'b', linkType: 'lt' },
     })
     expect(result).toEqual({
-      data: [
-        expect.objectContaining({ id: 'ab' }),
-        expect.objectContaining({ id: 'ba' }),
-      ],
+      data: [expect.objectContaining({ id: 'ab' }), expect.objectContaining({ id: 'ba' })],
     })
   })
 

@@ -62,9 +62,10 @@ function mountCollab(options?: {
           isLockHolder,
           isSpectator,
           preserveLocalCanvasAfterLockLoss,
-          getDiagramRenderer: () => ({
-            screenToWorld: (x: number, y: number) => ({ x: x + 10, y: y + 20 }),
-          }) as never,
+          getDiagramRenderer: () =>
+            ({
+              screenToWorld: (x: number, y: number) => ({ x: x + 10, y: y + 20 }),
+            }) as never,
         })
         return () => null
       },
@@ -217,8 +218,8 @@ describe('useDiagramRealtimeCollab', () => {
     collab.onCanvasMouseMoveForPointer(5, 6)
     collab.onCanvasMouseLeaveForPointer()
 
-    const paths = vi.mocked(apiPost).mock.calls.map((call) => String(call[0]))
-    expect(paths.some((path) => path.endsWith('/live') || path.endsWith('/pointer'))).toBe(false)
+    const paths = vi.mocked(apiPost).mock.calls.map(call => String(call[0]))
+    expect(paths.some(path => path.endsWith('/live') || path.endsWith('/pointer'))).toBe(false)
   })
 
   it('posts a patch of changed instances after a spectator is present', async () => {
@@ -253,7 +254,7 @@ describe('useDiagramRealtimeCollab', () => {
 
     const livePosts = vi
       .mocked(apiPost)
-      .mock.calls.filter((call) => String(call[0]) === '/diagram-locks/diagram-1/live')
+      .mock.calls.filter(call => String(call[0]) === '/diagram-locks/diagram-1/live')
     const last = livePosts.at(-1)?.[1] as Record<string, unknown>
     expect(last.kind).toBe('patch')
     expect(last.upsertNodes).toEqual([{ ...node, x: 9 }])
@@ -284,7 +285,7 @@ describe('useDiagramRealtimeCollab', () => {
 
     const livePosts = vi
       .mocked(apiPost)
-      .mock.calls.filter((call) => String(call[0]) === '/diagram-locks/diagram-1/live')
+      .mock.calls.filter(call => String(call[0]) === '/diagram-locks/diagram-1/live')
     expect(livePosts.length).toBeGreaterThan(0)
     const body = livePosts[0]?.[1] as Record<string, unknown>
     expect(body.kind).toBe('snapshot-chunk')
@@ -328,7 +329,7 @@ describe('useDiagramRealtimeCollab', () => {
 
     const livePosts = vi
       .mocked(apiPost)
-      .mock.calls.filter((call) => String(call[0]) === '/diagram-locks/diagram-1/live')
+      .mock.calls.filter(call => String(call[0]) === '/diagram-locks/diagram-1/live')
     expect(livePosts).toHaveLength(0)
   })
 
@@ -377,7 +378,7 @@ describe('useDiagramRealtimeCollab', () => {
       },
     })
 
-    expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes.map((node) => node.id)).toEqual([
+    expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes.map(node => node.id)).toEqual([
       'n1',
     ])
     expect(state.value.diagrams[0]?.parsedAttrs.instances.nodes[0]?.x).toBe(9)

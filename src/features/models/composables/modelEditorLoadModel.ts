@@ -1,4 +1,4 @@
-import { apiGet, type ApiResult } from "@/composables/useApi"
+import { apiGet, type ApiResult } from '@/composables/useApi'
 import {
   listParams,
   MODEL_PAGE_FETCH_CONCURRENCY,
@@ -6,7 +6,7 @@ import {
   PAGE_SIZE_MODEL_NODES,
   pagedListParams,
 } from '@/api/queryHelpers'
-import type { ModelData, NotationData, PaginatedResponse } from "@/types/entities"
+import type { ModelData, NotationData, PaginatedResponse } from '@/types/entities'
 import type {
   ComponentResponse,
   DiagramResponse,
@@ -16,23 +16,23 @@ import type {
   NodeTypeResponse,
   RelationResponse,
   RelationRuleResponse,
-} from "@/types/api"
+} from '@/types/api'
 import {
   paginatedContent,
   paginatedIsLastPage,
   paginatedTotalElements,
   paginatedTotalPages,
-} from "@/utils/paginatedResponse"
-import type { ModelEditorState } from "../types"
+} from '@/utils/paginatedResponse'
+import type { ModelEditorState } from '../types'
 import { withModelEditorPageSlot } from '../utils/modelEditorPagePool'
 import type { ModelEditorLoadProgressEvent } from '../utils/modelEditorLoadProgress'
-import { applyDefaultsToEditorLink } from "../utils/syncDefaultsOnLoad"
-import { toEditorDiagram, toEditorLink, toEditorNode } from "./modelEditorMappers"
-import { fetchAllComponentsByNotationIds } from "./modelNotationComponentsApi"
+import { applyDefaultsToEditorLink } from '../utils/syncDefaultsOnLoad'
+import { toEditorDiagram, toEditorLink, toEditorNode } from './modelEditorMappers'
+import { fetchAllComponentsByNotationIds } from './modelNotationComponentsApi'
 import {
   fetchAllRelationRulesByNotationIds,
   fetchAllRelationsByNotationId,
-} from "./modelNotationRelationsApi"
+} from './modelNotationRelationsApi'
 import { fetchNodeChildren } from './modelScopedApi'
 
 export type LoadModelEditorDataResult = {
@@ -240,10 +240,10 @@ export async function fetchAllByModelId<T extends { id?: string }>(
 function requireModel(modelResult: ApiResult<ModelData>): ModelData {
   if (!modelResult.success) {
     if (modelResult.error.status === 404) {
-      throw new Error("Модель не найдена")
+      throw new Error('Модель не найдена')
     }
     if (modelResult.error.status === 403) {
-      throw new Error("Доступ к модели отозван или отсутствует.")
+      throw new Error('Доступ к модели отозван или отсутствует.')
     }
     throw new Error(modelResult.error.message)
   }
@@ -292,15 +292,20 @@ export async function loadModelEditorShell(
 ): Promise<LoadModelEditorDataResult> {
   const diagramIncludeAttrs = options?.diagramIncludeAttrs === true
 
-  const [modelResult, rootChildrenResult, diagramResponses] =
-    await Promise.all([
-      apiGet<ModelData>(`/models/${modelId}`),
-      // Normal opening must stay parent-scoped. The full helper below remains for detached callers.
-      fetchNodeChildren(modelId, { kind: 'root' }, { page: 0 }),
-      fetchAllByModelId<DiagramResponse>('/diagrams', modelId, PAGE_SIZE_MODEL_DIAGRAMS, {
+  const [modelResult, rootChildrenResult, diagramResponses] = await Promise.all([
+    apiGet<ModelData>(`/models/${modelId}`),
+    // Normal opening must stay parent-scoped. The full helper below remains for detached callers.
+    fetchNodeChildren(modelId, { kind: 'root' }, { page: 0 }),
+    fetchAllByModelId<DiagramResponse>(
+      '/diagrams',
+      modelId,
+      PAGE_SIZE_MODEL_DIAGRAMS,
+      {
         includeAttrs: diagramIncludeAttrs ? 'true' : 'false',
-      }, options),
-    ])
+      },
+      options
+    ),
+  ])
 
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
   const model = requireModel(modelResult)
@@ -313,7 +318,9 @@ export async function loadModelEditorShell(
   const diagrams = diagramResponses.map(row =>
     toEditorDiagram(row, diagramIncludeAttrs ? { attrsPending: false } : undefined)
   )
-  const notationIds = Array.from(new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean)))
+  const notationIds = Array.from(
+    new Set(diagrams.map(diagram => diagram.notationId).filter(Boolean))
+  )
   // Attrs parse is CPU-heavy on large models — yield so the first paint stays responsive.
   const editorNodes = await mapInChunks(nodes, toEditorNode, options, (loaded, total) => {
     options?.onProgress?.({ kind: 'preparing', target: 'shell', loaded, total })
@@ -355,9 +362,9 @@ export async function loadModelEditorCatalog(
   options?.onProgress?.({ kind: 'catalog', status: 'started' })
   const listQuery = listParams()
   const typesQuery = listParams()
-  typesQuery.set("modelId", modelId)
+  typesQuery.set('modelId', modelId)
   for (const notationId of notationIds) {
-    typesQuery.append("notationId", notationId)
+    typesQuery.append('notationId', notationId)
   }
 
   const relationFetches =
@@ -373,16 +380,15 @@ export async function loadModelEditorCatalog(
     nodeTypesResult,
     linkTypesResult,
     relationRules,
-  ] =
-    await Promise.all([
-      apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
-      apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
-      fetchAllComponentsByNotationIds(notationIds, { modelId }),
-      Promise.all(relationFetches),
-      apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${typesQuery.toString()}`),
-      apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${typesQuery.toString()}`),
-      fetchAllRelationRulesByNotationIds(notationIds, { includeAttrs: false, modelId }),
-    ])
+  ] = await Promise.all([
+    apiGet<PaginatedResponse<ModelData>>(`/models?page=0&${listQuery.toString()}`),
+    apiGet<PaginatedResponse<NotationData>>(`/notations?${listQuery.toString()}`),
+    fetchAllComponentsByNotationIds(notationIds, { modelId }),
+    Promise.all(relationFetches),
+    apiGet<PaginatedResponse<NodeTypeResponse>>(`/node-types?${typesQuery.toString()}`),
+    apiGet<PaginatedResponse<LinkTypeResponse>>(`/link-types?${typesQuery.toString()}`),
+    fetchAllRelationRulesByNotationIds(notationIds, { includeAttrs: false, modelId }),
+  ])
 
   if (options?.isCancelled?.()) throw LOAD_CANCELLED
   const catalogFailures: string[] = []

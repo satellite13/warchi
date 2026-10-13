@@ -76,10 +76,13 @@ describe('applyDiagramStyleToNodeInstance', () => {
 describe('withInstanceDimensions', () => {
   it('overlays instance size onto style', () => {
     expect(
-      withInstanceDimensions({ nodeShape: 'composite', width: 160, height: 56 }, {
-        width: 320,
-        height: 180,
-      })
+      withInstanceDimensions(
+        { nodeShape: 'composite', width: 160, height: 56 },
+        {
+          width: 320,
+          height: 180,
+        }
+      )
     ).toEqual({
       nodeShape: 'composite',
       width: 320,

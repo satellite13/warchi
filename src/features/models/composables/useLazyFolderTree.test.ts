@@ -55,9 +55,7 @@ describe('useLazyFolderTree', () => {
 
     tree.setModel('model-1')
     await tree.loadRoot()
-    expect(tree.visibleRows.value.map(row => [row.node.id, row.depth])).toEqual([
-      ['folder-a', 0],
-    ])
+    expect(tree.visibleRows.value.map(row => [row.node.id, row.depth])).toEqual([['folder-a', 0]])
 
     await tree.toggleFolder('folder-a')
 

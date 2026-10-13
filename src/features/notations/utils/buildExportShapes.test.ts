@@ -5,15 +5,51 @@ import type { ExportedNodeShape } from './exportedNodeShape'
 import { buildExportShapes } from './buildExportShapes'
 
 const rectOutline: OutlineSegment[] = [
-  { type: 'line', points: [[0, 0], [1, 0]] },
-  { type: 'line', points: [[1, 0], [1, 1]] },
-  { type: 'line', points: [[1, 1], [0, 1]] },
-  { type: 'line', points: [[0, 1], [0, 0]] },
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [1, 0],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 0],
+      [1, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 1],
+      [0, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [0, 1],
+      [0, 0],
+    ],
+  },
 ]
 
 const otherOutline: OutlineSegment[] = [
-  { type: 'line', points: [[0, 0], [0.5, 0.5]] },
-  { type: 'line', points: [[0.5, 0.5], [1, 0]] },
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [0.5, 0.5],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [0.5, 0.5],
+      [1, 0],
+    ],
+  },
 ]
 
 const component = (partial: Partial<EditorComponent> & { id: string }): EditorComponent =>
@@ -119,7 +155,7 @@ describe('buildExportShapes', () => {
 
     const shapes = await buildExportShapes({ components, pendingShapes: pending, fetchById })
 
-    expect(shapes.map((s) => s.id)).toEqual(['s-used'])
+    expect(shapes.map(s => s.id)).toEqual(['s-used'])
     expect(fetchById).not.toHaveBeenCalled()
   })
 

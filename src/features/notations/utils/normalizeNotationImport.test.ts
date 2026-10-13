@@ -8,15 +8,51 @@ import {
 import type { NotationEditorState } from '../types'
 
 const rectOutline: OutlineSegment[] = [
-  { type: 'line', points: [[0, 0], [1, 0]] },
-  { type: 'line', points: [[1, 0], [1, 1]] },
-  { type: 'line', points: [[1, 1], [0, 1]] },
-  { type: 'line', points: [[0, 1], [0, 0]] },
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [1, 0],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 0],
+      [1, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 1],
+      [0, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [0, 1],
+      [0, 0],
+    ],
+  },
 ]
 
 const otherOutline: OutlineSegment[] = [
-  { type: 'line', points: [[0, 0], [0.5, 0.5]] },
-  { type: 'line', points: [[0.5, 0.5], [1, 0]] },
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [0.5, 0.5],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [0.5, 0.5],
+      [1, 0],
+    ],
+  },
 ]
 
 const t = (key: string) => key
@@ -97,18 +133,16 @@ describe('normalizeNotationImport', () => {
         relationRules: [],
         diagramLayer: { version: 1, nodes: [], edges: [] },
       },
-      shapes: [
-        { id: 's1', name: 'Pack shape', outline: JSON.stringify(rectOutline) },
-      ],
+      shapes: [{ id: 's1', name: 'Pack shape', outline: JSON.stringify(rectOutline) }],
     }
 
     const { state, pendingShapes } = normalizeNotationImport(raw, context)
 
     expect(state.notationId).toBe('notation-session')
     expect(state.ownerId).toBe('owner-session')
-    expect(pendingShapes.map((shape) => shape.id).sort()).toEqual(['s1', 's2'])
-    expect(pendingShapes.find((shape) => shape.id === 's1')?.name).toBe('Pack shape')
-    expect(pendingShapes.find((shape) => shape.id === 's2')?.name).toBe('Imported shape')
+    expect(pendingShapes.map(shape => shape.id).sort()).toEqual(['s1', 's2'])
+    expect(pendingShapes.find(shape => shape.id === 's1')?.name).toBe('Pack shape')
+    expect(pendingShapes.find(shape => shape.id === 's2')?.name).toBe('Imported shape')
   })
 
   it('collectImportShapesFromRaw matches normalize pendingShapes', () => {
@@ -148,14 +182,12 @@ describe('normalizeNotationImport', () => {
         relationRules: [],
         diagramLayer: { version: 1, nodes: [], edges: [] },
       },
-      shapes: [
-        { id: 's1', name: 'Pack shape', outline: JSON.stringify(rectOutline) },
-      ],
+      shapes: [{ id: 's1', name: 'Pack shape', outline: JSON.stringify(rectOutline) }],
     }
 
     const fromHelper = collectImportShapesFromRaw(raw, context.t)
     const { pendingShapes } = normalizeNotationImport(raw, context)
-    expect(fromHelper.map((s) => s.id).sort()).toEqual(pendingShapes.map((s) => s.id).sort())
+    expect(fromHelper.map(s => s.id).sort()).toEqual(pendingShapes.map(s => s.id).sort())
   })
 
   it('synthesizes pending shapes for v1 bare state with customOutline only', () => {
@@ -321,7 +353,7 @@ describe('normalizeNotationImport', () => {
       _isDirty: true,
       _isDeleted: false,
     })
-    expect(state.nodeTypes.find((nt) => nt.id === 'local-nt')).toBeTruthy()
+    expect(state.nodeTypes.find(nt => nt.id === 'local-nt')).toBeTruthy()
   })
 
   it('adds import-only component as new', () => {
@@ -373,8 +405,8 @@ describe('normalizeNotationImport', () => {
       localOnlyPolicy: 'keep',
     })
 
-    const actor = state.components.find((c) => c.name === 'Actor')
-    const system = state.components.find((c) => c.name === 'System')
+    const actor = state.components.find(c => c.name === 'Actor')
+    const system = state.components.find(c => c.name === 'System')
     expect(actor?.id).toBe('local-c')
     expect(system?._isNew).toBe(true)
     expect(system?.id).not.toBe('imported-new')
@@ -422,8 +454,8 @@ describe('normalizeNotationImport', () => {
       localOnlyPolicy: 'keep',
     })
 
-    expect(state.components.find((c) => c.id === 'local-only')?._isDeleted).not.toBe(true)
-    expect(state.components.some((c) => c.name === 'Imported' && c._isNew)).toBe(true)
+    expect(state.components.find(c => c.id === 'local-only')?._isDeleted).not.toBe(true)
+    expect(state.components.some(c => c.name === 'Imported' && c._isNew)).toBe(true)
   })
 
   it('marks local-only component deleted when policy is delete', () => {
@@ -468,7 +500,7 @@ describe('normalizeNotationImport', () => {
       localOnlyPolicy: 'delete',
     })
 
-    expect(state.components.find((c) => c.id === 'local-only')).toMatchObject({
+    expect(state.components.find(c => c.id === 'local-only')).toMatchObject({
       _isDeleted: true,
     })
   })

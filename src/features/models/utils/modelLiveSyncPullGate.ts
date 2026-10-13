@@ -1,10 +1,7 @@
 import type { ModelLiveSyncPullReason } from './modelLiveSyncTelemetry'
 
 export type CollectionPullDecision =
-  | { action: 'pull' }
-  | { action: 'skip' }
-  | { action: 'skip_hello' }
-  | { action: 'queue' }
+  { action: 'pull' } | { action: 'skip' } | { action: 'skip_hello' } | { action: 'queue' }
 
 export function decideCollectionPull(input: {
   reason: ModelLiveSyncPullReason
@@ -22,10 +19,7 @@ export function decideCollectionPull(input: {
   if (input.reason === 'ws_connect') {
     return { action: 'skip_hello' }
   }
-  if (
-    input.skipConnectResyncOnce &&
-    input.reason === 'session_resync'
-  ) {
+  if (input.skipConnectResyncOnce && input.reason === 'session_resync') {
     return { action: 'skip_hello' }
   }
   return { action: 'pull' }

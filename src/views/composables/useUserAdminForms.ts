@@ -18,16 +18,13 @@ type ProfileUser = {
   position?: string | null
 }
 
-type UpdateFn = (
-  userId: string,
-  patch: Record<string, unknown>,
-) => Promise<void>
+type UpdateFn = (userId: string, patch: Record<string, unknown>) => Promise<void>
 
 export function useUserProfileEdit(
   isSavingId: Ref<string | null>,
   errorMessage: Ref<string | null>,
   successMessage: Ref<string | null>,
-  updateUser: UpdateFn,
+  updateUser: UpdateFn
 ) {
   const { t } = useI18n()
   const profileEditId = ref<string | null>(null)
@@ -89,7 +86,9 @@ export function useUserProfileEdit(
     })
 
     if (isSavingId.value === null && !errorMessage.value) {
-      successMessage.value = t('adminUsers.profileUpdated', { email: (user as { email?: string }).email })
+      successMessage.value = t('adminUsers.profileUpdated', {
+        email: (user as { email?: string }).email,
+      })
       closeProfileEdit()
     }
   }
@@ -108,7 +107,7 @@ export function useUserPasswordEdit(
   isSavingId: Ref<string | null>,
   errorMessage: Ref<string | null>,
   successMessage: Ref<string | null>,
-  updateUser: UpdateFn,
+  updateUser: UpdateFn
 ) {
   const { t } = useI18n()
   const passwordEditId = ref<string | null>(null)

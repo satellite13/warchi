@@ -13,11 +13,11 @@ export function addType<T extends BaseEditorType>(
   list: T[],
   name: string,
   ownerId: string,
-  extraDefaults?: Partial<Omit<T, 'id' | 'name' | 'ownerId' | 'parsedAttrs' | '_isNew'>>,
+  extraDefaults?: Partial<Omit<T, 'id' | 'name' | 'ownerId' | 'parsedAttrs' | '_isNew'>>
 ): string | null {
   const trimmed = name.trim()
   if (!trimmed) return null
-  const existing = list.find((item) => item.name.toLowerCase() === trimmed.toLowerCase())
+  const existing = list.find(item => item.name.toLowerCase() === trimmed.toLowerCase())
   if (existing) return existing.id
   const newType = {
     id: createId(),

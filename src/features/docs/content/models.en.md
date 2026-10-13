@@ -54,7 +54,7 @@ Models provide a dedicated **visual version comparison** screen.
 How to open it:
 
 1. Open the target model in the editor.
-2. Click **Compare with version** (the `compare_arrows` icon) in the header.
+2. Open the **diagram version menu** in the header (click the current version name) and choose **Compare diagram versions**.
 3. Select left and right versions.
 4. If needed, choose the diagram name in the **searchable** list.
 

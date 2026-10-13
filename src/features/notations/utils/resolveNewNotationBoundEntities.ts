@@ -35,7 +35,7 @@ function remapEntityId<T extends NotationBoundEntityLike>(
   entity: T,
   oldId: string,
   newId: string,
-  onRemapId: (oldId: string, newId: string) => void,
+  onRemapId: (oldId: string, newId: string) => void
 ): void {
   entity.id = newId
   entity._isNew = false
@@ -45,14 +45,14 @@ function remapEntityId<T extends NotationBoundEntityLike>(
 function boundEntityNameVersionConflictMessage(
   name: string,
   version: string,
-  entityTypeName: string,
+  entityTypeName: string
 ): string {
   return String(
     i18n.global.t('notations.boundEntityNameVersionConflict', {
       name,
       version,
       entity: entityTypeName,
-    }),
+    })
   )
 }
 
@@ -62,7 +62,7 @@ function boundEntityNameVersionConflictMessage(
  * Two distinct new locals with the same name+version are rejected (not merged).
  */
 export async function resolveNewNotationBoundEntities<T extends NotationBoundEntityLike>(
-  options: ResolveNewNotationBoundEntitiesOptions<T>,
+  options: ResolveNewNotationBoundEntitiesOptions<T>
 ): Promise<void> {
   const {
     entities,
@@ -86,13 +86,13 @@ export async function resolveNewNotationBoundEntities<T extends NotationBoundEnt
       loadExistingByListParams<NotationBoundEntityResponse>(
         apiEndpoint,
         params,
-        PAGE_SIZE_NOTATION,
+        PAGE_SIZE_NOTATION
       ),
     reloadExisting: () =>
       loadExistingByListParams<NotationBoundEntityResponse>(
         apiEndpoint,
         params,
-        PAGE_SIZE_NOTATION,
+        PAGE_SIZE_NOTATION
       ),
     create: async entity => postCreateEntity(apiEndpoint, buildCreateRequest(entity)),
     onReuse: (entity, remote) => {

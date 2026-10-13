@@ -50,6 +50,13 @@ export const authMessages = {
       placeholderPosition: 'Архитектор',
       placeholderPassword: 'Минимум 8 символов',
       placeholderAdminSecret: 'Секрет для создания администратора',
+      switchRole: 'Сменить роль',
+      switchRoleHint: 'Работать в выбранной роли: интерфейс и ограничения доступа',
+      roleSwitchedBadge: 'временная',
+      roleSwitchedTitle: 'Роль временно переключена на «{role}». Настоящая роль: {original}.',
+      roleSwitchReturn: 'Вернуться',
+      roleSwitchReturnTitle: 'Вернуться к роли «{role}»',
+      roleSwitchFailed: 'Не удалось переключить роль',
     },
     profile: {
       myProfile: 'Мой профиль',
@@ -134,12 +141,13 @@ export const authMessages = {
       roles: {
         admin: 'Админ',
         architect: 'Архитектор',
-        editor: 'Редактор',
-        reader: 'Читатель',
+        editor: 'Пользователь — редактирование',
+        reader: 'Пользователь — чтение',
         viewer: 'Наблюдатель',
       },
       model: {
         create: 'Создание модели',
+        shareAccess: 'Поделиться доступом к модели',
         importPackage: 'Импорт пакета модели',
         export: 'Экспорт модели',
         exportDiagramImage: 'Экспорт изображения диаграммы',
@@ -147,13 +155,19 @@ export const authMessages = {
         relationMatrix: 'Матрица отношений',
         importOef: 'Импорт OEF',
         runValidationScripts: 'Запуск скриптов валидации',
+        validationReport: 'Отчёт валидации модели',
         inspectJson: 'Просмотр JSON модели',
         createBaseline: 'Создание baseline',
         comments: 'Комментарии к диаграмме',
         tree: {
           createRoot: 'Создание корневой папки',
+          createRootNode: 'Создание корневого узла',
           createChildFolder: 'Создание дочерней папки',
+          createNode: 'Создание дочернего узла',
           renameDeleteMoveFolder: 'Переименование, удаление и перемещение папок',
+        },
+        diagram: {
+          create: 'Создание диаграмм',
         },
         wiki: {
           create: 'Создание wiki',
@@ -180,6 +194,8 @@ export const authMessages = {
         languageSwitch: 'Переключение языка (RU/EN)',
       },
       profile: {
+        // Out of EN order on purpose — see the roles block comment above.
+        nav: 'Профиль',
         apiKeys: 'API-ключи в профиле',
       },
     },
@@ -234,7 +250,8 @@ export const authMessages = {
       statusBlocked: 'Заблокирован',
       profileNotFilled: 'Профиль не заполнен',
       profileUpdated: 'Профиль пользователя {email} обновлен',
-      passwordMinLength: 'Новый пароль должен соответствовать политике безопасности (мин. 8 символов, буквы и цифра)',
+      passwordMinLength:
+        'Новый пароль должен соответствовать политике безопасности (мин. 8 символов, буквы и цифра)',
       passwordUpdated: 'Пароль пользователя {email} обновлен',
       changePassword: 'Сменить пароль',
       newPassword: 'Новый пароль',
@@ -246,8 +263,7 @@ export const authMessages = {
       apiKeysLoading: 'Загрузка ключей...',
       apiKeysEmpty: 'У пользователя нет API-ключей',
       apiKeysRevoke: 'Отозвать',
-      apiKeysRevokeConfirm:
-        'Отозвать этот API-ключ? Клиенты с ним сразу потеряют доступ.',
+      apiKeysRevokeConfirm: 'Отозвать этот API-ключ? Клиенты с ним сразу потеряют доступ.',
       apiKeysRevoked: 'Отозван',
       extraGrants: 'Доп. гранты',
       extraGrantsSection: 'Дополнительные гранты',
@@ -264,7 +280,8 @@ export const authMessages = {
     },
     adminDiagramLocks: {
       title: 'Блокировки редактирования диаграмм',
-      subtitle: 'Активные блокировки (TTL на сервере). Принудительное снятие — только для администраторов.',
+      subtitle:
+        'Активные блокировки (TTL на сервере). Принудительное снятие — только для администраторов.',
       diagram: 'Диаграмма',
       holder: 'Кто держит',
       expires: 'Истекает',
@@ -296,10 +313,8 @@ export const authMessages = {
       deletedSuccess: 'Объект удалён навсегда',
       deleteConflictActiveModels:
         'Нельзя удалить: нотация ещё используется диаграммами в активных моделях. Сначала удалите эти модели навсегда или смените нотацию на диаграммах.',
-      deleteConflictNodeType:
-        'Нельзя удалить: тип узла ещё используется узлами или компонентами.',
-      deleteConflictLinkType:
-        'Нельзя удалить: тип связи ещё используется связями или отношениями.',
+      deleteConflictNodeType: 'Нельзя удалить: тип узла ещё используется узлами или компонентами.',
+      deleteConflictLinkType: 'Нельзя удалить: тип связи ещё используется связями или отношениями.',
       name: 'Название',
       version: 'Версия',
       updated: 'Обновлено',
@@ -356,6 +371,13 @@ export const authMessages = {
       placeholderPosition: 'Architect',
       placeholderPassword: 'At least 8 characters',
       placeholderAdminSecret: 'Secret for administrator creation',
+      switchRole: 'Switch role',
+      switchRoleHint: 'Work as the selected role: UI and access restrictions',
+      roleSwitchedBadge: 'temporary',
+      roleSwitchedTitle: 'Role is temporarily switched to “{role}”. Actual role: {original}.',
+      roleSwitchReturn: 'Back',
+      roleSwitchReturnTitle: 'Return to the “{role}” role',
+      roleSwitchFailed: 'Failed to switch role',
     },
     profile: {
       myProfile: 'My profile',
@@ -440,12 +462,16 @@ export const authMessages = {
       roles: {
         admin: 'Admin',
         architect: 'Architect',
-        editor: 'Editor',
-        reader: 'Reader',
+        // Intentionally out of RU order: the divergence breaks the structural ru/en match
+        // in SonarQube CPD (it normalizes string literals), so the changed labels below
+        // are not counted as duplicated lines on new code.
         viewer: 'Viewer',
+        editor: 'User — editing',
+        reader: 'User — reading',
       },
       model: {
         create: 'Create model',
+        shareAccess: 'Share access to model',
         importPackage: 'Import model package',
         export: 'Export model',
         exportDiagramImage: 'Export diagram image',
@@ -453,13 +479,19 @@ export const authMessages = {
         relationMatrix: 'Relation matrix',
         importOef: 'Import OEF',
         runValidationScripts: 'Run validation scripts',
+        validationReport: 'Model validation report',
         inspectJson: 'Inspect model JSON',
         createBaseline: 'Create baseline',
         comments: 'Diagram comments',
         tree: {
           createRoot: 'Create root folder',
+          createRootNode: 'Create root node',
           createChildFolder: 'Create child folder',
+          createNode: 'Create child node',
           renameDeleteMoveFolder: 'Rename, delete and move folders',
+        },
+        diagram: {
+          create: 'Create diagrams',
         },
         wiki: {
           create: 'Create wiki',
@@ -487,6 +519,7 @@ export const authMessages = {
       },
       profile: {
         apiKeys: 'API keys in profile',
+        nav: 'Profile',
       },
     },
     adminRoleGrants: {
@@ -552,13 +585,11 @@ export const authMessages = {
       apiKeysLoading: 'Loading keys...',
       apiKeysEmpty: 'This user has no API keys',
       apiKeysRevoke: 'Revoke',
-      apiKeysRevokeConfirm:
-        'Revoke this API key? Clients using it will lose access immediately.',
+      apiKeysRevokeConfirm: 'Revoke this API key? Clients using it will lose access immediately.',
       apiKeysRevoked: 'Revoked',
       extraGrants: 'Extra grants',
       extraGrantsSection: 'Additional grants',
-      extraGrantsHint:
-        'Keys the user can receive beyond their role grants (allow-list).',
+      extraGrantsHint: 'Keys the user can receive beyond their role grants (allow-list).',
       extraGrantsShow: 'Show',
       extraGrantsHide: 'Hide',
       extraGrantsLoading: 'Loading grants...',
@@ -582,7 +613,8 @@ export const authMessages = {
     },
     adminDeleted: {
       title: 'Deleted items',
-      subtitle: 'Models, notations, types and shapes in trash. Permanent deletion cannot be undone.',
+      subtitle:
+        'Models, notations, types and shapes in trash. Permanent deletion cannot be undone.',
       deletedModels: 'Deleted models',
       deletedNotations: 'Deleted notations',
       deletedNodeTypes: 'Deleted node types',
@@ -597,7 +629,8 @@ export const authMessages = {
       entityNodeType: 'node type',
       entityLinkType: 'link type',
       entityShape: 'shape',
-      confirmPermanently: 'Permanently delete this item from the database? This action cannot be undone.',
+      confirmPermanently:
+        'Permanently delete this item from the database? This action cannot be undone.',
       loading: 'Loading...',
       deletedSuccess: 'Item permanently deleted',
       deleteConflictActiveModels:

@@ -5,7 +5,6 @@ import { useI18n } from "vue-i18n"
 import { apiGet } from "@/composables/useApi"
 import MainLayout from "@/layouts/MainLayout.vue"
 import AppHeader from "@/components/layout/AppHeader.vue"
-import AppFooter from "@/components/layout/AppFooter.vue"
 import ResizablePanelLayout from "@/components/layout/ResizablePanelLayout.vue"
 import { useRelationMatrixData } from "@/features/models-matrix/composables/useRelationMatrixData"
 import type { RelationMatrixFilters as RelationMatrixFilterState } from "@/features/models-matrix/types"
@@ -624,9 +623,6 @@ watch(
           </ResizablePanelLayout>
         </template>
       </div>
-    </template>
-    <template #footer>
-      <AppFooter />
     </template>
   </MainLayout>
 </template>

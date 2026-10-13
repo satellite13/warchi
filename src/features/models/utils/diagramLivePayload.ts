@@ -42,21 +42,21 @@ export function diffDiagramInstances(
   previous: DiagramInstances,
   next: DiagramInstances
 ): DiagramLivePatch {
-  const prevNodes = new Map(previous.nodes.map((n) => [instanceKey(n), n]))
-  const prevEdges = new Map(previous.edges.map((e) => [instanceKey(e), e]))
+  const prevNodes = new Map(previous.nodes.map(n => [instanceKey(n), n]))
+  const prevEdges = new Map(previous.edges.map(e => [instanceKey(e), e]))
   const nextNodeIds = new Set(next.nodes.map(instanceKey))
   const nextEdgeIds = new Set(next.edges.map(instanceKey))
 
-  const upsertNodes = next.nodes.filter((n) => {
+  const upsertNodes = next.nodes.filter(n => {
     const prev = prevNodes.get(n.id)
     return !prev || fingerprint(prev) !== fingerprint(n)
   })
-  const upsertEdges = next.edges.filter((e) => {
+  const upsertEdges = next.edges.filter(e => {
     const prev = prevEdges.get(e.id)
     return !prev || fingerprint(prev) !== fingerprint(e)
   })
-  const removeNodeIds = [...prevNodes.keys()].filter((id) => !nextNodeIds.has(id))
-  const removeEdgeIds = [...prevEdges.keys()].filter((id) => !nextEdgeIds.has(id))
+  const removeNodeIds = [...prevNodes.keys()].filter(id => !nextNodeIds.has(id))
+  const removeEdgeIds = [...prevEdges.keys()].filter(id => !nextEdgeIds.has(id))
   return { upsertNodes, upsertEdges, removeNodeIds, removeEdgeIds }
 }
 
@@ -125,12 +125,19 @@ export function chunkLiveEnvelope(
     current = emptyDraft(false)
   }
 
-  const addItem = (kind: 'node' | 'edge', item: DiagramNodeInstance | DiagramEdgeInstance): void => {
+  const addItem = (
+    kind: 'node' | 'edge',
+    item: DiagramNodeInstance | DiagramEdgeInstance
+  ): void => {
     const candidate: LiveChunkDraft = {
       upsertNodes:
-        kind === 'node' ? [...current.upsertNodes, item as DiagramNodeInstance] : current.upsertNodes,
+        kind === 'node'
+          ? [...current.upsertNodes, item as DiagramNodeInstance]
+          : current.upsertNodes,
       upsertEdges:
-        kind === 'edge' ? [...current.upsertEdges, item as DiagramEdgeInstance] : current.upsertEdges,
+        kind === 'edge'
+          ? [...current.upsertEdges, item as DiagramEdgeInstance]
+          : current.upsertEdges,
       removeNodeIds: current.removeNodeIds,
       removeEdgeIds: current.removeEdgeIds,
     }

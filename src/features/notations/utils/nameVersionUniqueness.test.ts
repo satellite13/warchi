@@ -47,7 +47,7 @@ describe('nameVersionUniqueness', () => {
         findDuplicateNameVersionGroups([
           { id: 'a', name: 'Actor', version: '1.0.0' },
           { id: 'b', name: 'Actor', version: '2.0.0' },
-        ]),
+        ])
       ).toEqual([])
     })
 
@@ -57,7 +57,7 @@ describe('nameVersionUniqueness', () => {
           { id: 'shared', name: 'Actor', version: '1.0.0' },
           { id: 'shared', name: 'Actor', version: '1.0.0' },
           { id: 'other', name: 'Service', version: '1.0.0' },
-        ]),
+        ])
       ).toEqual([{ name: 'Actor', version: '1.0.0', ids: ['shared', 'shared'] }])
     })
 
@@ -66,7 +66,7 @@ describe('nameVersionUniqueness', () => {
         findDuplicateNameVersionGroups([
           { id: 'a', name: 'Actor', version: '1.0.0' },
           { id: 'b', name: 'Actor', version: '1.0.0', _isDeleted: true },
-        ]),
+        ])
       ).toEqual([])
     })
   })

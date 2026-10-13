@@ -42,13 +42,16 @@ describe('applyLocalModelDelta', () => {
       node('created', { _isNew: true }),
     ]
 
-    const result = applyLocalModelDelta({
-      nodes: remoteNodes,
-      links: [],
-    }, {
-      nodes: localNodes,
-      links: [],
-    })
+    const result = applyLocalModelDelta(
+      {
+        nodes: remoteNodes,
+        links: [],
+      },
+      {
+        nodes: localNodes,
+        links: [],
+      }
+    )
 
     expect(result.nodes.map(row => [row.id, row.name])).toEqual([
       ['clean', 'clean'],
@@ -58,13 +61,16 @@ describe('applyLocalModelDelta', () => {
   })
 
   it('removes locally deleted rows from the snapshot', () => {
-    const result = applyLocalModelDelta({
-      nodes: [node('keep'), node('gone')],
-      links: [link('keep-link', 'keep', 'gone'), link('gone-link', 'gone', 'keep')],
-    }, {
-      nodes: [node('gone', { _isDeleted: true })],
-      links: [link('gone-link', 'gone', 'keep', { _isDeleted: true })],
-    })
+    const result = applyLocalModelDelta(
+      {
+        nodes: [node('keep'), node('gone')],
+        links: [link('keep-link', 'keep', 'gone'), link('gone-link', 'gone', 'keep')],
+      },
+      {
+        nodes: [node('gone', { _isDeleted: true })],
+        links: [link('gone-link', 'gone', 'keep', { _isDeleted: true })],
+      }
+    )
 
     expect(result.nodes.map(row => row.id)).toEqual(['keep'])
     expect(result.links.map(row => row.id)).toEqual(['keep-link'])
@@ -74,13 +80,16 @@ describe('applyLocalModelDelta', () => {
     const remote = node('same', { name: 'server' })
     const localClean = node('same', { name: 'materialized' })
 
-    const result = applyLocalModelDelta({
-      nodes: [remote],
-      links: [],
-    }, {
-      nodes: [localClean, node('also-clean')],
-      links: [],
-    })
+    const result = applyLocalModelDelta(
+      {
+        nodes: [remote],
+        links: [],
+      },
+      {
+        nodes: [localClean, node('also-clean')],
+        links: [],
+      }
+    )
 
     expect(result.nodes).toHaveLength(1)
     expect(result.nodes[0]).toBe(remote)
@@ -91,13 +100,16 @@ describe('applyLocalModelDelta', () => {
     const materializedNodeById = new Map([['visible', node('visible')]])
     const dangling = link('dangling', 'missing-source', 'missing-target')
 
-    const result = applyLocalModelDelta({
-      nodes: [node('visible')],
-      links: [dangling, link('local-only', 'visible', 'visible')],
-    }, {
-      nodes: [node('visible')],
-      links: [],
-    })
+    const result = applyLocalModelDelta(
+      {
+        nodes: [node('visible')],
+        links: [dangling, link('local-only', 'visible', 'visible')],
+      },
+      {
+        nodes: [node('visible')],
+        links: [],
+      }
+    )
 
     expect(result.links.map(row => row.id)).toEqual(['dangling', 'local-only'])
     expect(materializedNodeById.has(result.links[0]!.sourceId)).toBe(false)
@@ -111,13 +123,16 @@ describe('applyLocalModelDelta', () => {
     const remoteNodesCopy = [...remoteNodes]
     const localNodesCopy = [...localNodes]
 
-    const result = applyLocalModelDelta({
-      nodes: remoteNodes,
-      links: remoteLinks,
-    }, {
-      nodes: localNodes,
-      links: localLinks,
-    })
+    const result = applyLocalModelDelta(
+      {
+        nodes: remoteNodes,
+        links: remoteLinks,
+      },
+      {
+        nodes: localNodes,
+        links: localLinks,
+      }
+    )
 
     expect(remoteNodes).toEqual(remoteNodesCopy)
     expect(localNodes).toEqual(localNodesCopy)

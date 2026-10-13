@@ -49,6 +49,7 @@ function onClose(): void {
             <li>{{ t('models.validationAutoMergeRuleKeep', { nodes: nodeGroups }) }}</li>
             <li>{{ t('models.validationAutoMergeRuleLinks') }}</li>
             <li>{{ t('models.validationAutoMergeRuleDiagrams') }}</li>
+            <li>{{ t('models.validationAutoMergeRuleJunction') }}</li>
             <li>{{ t('models.validationAutoMergeRuleDecision') }}</li>
             <li>{{ t('models.validationAutoMergeRuleDocuments') }}</li>
           </ul>

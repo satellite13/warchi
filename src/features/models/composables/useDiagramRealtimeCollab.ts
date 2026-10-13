@@ -1,8 +1,8 @@
-import type { DiagramRenderer } from "@ngroznykh/papirus"
-import { nextTick, onBeforeUnmount, ref, watch, type Ref } from "vue"
-import { apiDelete, apiPost } from "@/composables/useApi"
-import type { ModelEditorState } from "../types"
-import { applyDiagramLiveMessage, createLiveSnapshotBuffer } from "../utils/applyDiagramLiveMessage"
+import type { DiagramRenderer } from '@ngroznykh/papirus'
+import { nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { apiDelete, apiPost } from '@/composables/useApi'
+import type { ModelEditorState } from '../types'
+import { applyDiagramLiveMessage, createLiveSnapshotBuffer } from '../utils/applyDiagramLiveMessage'
 import {
   LIVE_CHUNK_MAX_BYTES,
   chunkLiveEnvelope,
@@ -11,7 +11,7 @@ import {
   type DiagramInstances,
   type DiagramLiveEnvelope,
   type DiagramLivePatch,
-} from "../utils/diagramLivePayload"
+} from '../utils/diagramLivePayload'
 
 const POINTER_MIN_MS = 100
 const LIVE_DEBOUNCE_MS = 220
@@ -29,7 +29,7 @@ export type RemoteEditorPointer = {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function parseSpectators(raw: unknown): DiagramSpectatorEntry[] {
@@ -39,7 +39,7 @@ function parseSpectators(raw: unknown): DiagramSpectatorEntry[] {
     if (!isRecord(item)) continue
     const userId = item.userId
     const displayName = item.displayName
-    if (typeof userId === "string" && typeof displayName === "string") {
+    if (typeof userId === 'string' && typeof displayName === 'string') {
       out.push({ userId, displayName })
     }
   }
@@ -68,7 +68,7 @@ export function useDiagramRealtimeCollab(options: {
   diagramSpectators: Ref<DiagramSpectatorEntry[]>
   liveCanvasEpoch: Ref<number>
   gestureDepth: Ref<number>
-  onLiveCollaborationGesture: (phase: "block" | "unblock") => void
+  onLiveCollaborationGesture: (phase: 'block' | 'unblock') => void
   scheduleDebouncedLivePush: () => void
   flushLivePushNow: () => void
   handleModelTopicBroadcast: (msg: Record<string, unknown>) => void
@@ -138,12 +138,12 @@ export function useDiagramRealtimeCollab(options: {
         lastSpectateDiagramId = diagramId
       }
     },
-    { flush: "post", immediate: true }
+    { flush: 'post', immediate: true }
   )
 
   watch(
     () => options.isLockHolder.value,
-    (holder) => {
+    holder => {
       if (!holder) {
         diagramSpectators.value = []
         resetLivePushState()
@@ -160,7 +160,7 @@ export function useDiagramRealtimeCollab(options: {
 
   watch(
     () => options.isSpectator.value,
-    (spec) => {
+    spec => {
       if (!spec) {
         remoteEditorPointer.value = null
       }
@@ -179,11 +179,11 @@ export function useDiagramRealtimeCollab(options: {
   function getOpenDiagramRow() {
     const id = options.selectedDiagramId.value
     if (!id) return null
-    return options.state.value.diagrams.find((d) => d.id === id && !d._isDeleted) ?? null
+    return options.state.value.diagrams.find(d => d.id === id && !d._isDeleted) ?? null
   }
 
   async function postLiveChunks(
-    kind: "patch" | "snapshot-chunk",
+    kind: 'patch' | 'snapshot-chunk',
     payload: DiagramLivePatch | DiagramInstances
   ): Promise<void> {
     const diagram = getOpenDiagramRow()
@@ -191,11 +191,11 @@ export function useDiagramRealtimeCollab(options: {
     liveSeq += 1
     const seq = liveSeq
     const envelope: DiagramLiveEnvelope =
-      kind === "patch"
-        ? { v: 1, kind: "patch", seq, ...(payload as DiagramLivePatch) }
+      kind === 'patch'
+        ? { v: 1, kind: 'patch', seq, ...(payload as DiagramLivePatch) }
         : {
             v: 1,
-            kind: "snapshot-chunk",
+            kind: 'snapshot-chunk',
             seq,
             upsertNodes: (payload as DiagramInstances).nodes,
             upsertEdges: (payload as DiagramInstances).edges,
@@ -209,12 +209,14 @@ export function useDiagramRealtimeCollab(options: {
         return
       }
     }
-    lastSentInstances = JSON.parse(JSON.stringify(diagram.parsedAttrs.instances)) as DiagramInstances
+    lastSentInstances = JSON.parse(
+      JSON.stringify(diagram.parsedAttrs.instances)
+    ) as DiagramInstances
   }
 
   function flushLivePushNow(): void {
     if (!options.isLockHolder.value) return
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     const diagram = getOpenDiagramRow()
     if (!diagram) return
     if (!hasSpectators()) return
@@ -222,22 +224,22 @@ export function useDiagramRealtimeCollab(options: {
     const previous = lastSentInstances ?? { nodes: [], edges: [] }
     const patch = diffDiagramInstances(previous, current)
     if (isEmptyLivePatch(patch)) return
-    void postLiveChunks("patch", patch)
+    void postLiveChunks('patch', patch)
   }
 
   function flushSnapshotNow(): void {
     if (!options.isLockHolder.value) return
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     const diagram = getOpenDiagramRow()
     if (!diagram) return
     if (!hasSpectators()) return
-    void postLiveChunks("snapshot-chunk", diagram.parsedAttrs.instances)
+    void postLiveChunks('snapshot-chunk', diagram.parsedAttrs.instances)
   }
 
   function scheduleDebouncedLivePush(): void {
     if (!options.isLockHolder.value) return
     if (gestureDepth.value > 0) return
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     clearLiveDebounce()
     liveDebounceTimer = setTimeout(() => {
       liveDebounceTimer = null
@@ -245,8 +247,8 @@ export function useDiagramRealtimeCollab(options: {
     }, LIVE_DEBOUNCE_MS)
   }
 
-  function onLiveCollaborationGesture(phase: "block" | "unblock"): void {
-    if (phase === "block") {
+  function onLiveCollaborationGesture(phase: 'block' | 'unblock'): void {
+    if (phase === 'block') {
       gestureDepth.value += 1
       clearLiveDebounce()
       return
@@ -261,20 +263,20 @@ export function useDiagramRealtimeCollab(options: {
 
   function handleModelTopicBroadcast(msg: Record<string, unknown>): void {
     const type = msg.type
-    const diagramId = typeof msg.diagramId === "string" ? msg.diagramId : null
+    const diagramId = typeof msg.diagramId === 'string' ? msg.diagramId : null
     const self = options.currentUserId.value
 
-    if (type === "diagram_comment") {
+    if (type === 'diagram_comment') {
       options.onDiagramCommentEvent?.(msg)
       return
     }
 
-    if (type === "diagram_pointer") {
+    if (type === 'diagram_pointer') {
       if (!options.isSpectator.value) {
         return
       }
       if (!diagramId || diagramId !== options.selectedDiagramId.value) return
-      const actor = typeof msg.actorUserId === "string" ? msg.actorUserId : null
+      const actor = typeof msg.actorUserId === 'string' ? msg.actorUserId : null
       if (self && actor === self) return
       const visible = msg.visible !== false
       const wx = Number(msg.worldX)
@@ -284,14 +286,14 @@ export function useDiagramRealtimeCollab(options: {
       return
     }
 
-    if (type === "diagram_live") {
+    if (type === 'diagram_live') {
       if (!options.isSpectator.value) return
       if (!diagramId || diagramId !== options.selectedDiagramId.value) return
-      const actor = typeof msg.actorUserId === "string" ? msg.actorUserId : null
+      const actor = typeof msg.actorUserId === 'string' ? msg.actorUserId : null
       if (self && actor === self) return
       if (options.preserveLocalCanvasAfterLockLoss?.value) return
       let inst = msg.instances
-      if (typeof inst === "string") {
+      if (typeof inst === 'string') {
         try {
           inst = JSON.parse(inst) as unknown
         } catch {
@@ -299,7 +301,7 @@ export function useDiagramRealtimeCollab(options: {
         }
       }
       const diagrams = options.state.value.diagrams
-      const idx = diagrams.findIndex((d) => d.id === diagramId && !d._isDeleted)
+      const idx = diagrams.findIndex(d => d.id === diagramId && !d._isDeleted)
       if (idx < 0) return
       const row = diagrams[idx]!
       if (row._isNew || row._isDeleted) return
@@ -324,12 +326,12 @@ export function useDiagramRealtimeCollab(options: {
       return
     }
 
-    if (type === "diagram_spectators") {
+    if (type === 'diagram_spectators') {
       if (!options.isLockHolder.value) return
       if (!diagramId || diagramId !== options.selectedDiagramId.value) return
-      const previousIds = new Set(diagramSpectators.value.map((viewer) => viewer.userId))
+      const previousIds = new Set(diagramSpectators.value.map(viewer => viewer.userId))
       const nextViewers = parseSpectators(msg.viewers)
-      const hasNewcomer = nextViewers.some((viewer) => !previousIds.has(viewer.userId))
+      const hasNewcomer = nextViewers.some(viewer => !previousIds.has(viewer.userId))
       diagramSpectators.value = nextViewers
       if (hasNewcomer) {
         flushSnapshotNow()

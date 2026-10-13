@@ -60,10 +60,7 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
           isCancelled: () =>
             requestGeneration !== snapshotGeneration || modelId.value !== targetModelId,
         })
-        if (
-          requestGeneration !== snapshotGeneration ||
-          modelId.value !== targetModelId
-        ) {
+        if (requestGeneration !== snapshotGeneration || modelId.value !== targetModelId) {
           return null
         }
         links.value = loaded
@@ -71,10 +68,7 @@ export function useDetachedModelLinks(modelId: Ref<string | null>) {
         stale.value = false
         return loaded
       } catch (caught) {
-        if (
-          requestGeneration !== snapshotGeneration ||
-          modelId.value !== targetModelId
-        ) {
+        if (requestGeneration !== snapshotGeneration || modelId.value !== targetModelId) {
           return null
         }
         error.value =

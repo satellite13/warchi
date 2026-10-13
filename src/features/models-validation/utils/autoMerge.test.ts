@@ -67,7 +67,9 @@ function nodePreview(overrides: Partial<MergeNodesPreview>): {
   }
 }
 
-function nodeGroup(members: Array<{ id: string; diagramCount?: number }>): DuplicateNodeGroup {
+function nodeGroup(
+  members: Array<{ id: string; diagramCount?: number; autoCreated?: boolean }>
+): DuplicateNodeGroup {
   return {
     nodeTypeId: 'nt',
     nodeTypeName: 'Type',
@@ -79,6 +81,7 @@ function nodeGroup(members: Array<{ id: string; diagramCount?: number }>): Dupli
       parentId: null,
       parentName: null,
       diagramCount: m.diagramCount,
+      autoCreated: m.autoCreated,
     })),
   }
 }
@@ -229,6 +232,33 @@ describe('autoMergeDuplicates', () => {
         transferLinkIds: ['l1'],
         keepUpdatedAt: 'k1',
       })
+    )
+  })
+
+  it('prefers the auto-created copy as keep even when it is not on diagrams', async () => {
+    mockedPreviewNodes.mockResolvedValue(
+      nodePreview({
+        keepTypeProperties: { ownerId: 'x' },
+        dropTypeProperties: { ownerId: 'x' },
+      })
+    )
+    mockedMergeNodes.mockResolvedValue({ success: true, data: { keepId: 'keep', dropId: 'drop' } })
+
+    const result = await autoMergeDuplicates({
+      modelId: 'm1',
+      nodeGroups: [
+        nodeGroup([
+          { id: 'manual', diagramCount: 7 },
+          { id: 'auto', diagramCount: 0, autoCreated: true },
+        ]),
+      ],
+      linkGroups: [],
+    })
+
+    expect(result.mergedGroups).toBe(1)
+    expect(mockedMergeNodes).toHaveBeenCalledWith(
+      'm1',
+      expect.objectContaining({ keepId: 'auto', dropId: 'manual' })
     )
   })
 

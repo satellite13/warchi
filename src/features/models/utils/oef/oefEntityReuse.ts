@@ -42,11 +42,7 @@ function emptySummary(): OefReuseSummary {
   }
 }
 
-function bump(
-  summary: OefReuseSummary,
-  kind: 'nodes' | 'links',
-  action: OefResolvedAction
-): void {
+function bump(summary: OefReuseSummary, kind: 'nodes' | 'links', action: OefResolvedAction): void {
   summary[kind][action] += 1
 }
 

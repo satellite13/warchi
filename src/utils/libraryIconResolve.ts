@@ -24,7 +24,7 @@ export function svgToDataUrl(svg: string): string {
 
 function librarySvg(
   id: string,
-  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
 ): string | undefined {
   if (!libraryByName) return undefined
   if ('get' in libraryByName && typeof libraryByName.get === 'function') {
@@ -35,7 +35,7 @@ function librarySvg(
 
 export function resolveIconSrc(
   name: string,
-  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
 ): string {
   const id = normalizeIconName(name)
   if (!id) return ''
@@ -46,7 +46,7 @@ export function resolveIconSrc(
 
 export function resolveIconMarkup(
   name: string,
-  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
 ): string {
   const id = normalizeIconName(name)
   if (!id) return ''
@@ -67,26 +67,20 @@ export function iconNameFromSource(source: string): string {
  * Name to show in the icon select: path/id from the node source, or the
  * persisted diagramStyle.iconName when the canvas stores resolved SVG markup.
  */
-export function resolveStoredIconName(
-  source: string | undefined,
-  styleIconName?: string,
-): string {
+export function resolveStoredIconName(source: string | undefined, styleIconName?: string): string {
   if (!source?.trim()) return ''
   return iconNameFromSource(source) || styleIconName?.trim() || ''
 }
 
-export function matchIconOptionId(
-  value: string,
-  options: ReadonlyArray<{ id: string }>,
-): string {
+export function matchIconOptionId(value: string, options: ReadonlyArray<{ id: string }>): string {
   if (!value) return ''
-  if (options.some((option) => option.id === value)) return value
+  if (options.some(option => option.id === value)) return value
   const norm = normalizeIconName(value)
-  return options.find((option) => normalizeIconName(option.id) === norm)?.id ?? value
+  return options.find(option => normalizeIconName(option.id) === norm)?.id ?? value
 }
 
 export function libraryNameMap(
-  icons: ReadonlyArray<{ name: string; svg: string }>,
+  icons: ReadonlyArray<{ name: string; svg: string }>
 ): Map<string, string> {
   const map = new Map<string, string>()
   for (const icon of icons) {

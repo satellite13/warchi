@@ -40,11 +40,14 @@ export type ModelEdgeOptions = Partial<{
 
 export function buildModelNodeIcon(
   ds?: DiagramStyle,
-  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null,
+  libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
 ): NodeImageOptions | undefined {
   const icon = buildNodeIcon(ds, libraryByName)
   if (!icon) return undefined
-  if (ds?.iconPlacement && VALID_ICON_PLACEMENTS.has(ds.iconPlacement as NodeImageOptions['placement'])) {
+  if (
+    ds?.iconPlacement &&
+    VALID_ICON_PLACEMENTS.has(ds.iconPlacement as NodeImageOptions['placement'])
+  ) {
     return icon
   }
   return { ...icon, placement: 'left' }
@@ -97,12 +100,16 @@ export function buildModelEdgeDisplayLabel(
     return buildModelEdgeLabelConfig(instanceEdgeLabel, ds)
   }
 
-  const displayText = resolveDiagramEdgeLabelTemplate(ds!.labelTemplate!.trim(), relationName ?? '', {
-    typeProperties: linkTypeProperties,
-    typeValues,
-    relationProperties,
-    relationValues,
-  }).trim()
+  const displayText = resolveDiagramEdgeLabelTemplate(
+    ds!.labelTemplate!.trim(),
+    relationName ?? '',
+    {
+      typeProperties: linkTypeProperties,
+      typeValues,
+      relationProperties,
+      relationValues,
+    }
+  ).trim()
   if (!displayText) return undefined
 
   const labelInset = ds?.labelInset
@@ -177,11 +184,7 @@ export function mergeEffectiveDiagramStyle(
   bound: DiagramStyle | undefined,
   instanceStyle: DiagramStyle | undefined
 ): DiagramStyle | undefined {
-  if (
-    instanceStyle &&
-    typeof instanceStyle === 'object' &&
-    !Array.isArray(instanceStyle)
-  ) {
+  if (instanceStyle && typeof instanceStyle === 'object' && !Array.isArray(instanceStyle)) {
     return { ...(bound ?? {}), ...instanceStyle }
   }
   return bound

@@ -16,7 +16,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const upsertById = <T extends { id: string }>(items: T[], incoming: T[]): T[] => {
   const next = [...items]
   for (const item of incoming) {
-    const index = next.findIndex((current) => current.id === item.id)
+    const index = next.findIndex(current => current.id === item.id)
     if (index >= 0) {
       next[index] = item
     } else {
@@ -30,11 +30,11 @@ const applyPatch = (current: DiagramInstances, envelope: DiagramLiveEnvelope): D
   const removeNodeIds = new Set(envelope.removeNodeIds ?? [])
   const removeEdgeIds = new Set(envelope.removeEdgeIds ?? [])
   const nodes = upsertById(
-    current.nodes.filter((node) => !removeNodeIds.has(node.id)),
+    current.nodes.filter(node => !removeNodeIds.has(node.id)),
     envelope.upsertNodes ?? []
   )
   const edges = upsertById(
-    current.edges.filter((edge) => !removeEdgeIds.has(edge.id)),
+    current.edges.filter(edge => !removeEdgeIds.has(edge.id)),
     envelope.upsertEdges ?? []
   )
   return { nodes, edges }

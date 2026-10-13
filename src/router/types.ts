@@ -1,7 +1,7 @@
-import "vue-router"
-import type { FeatureGrantKey } from "@/domain/featureGrants/catalog"
+import 'vue-router'
+import type { FeatureGrantKey } from '@/domain/featureGrants/catalog'
 
-declare module "vue-router" {
+declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     requiresAdminPanel?: boolean

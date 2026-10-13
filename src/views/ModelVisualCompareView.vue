@@ -13,7 +13,7 @@ import type {
   NodeTypeResponse,
 } from '@/types/api'
 import { type CompareSharedData, loadCompareSharedData } from '@/api/loadCompareSharedData'
-import SearchableSelect from '@/components/forms/SearchableSelect.vue'
+import SearchableSelect, { type SelectOption } from '@/components/forms/SearchableSelect.vue'
 import DualDiagramCompareView from '@/features/models/components/DualDiagramCompareView.vue'
 import { fetchAllByModelId } from '@/features/models/composables/modelEditorLoadModel'
 import { compareVersions } from '@/utils/version'
@@ -31,6 +31,22 @@ const modelId = computed(() => route.params.id as string)
 const relatedVersions = ref<ModelData[]>([])
 const leftVersionId = ref<string>('')
 const rightVersionId = ref<string>('')
+
+const versionLabel = (v: ModelData): string => `${v.name} ${v.version}`
+
+// Занятая противоположной стороной версия исключается из опций
+// (нативный селект делал её disabled — в кастомном просто не показываем).
+const leftVersionOptions = computed((): SelectOption[] =>
+  relatedVersions.value
+    .filter(v => v.id !== rightVersionId.value)
+    .map(v => ({ id: v.id, label: versionLabel(v) })),
+)
+
+const rightVersionOptions = computed((): SelectOption[] =>
+  relatedVersions.value
+    .filter(v => v.id !== leftVersionId.value)
+    .map(v => ({ id: v.id, label: versionLabel(v) })),
+)
 const diagramName = ref<string>('')
 
 const leftData = ref<{
@@ -210,34 +226,30 @@ watch(
     <template #before-swap>
       <div class="ddc-pick">
         <span class="ddc-pick__label">{{ t('models.compareVersionLeft') }}</span>
-        <select v-model="leftVersionId" class="ddc-pick__select" :disabled="loading">
-          <option value="">{{ t('models.compareSelectVersion') }}</option>
-          <option
-            v-for="v in relatedVersions"
-            :key="v.id"
-            :value="v.id"
-            :disabled="v.id === rightVersionId"
-          >
-            {{ v.name }} {{ v.version }}
-          </option>
-        </select>
+        <SearchableSelect
+          v-model="leftVersionId"
+          class="ddc-pick__searchable"
+          :options="leftVersionOptions"
+          :disabled="loading"
+          :placeholder="t('models.compareSelectVersion')"
+          :search-placeholder="t('common.search')"
+          :empty-text="t('common.nothingFound')"
+        />
       </div>
     </template>
 
     <template #after-swap>
       <div class="ddc-pick">
         <span class="ddc-pick__label">{{ t('models.compareVersionRight') }}</span>
-        <select v-model="rightVersionId" class="ddc-pick__select" :disabled="loading">
-          <option value="">{{ t('models.compareSelectVersion') }}</option>
-          <option
-            v-for="v in relatedVersions"
-            :key="v.id"
-            :value="v.id"
-            :disabled="v.id === leftVersionId"
-          >
-            {{ v.name }} {{ v.version }}
-          </option>
-        </select>
+        <SearchableSelect
+          v-model="rightVersionId"
+          class="ddc-pick__searchable"
+          :options="rightVersionOptions"
+          :disabled="loading"
+          :placeholder="t('models.compareSelectVersion')"
+          :search-placeholder="t('common.search')"
+          :empty-text="t('common.nothingFound')"
+        />
       </div>
     </template>
 

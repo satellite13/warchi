@@ -136,8 +136,7 @@ export const validationScriptsMessages = {
       errorSave: 'Failed to save',
       errorDelete: 'Failed to delete',
       unsavedChangesTitle: 'Unsaved changes',
-      unsavedChangesText:
-        'The current script has unsaved changes. Discard changes and continue?',
+      unsavedChangesText: 'The current script has unsaved changes. Discard changes and continue?',
       stay: 'Stay',
       discardAndSwitch: 'Discard and switch',
       defaultName: 'New script',
@@ -161,8 +160,7 @@ export const validationScriptsMessages = {
       applyReadOnly: 'The diagram is not writable. The canvas was not changed.',
       applyMissingEntity: 'A model node or link could not be resolved. The canvas was not changed.',
       applyInvalidCommands: 'The command queue is invalid. The canvas was not changed.',
-      applyNeedComponent:
-        'The node has no unique notation component. The canvas was not changed.',
+      applyNeedComponent: 'The node has no unique notation component. The canvas was not changed.',
       toolbarRun: 'Scripts',
       issuesTitle: 'Results ({count})',
       issueError: 'Error',

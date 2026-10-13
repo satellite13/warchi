@@ -7,14 +7,11 @@ export function applyRelationRuleCell(
   fromComponentId: string,
   toComponentId: string,
   allowedRelationIds: string[],
-  createId: () => string,
+  createId: () => string
 ): void {
   const uniqueAllowed = uniqueIds(allowedRelationIds)
   const existingIndex = rules.findIndex(
-    r =>
-      r.fromComponentId === fromComponentId &&
-      r.toComponentId === toComponentId &&
-      !r._isDeleted,
+    r => r.fromComponentId === fromComponentId && r.toComponentId === toComponentId && !r._isDeleted
   )
   const existing = existingIndex >= 0 ? rules[existingIndex] : undefined
 

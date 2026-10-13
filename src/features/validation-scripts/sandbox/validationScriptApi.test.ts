@@ -123,7 +123,12 @@ describe('validationScriptApi', () => {
   it('filters diagram nodes and nodesOfType by name', () => {
     const issues: ValidationIssue[] = []
     const api = createValidationScriptApi(sampleSnapshot(), 'd1', issues)
-    expect(api.diagramNodes(api.ctx.diagram!).map((n) => n.id).sort()).toEqual(['n1', 'n2'])
+    expect(
+      api
+        .diagramNodes(api.ctx.diagram!)
+        .map(n => n.id)
+        .sort()
+    ).toEqual(['n1', 'n2'])
     expect(api.nodesOfType('Application')).toHaveLength(2)
     expect(api.nodesOfType('nt-db')).toHaveLength(1)
   })
@@ -136,7 +141,7 @@ describe('validationScriptApi', () => {
         if (method !== 'linksBetween') return []
         const a = String(args.a)
         const b = String(args.b)
-        return snapshot.model.links.filter((link) => {
+        return snapshot.model.links.filter(link => {
           const pair =
             (link.sourceId === a && link.targetId === b) ||
             (link.sourceId === b && link.targetId === a)
@@ -166,7 +171,7 @@ if (!ctx.diagram) {
 `
     const { error } = await executeValidationScript(source, api)
     expect(error).toBeUndefined()
-    expect(issues.some((i) => i.level === 'info' && i.message.includes('Flow'))).toBe(true)
+    expect(issues.some(i => i.level === 'info' && i.message.includes('Flow'))).toBe(true)
   })
 
   it('runs duplicate-links golden script', async () => {
@@ -210,8 +215,8 @@ if (ctx.diagram) {
       api
     )
     expect(error).toBeUndefined()
-    expect(issues.map((i) => i.message).sort()).toEqual(['Node: App1', 'Node: App2'])
-    expect(issues.every((i) => i.target?.kind === 'node')).toBe(true)
+    expect(issues.map(i => i.message).sort()).toEqual(['Node: App1', 'Node: App2'])
+    expect(issues.every(i => i.target?.kind === 'node')).toBe(true)
   })
 
   it('captures runtime errors and keeps prior issues', async () => {
@@ -236,7 +241,7 @@ if (ctx.diagram) {
     const commands: import('./diagramScriptCommands').DiagramScriptCommand[] = []
     const api = createValidationScriptApi(snapshot, 'd1', issues, {
       commands,
-      query: async (method) => {
+      query: async method => {
         expect(method).toBe('neighbors')
         return {
           items: [{ node: { id: 'n3' }, link: { id: 'l3' } }],
@@ -251,7 +256,7 @@ apply.addInstance({ nodeId: n.items[0].node.id, x: 10, y: 10 })
     const { error } = await executeValidationScript(source, api)
     expect(error).toBeUndefined()
     expect(commands).toEqual([{ type: 'addInstance', nodeId: 'n3', x: 10, y: 10 }])
-    expect(snapshot.model.nodes.map((n) => n.id)).toEqual(['n1', 'n2', 'n3'])
+    expect(snapshot.model.nodes.map(n => n.id)).toEqual(['n1', 'n2', 'n3'])
     expect(snapshot.model.diagrams[0]?.instances).toHaveLength(1)
   })
 

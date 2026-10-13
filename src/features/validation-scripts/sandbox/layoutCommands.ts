@@ -25,36 +25,39 @@ function toSetBounds(item: LayoutBounds): DiagramScriptCommand {
   }
 }
 
-function align(items: LayoutBounds[], mode: Extract<DiagramScriptCommand, { type: 'align' }>['mode']): void {
+function align(
+  items: LayoutBounds[],
+  mode: Extract<DiagramScriptCommand, { type: 'align' }>['mode']
+): void {
   if (items.length === 0) return
   switch (mode) {
     case 'left': {
-      const minX = Math.min(...items.map((n) => n.x))
+      const minX = Math.min(...items.map(n => n.x))
       for (const item of items) item.x = minX
       break
     }
     case 'center': {
-      const centerX = Math.min(...items.map((n) => n.x + n.width / 2))
+      const centerX = Math.min(...items.map(n => n.x + n.width / 2))
       for (const item of items) item.x = centerX - item.width / 2
       break
     }
     case 'right': {
-      const maxX = Math.max(...items.map((n) => n.x + n.width))
+      const maxX = Math.max(...items.map(n => n.x + n.width))
       for (const item of items) item.x = maxX - item.width
       break
     }
     case 'top': {
-      const minY = Math.min(...items.map((n) => n.y))
+      const minY = Math.min(...items.map(n => n.y))
       for (const item of items) item.y = minY
       break
     }
     case 'middle': {
-      const centerY = Math.min(...items.map((n) => n.y + n.height / 2))
+      const centerY = Math.min(...items.map(n => n.y + n.height / 2))
       for (const item of items) item.y = centerY - item.height / 2
       break
     }
     case 'bottom': {
-      const maxY = Math.max(...items.map((n) => n.y + n.height))
+      const maxY = Math.max(...items.map(n => n.y + n.height))
       for (const item of items) item.y = maxY - item.height
       break
     }
@@ -92,8 +95,8 @@ function distribute(items: LayoutBounds[], axis: 'horizontal' | 'vertical'): voi
 
 function stack(items: LayoutBounds[], mode: 'vertical' | 'overlap'): void {
   if (items.length === 0) return
-  const originX = Math.min(...items.map((n) => n.x))
-  const originY = Math.min(...items.map((n) => n.y))
+  const originX = Math.min(...items.map(n => n.x))
+  const originY = Math.min(...items.map(n => n.y))
   if (mode === 'overlap') {
     for (const item of items) {
       item.x = originX
@@ -136,7 +139,7 @@ export function expandLayoutCommands(input: {
       continue
     }
     const items = command.instanceIds
-      .map((id) => bounds[id])
+      .map(id => bounds[id])
       .filter((item): item is LayoutBounds => item != null)
     if (command.type === 'align') align(items, command.mode)
     else if (command.type === 'distribute') distribute(items, command.axis)

@@ -12,7 +12,7 @@ describe('resolveInstanceComponentId', () => {
     parsedAttrs: parseNodeAttrs(
       JSON.stringify({
         notationComponents: { 'notation-1': { componentId: 'node-default' } },
-      }),
+      })
     ),
   }
 
@@ -29,7 +29,7 @@ describe('resolveInstanceComponentId', () => {
         instance,
         node,
         notationId: 'notation-1',
-      }),
+      })
     ).toBe('instance-visual')
   })
 
@@ -50,7 +50,7 @@ describe('resolveInstanceComponentId', () => {
           { id: 'node-default', notationId: 'notation-1' },
           { id: 'old-version-component', notationId: 'notation-old' },
         ],
-      }),
+      })
     ).toBe('node-default')
   })
 
@@ -66,7 +66,7 @@ describe('resolveInstanceComponentId', () => {
         instance,
         node,
         notationId: 'notation-1',
-      }),
+      })
     ).toBe('node-default')
   })
 
@@ -76,7 +76,7 @@ describe('resolveInstanceComponentId', () => {
         instance: { id: 'inst-1', modelNodeId: 'node-1', x: 0, y: 0 },
         node: { parsedAttrs: parseNodeAttrs(null) },
         notationId: 'notation-1',
-      }),
+      })
     ).toBeNull()
   })
 
@@ -88,12 +88,12 @@ describe('resolveInstanceComponentId', () => {
           parsedAttrs: parseNodeAttrs(
             JSON.stringify({
               notationComponents: { 'notation-1': { componentId: 'bound-component' } },
-            }),
+            })
           ),
         },
         notationId: 'notation-1',
         components: [{ id: 'bound-component', notationId: 'notation-1', nodeTypeId: 'type-2' }],
-      }),
+      })
     ).toBe(true)
   })
 
@@ -105,12 +105,12 @@ describe('resolveInstanceComponentId', () => {
           parsedAttrs: parseNodeAttrs(
             JSON.stringify({
               notationComponents: { 'notation-1': { componentId: 'stale-component' } },
-            }),
+            })
           ),
         },
         notationId: 'notation-1',
         components: [{ id: 'other-component', notationId: 'notation-1', nodeTypeId: 'type-1' }],
-      }),
+      })
     ).toBe(false)
   })
 
@@ -124,7 +124,7 @@ describe('resolveInstanceComponentId', () => {
       parsedAttrs: parseNodeAttrs(
         JSON.stringify({
           notationComponents: { 'notation-1': { componentId: 'bound-component' } },
-        }),
+        })
       ),
     }
     const staleNode = {
@@ -132,7 +132,7 @@ describe('resolveInstanceComponentId', () => {
       parsedAttrs: parseNodeAttrs(
         JSON.stringify({
           notationComponents: { 'notation-1': { componentId: 'stale-component' } },
-        }),
+        })
       ),
     }
 
@@ -141,14 +141,14 @@ describe('resolveInstanceComponentId', () => {
         node: boundNode,
         notationId: 'notation-1',
         components,
-      }).map(component => component.id),
+      }).map(component => component.id)
     ).toEqual(['bound-component'])
     expect(
       resolveCompatibleNotationComponents({
         node: staleNode,
         notationId: 'notation-1',
         components,
-      }),
+      })
     ).toEqual([])
   })
 })

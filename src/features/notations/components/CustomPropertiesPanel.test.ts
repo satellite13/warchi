@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import CustomPropertiesPanel from './CustomPropertiesPanel.vue'
 import type { EditorRelation } from '../types'
 
-vi.mock('vue-i18n', async (importOriginal) => {
+vi.mock('vue-i18n', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,

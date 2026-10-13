@@ -46,11 +46,7 @@ type ReconcilerOptions = {
   onDetachedSnapshotInvalidated?: () => void
   onDiagramReferencesInvalidated?: () => void
   onUnknownEvent?: (event: GranularSyncEventPayload) => void
-  onError?: (
-    event: GranularSyncEventPayload,
-    error: unknown,
-    retry: () => void
-  ) => void
+  onError?: (event: GranularSyncEventPayload, error: unknown, retry: () => void) => void
   onRecovered?: (event: GranularSyncEventPayload) => void
   onModelRevisionApplied?: (revision: number | undefined) => void
   acceptModelMetadata?: (remote: ModelData) => boolean
@@ -172,9 +168,7 @@ export function createModelGranularSyncReconciler(
       options.store.markLinkStale(event.id)
     } else if (event.entity === 'diagram') {
       options.replaceDiagrams(
-        options.diagrams().map(row =>
-          row.id === event.id ? { ...row, _attrsPending: true } : row
-        )
+        options.diagrams().map(row => (row.id === event.id ? { ...row, _attrsPending: true } : row))
       )
     }
     options.onError?.(event, error, () => enqueue([event]))
@@ -404,10 +398,7 @@ export function createModelGranularSyncReconciler(
     }
   }
 
-  const mergeDiagramMetadata = (
-    local: EditorDiagram,
-    remote: DiagramResponse
-  ): EditorDiagram => {
+  const mergeDiagramMetadata = (local: EditorDiagram, remote: DiagramResponse): EditorDiagram => {
     const preserveHydratedAttrs = options.openDiagramId?.() === local.id
     const mapped = toEditorDiagram(
       { ...remote, attrs: null },
@@ -509,8 +500,7 @@ export function createModelGranularSyncReconciler(
       if (
         batch.some(
           event =>
-            event.entity === 'link' ||
-            (event.entity === 'node' && event.type === 'node_deleted')
+            event.entity === 'link' || (event.entity === 'node' && event.type === 'node_deleted')
         )
       ) {
         options.onDetachedSnapshotInvalidated?.()

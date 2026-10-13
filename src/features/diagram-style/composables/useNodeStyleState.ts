@@ -94,7 +94,9 @@ export function useNodeStyleState() {
   const styleBindingsJsonError = ref<string | null>(null)
   const compositeEditorMode = ref<'visual' | 'json'>('visual')
   const compositeTreeTargets = ref<Array<{ id: string; label: string }>>([])
-  const compositeContentDraft = ref<CompositeSerializedCComponent>(createDefaultCompositeContent('Name'))
+  const compositeContentDraft = ref<CompositeSerializedCComponent>(
+    createDefaultCompositeContent('Name')
+  )
   const styleBindingsDraft = ref<StylePropertyBindingGroup[]>([])
   const compositeShapeType = ref<
     'rectangle' | 'beveled-rectangle' | 'circle' | 'diamond' | 'custom'
@@ -122,13 +124,13 @@ export function useNodeStyleState() {
     }
     iconPlacement.value = normalizeIconPlacement(
       iconOptions?.placement,
-      normalizeIconPlacement(currentDiagramStyle?.iconPlacement, 'top-left'),
+      normalizeIconPlacement(currentDiagramStyle?.iconPlacement, 'top-left')
     )
     iconWidth.value = Math.round(Number(iconOptions?.width ?? 20))
     iconHeight.value = Math.round(Number(iconOptions?.height ?? 20))
     iconInset.value = toInsetNumber(
       iconOptions?.inset ?? iconOptions?.padding ?? iconOptions?.margin ?? iconOptions?.gap,
-      6,
+      6
     )
     iconStrokeColor.value = (iconOptions?.strokeColor as string) ?? '#000000'
     iconFillColor.value = (iconOptions?.fillColor as string) ?? '#000000'
@@ -153,10 +155,7 @@ export function useNodeStyleState() {
           resolveCustomScaleSlice(currentDiagramStyle) ??
           undefined
         needsCatalogShapes = true
-      } else if (
-        rawShape === 'composite' &&
-        currentDiagramStyle?.compositeShapeType === 'custom'
-      ) {
+      } else if (rawShape === 'composite' && currentDiagramStyle?.compositeShapeType === 'custom') {
         customOutlineRef.value = currentDiagramStyle?.customOutline ?? undefined
         customShapeIdRef.value = currentDiagramStyle?.customShapeId ?? null
         customScaleSliceRef.value =
@@ -206,14 +205,10 @@ export function useNodeStyleState() {
     const nodeLabelSpacing = getLabelSpacing(node.label)
     labelInset.value = toInsetSides(nodeLabelSpacing.inset, 8)
     labelAlign.value = (labelStyle?.align as 'center' | 'left' | 'right') ?? 'center'
-    labelVerticalAlign.value =
-      labelStyle?.verticalAlign ?? 'middle'
+    labelVerticalAlign.value = labelStyle?.verticalAlign ?? 'middle'
     const placement = currentDiagramStyle?.labelPlacement ?? node.labelPlacement
     labelPlacement.value =
-      placement === 'top' ||
-      placement === 'bottom' ||
-      placement === 'left' ||
-      placement === 'right'
+      placement === 'top' || placement === 'bottom' || placement === 'left' || placement === 'right'
         ? placement
         : 'center'
     labelGap.value = currentDiagramStyle?.labelGap ?? node.labelGap ?? 4
@@ -245,7 +240,7 @@ export function useNodeStyleState() {
     lockTransform.value = currentDiagramStyle?.lockTransform === true
     contentInset.value = toInsetSides(
       nodeRuntime.contentInset ?? currentDiagramStyle?.contentInset,
-      0,
+      0
     )
     contentInsetScale.value = { ...(currentDiagramStyle?.contentInsetScale ?? {}) }
     const anchorPoints = nodeRuntime.anchorPoints || {}
@@ -271,9 +266,7 @@ export function useNodeStyleState() {
         ? {
             customOutline: customOutlineRef.value,
             customShapeId: customShapeIdRef.value ?? undefined,
-            ...(customScaleSliceRef.value
-              ? { customScaleSlice: customScaleSliceRef.value }
-              : {}),
+            ...(customScaleSliceRef.value ? { customScaleSlice: customScaleSliceRef.value } : {}),
           }
         : {}),
       fillColor: fillColor.value,
@@ -348,8 +341,8 @@ export function useNodeStyleState() {
       const pattern = lineDashPattern.value.trim() || '8,4'
       style.lineDash = pattern
         .split(',')
-        .map((s) => parseFloat(s.trim()))
-        .filter((n) => !isNaN(n))
+        .map(s => parseFloat(s.trim()))
+        .filter(n => !isNaN(n))
     }
     return style
   }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveLoginRedirect } from './resolveLoginRedirect'
 
 vi.mock('../utils/safeRedirect', () => ({
-  isSafeSiteReturnUrl: vi.fn((value: string) => value.startsWith('https://warchi-site.'))
+  isSafeSiteReturnUrl: vi.fn((value: string) => value.startsWith('https://warchi-site.')),
 }))
 
 describe('resolveLoginRedirect', () => {
@@ -20,7 +20,7 @@ describe('resolveLoginRedirect', () => {
       isAuthenticated: false,
       returnUrl: 'https://warchi-site.arch.svc.cluster.local/',
       loadCurrentUser,
-      isStillAuthenticated: () => stillAuthenticated
+      isStillAuthenticated: () => stillAuthenticated,
     })
 
     expect(decision).toEqual({ type: 'stay' })
@@ -36,7 +36,7 @@ describe('resolveLoginRedirect', () => {
       isAuthenticated: true,
       returnUrl: 'https://warchi-site.arch.svc.cluster.local/',
       loadCurrentUser,
-      isStillAuthenticated: () => stillAuthenticated
+      isStillAuthenticated: () => stillAuthenticated,
     })
 
     expect(loadCurrentUser).toHaveBeenCalledOnce()
@@ -48,12 +48,12 @@ describe('resolveLoginRedirect', () => {
       isAuthenticated: true,
       returnUrl: 'https://warchi-site.arch.svc.cluster.local/feedback',
       loadCurrentUser,
-      isStillAuthenticated: () => stillAuthenticated
+      isStillAuthenticated: () => stillAuthenticated,
     })
 
     expect(decision).toEqual({
       type: 'return',
-      url: 'https://warchi-site.arch.svc.cluster.local/feedback'
+      url: 'https://warchi-site.arch.svc.cluster.local/feedback',
     })
   })
 
@@ -62,7 +62,7 @@ describe('resolveLoginRedirect', () => {
       isAuthenticated: true,
       returnUrl: 'https://evil.example/',
       loadCurrentUser,
-      isStillAuthenticated: () => stillAuthenticated
+      isStillAuthenticated: () => stillAuthenticated,
     })
 
     expect(decision).toEqual({ type: 'home' })

@@ -103,11 +103,7 @@ export type UseModelLiveSyncOptions = {
     invalidateChildrenScope?: (scope: TreeParentScope) => void
     onDetachedSnapshotInvalidated?: () => void
     onDiagramReferencesInvalidated?: () => void
-    onSyncError?: (
-      event: GranularSyncEventPayload,
-      message: string,
-      retry: () => void
-    ) => void
+    onSyncError?: (event: GranularSyncEventPayload, message: string, retry: () => void) => void
     onSyncRecovered?: (event: GranularSyncEventPayload) => void
     fetchers?: ModelGranularSyncFetchers
   }
@@ -120,11 +116,7 @@ export type UseModelLiveSyncOptions = {
     ) => Promise<PreparedChildrenScopeRefresh>
     reloadOpenDiagramScope?: (diagramId: string, signal: AbortSignal) => Promise<void>
     onDetachedSnapshotInvalidated?: () => void
-    onSyncError?: (
-      reason: ModelLiveSyncPullReason,
-      message: string,
-      retry: () => void
-    ) => void
+    onSyncError?: (reason: ModelLiveSyncPullReason, message: string, retry: () => void) => void
     onSyncRecovered?: (reason: ModelLiveSyncPullReason) => void
     fetchers?: BoundedModelReconcileFetchers
   }
@@ -197,8 +189,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
         invalidateChildrenScope: options.granularSync.invalidateChildrenScope,
         fetchers: options.granularSync.fetchers,
         onDetachedSnapshotInvalidated: options.granularSync.onDetachedSnapshotInvalidated,
-        onDiagramReferencesInvalidated:
-          options.granularSync.onDiagramReferencesInvalidated,
+        onDiagramReferencesInvalidated: options.granularSync.onDiagramReferencesInvalidated,
         onModelRevisionApplied: revision => {
           if (revision != null) {
             lastAppliedModelRevision =
@@ -245,8 +236,7 @@ export function useModelLiveSync(options: UseModelLiveSyncOptions): void {
     materializedScopes: options.boundedSync?.materializedScopes ?? (() => []),
     refreshVisibleChildrenScope:
       options.boundedSync?.refreshVisibleChildrenScope ?? (async () => undefined),
-    prepareVisibleChildrenScopeRefresh:
-      options.boundedSync?.prepareVisibleChildrenScopeRefresh,
+    prepareVisibleChildrenScopeRefresh: options.boundedSync?.prepareVisibleChildrenScopeRefresh,
     openDiagramId: () => options.openDiagramId?.value,
     reloadOpenDiagramScope: options.boundedSync?.reloadOpenDiagramScope,
     fetchers: options.boundedSync?.fetchers,

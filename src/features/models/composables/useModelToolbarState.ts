@@ -30,7 +30,7 @@ function isEdgePathType(value: unknown): value is EdgePathType {
 export function useModelToolbarState(
   userId: Ref<string | null>,
   hasActiveDiagram: Ref<boolean>,
-  canShowComments: Ref<boolean> = computed(() => true),
+  canShowComments: Ref<boolean> = computed(() => true)
 ) {
   const { t } = useI18n()
 
@@ -70,15 +70,15 @@ export function useModelToolbarState(
       validate: {
         defaultEdgeType: isEdgePathType,
       },
-    },
+    }
   )
 
   watch(
     canShowComments,
-    (allowed) => {
+    allowed => {
       if (!allowed) commentsVisible.value = false
     },
-    { immediate: true },
+    { immediate: true }
   )
 
   const canvasToggleButtons = computed<ToolbarButton[]>(() => {
@@ -152,18 +152,18 @@ export function useModelToolbarState(
     return buttons
   })
 
-  const defaultLinkTypeOptions = computed<
-    { value: EdgePathType; label: string; icon: string }[]
-  >(() => [
-    { value: 'straight', label: t('diagram.linkTypeStraight'), icon: 'remove' },
-    { value: 'polyline', label: t('diagram.linkTypePolyline'), icon: 'timeline' },
-    {
-      value: 'editable-polyline',
-      label: t('diagram.linkTypeEditablePolyline'),
-      icon: 'polyline',
-    },
-    { value: 'bezier', label: t('diagram.linkTypeBezier'), icon: 'line_curve' },
-  ])
+  const defaultLinkTypeOptions = computed<{ value: EdgePathType; label: string; icon: string }[]>(
+    () => [
+      { value: 'straight', label: t('diagram.linkTypeStraight'), icon: 'remove' },
+      { value: 'polyline', label: t('diagram.linkTypePolyline'), icon: 'timeline' },
+      {
+        value: 'editable-polyline',
+        label: t('diagram.linkTypeEditablePolyline'),
+        icon: 'polyline',
+      },
+      { value: 'bezier', label: t('diagram.linkTypeBezier'), icon: 'line_curve' },
+    ]
+  )
 
   return {
     gridVisible,

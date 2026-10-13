@@ -3,9 +3,16 @@ import { loadAllDiagramReferences } from './useAllDiagramReferences'
 
 describe('loadAllDiagramReferences', () => {
   it('pages until last', async () => {
-    const fetch = vi.fn()
-      .mockResolvedValueOnce({ success: true, data: { content: [{ id: 'd1', name: 'A' }], last: false } })
-      .mockResolvedValueOnce({ success: true, data: { content: [{ id: 'd2', name: 'B' }], last: true } })
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: true,
+        data: { content: [{ id: 'd1', name: 'A' }], last: false },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { content: [{ id: 'd2', name: 'B' }], last: true },
+      })
     const rows = await loadAllDiagramReferences('m', { nodeId: 'n' }, fetch)
     expect(rows.map(r => r.id)).toEqual(['d1', 'd2'])
     expect(fetch).toHaveBeenCalledTimes(2)

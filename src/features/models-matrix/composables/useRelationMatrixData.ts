@@ -1,7 +1,7 @@
-import { ref } from "vue"
-import type { ModelData } from "@/types/entities"
-import type { ModelEditorState } from "@/features/models/types"
-import { loadModelEditorData } from "@/features/models/composables/modelEditorLoadModel"
+import { ref } from 'vue'
+import type { ModelData } from '@/types/entities'
+import type { ModelEditorState } from '@/features/models/types'
+import { loadModelEditorData } from '@/features/models/composables/modelEditorLoadModel'
 
 /**
  * Relation matrix needs diagram instance snapshots for component/relation
@@ -24,7 +24,7 @@ export function useRelationMatrixData() {
     } catch (err) {
       model.value = null
       state.value = null
-      error.value = err instanceof Error ? err.message : "Ошибка загрузки матрицы"
+      error.value = err instanceof Error ? err.message : 'Ошибка загрузки матрицы'
     } finally {
       loading.value = false
     }

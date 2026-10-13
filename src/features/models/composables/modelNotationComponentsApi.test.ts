@@ -23,7 +23,9 @@ describe('fetchAllComponentsByNotationIds', () => {
       .mockResolvedValueOnce(
         ok(page([{ id: 'c1', notationId: 'n1' }], { last: false, totalPages: 2 }))
       )
-      .mockResolvedValueOnce(ok(page([{ id: 'c2', notationId: 'n1' }], { last: true, totalPages: 2 })))
+      .mockResolvedValueOnce(
+        ok(page([{ id: 'c2', notationId: 'n1' }], { last: true, totalPages: 2 }))
+      )
 
     const result = await fetchAllComponentsByNotationIds(['n1'], { modelId: 'model-1' })
 

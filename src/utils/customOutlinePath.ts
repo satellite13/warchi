@@ -93,8 +93,7 @@ export function mapSliceAxis(
   const midNormEnd = 1 - endNorm
   const midPxStart = startPx
   const midPxEnd = size - endPx
-  const t =
-    midNormEnd > midNormStart ? (n - midNormStart) / (midNormEnd - midNormStart) : 0
+  const t = midNormEnd > midNormStart ? (n - midNormStart) / (midNormEnd - midNormStart) : 0
   return midPxStart + t * (midPxEnd - midPxStart)
 }
 

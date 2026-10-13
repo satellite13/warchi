@@ -40,13 +40,16 @@ export function computeTraceabilityLinkStatus(
   } = args
 
   if (!activeDiagram) {
-    return { hasActiveDiagram: false, onDiagram: false, draggable: false, reason: 'noActiveDiagram' }
+    return {
+      hasActiveDiagram: false,
+      onDiagram: false,
+      draggable: false,
+      reason: 'noActiveDiagram',
+    }
   }
 
   const onDiagram = activeDiagram.parsedAttrs.instances.edges.some(
-    (edge) =>
-      edge.modelLinkId === link.id &&
-      !isDiagramOnlyEdgeModelLinkId(edge.modelLinkId)
+    edge => edge.modelLinkId === link.id && !isDiagramOnlyEdgeModelLinkId(edge.modelLinkId)
   )
 
   if (isDiagramReadOnly) {
@@ -58,7 +61,7 @@ export function computeTraceabilityLinkStatus(
   }
 
   const modelNodeIdsOnDiagram = new Set(
-    activeDiagram.parsedAttrs.instances.nodes.map((nodeInstance) => nodeInstance.modelNodeId)
+    activeDiagram.parsedAttrs.instances.nodes.map(nodeInstance => nodeInstance.modelNodeId)
   )
   const hasSourceInstance = modelNodeIdsOnDiagram.has(link.sourceId)
   const hasTargetInstance = modelNodeIdsOnDiagram.has(link.targetId)
@@ -74,7 +77,7 @@ export function computeTraceabilityLinkStatus(
   const hasRelation =
     !!activeNotationId &&
     relations.some(
-      (relation) =>
+      relation =>
         relation.notationId === activeNotationId && relation.linkTypeId === link.linkTypeId
     )
   if (!hasRelation) {
@@ -82,9 +85,13 @@ export function computeTraceabilityLinkStatus(
   }
 
   if (!canConnect(link.sourceId, link.targetId)) {
-    return { hasActiveDiagram: true, onDiagram: false, draggable: false, reason: 'connectNotAllowed' }
+    return {
+      hasActiveDiagram: true,
+      onDiagram: false,
+      draggable: false,
+      reason: 'connectNotAllowed',
+    }
   }
 
   return { hasActiveDiagram: true, onDiagram: false, draggable: true }
 }
-

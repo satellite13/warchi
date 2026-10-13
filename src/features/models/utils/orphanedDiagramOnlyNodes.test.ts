@@ -13,7 +13,7 @@ describe('orphanedUntypedNodeIds', () => {
           { id: 'actor-1', nodeTypeId: 'actor' },
           { id: 'folder-1', nodeTypeId: 'dir' },
         ],
-      }),
+      })
     ).toEqual(['note-1'])
   })
 
@@ -24,7 +24,7 @@ describe('orphanedUntypedNodeIds', () => {
         remainingCanvasNodeIds: ['note-1'],
         untypedNodeTypeIds: new Set(['untyped']),
         nodes: [{ id: 'note-1', nodeTypeId: 'untyped' }],
-      }),
+      })
     ).toEqual([])
   })
 })
@@ -34,7 +34,7 @@ describe('canvasModelNodeIds', () => {
     expect(
       canvasModelNodeIds({
         nodes: [{ modelNodeId: 'a' }, { modelNodeId: '' }, {}],
-      }),
+      })
     ).toEqual(['a'])
   })
 })

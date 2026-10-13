@@ -1,8 +1,5 @@
 import type { Ref } from 'vue'
-import {
-  applyHistoryPersistDirty,
-  type HistoryPersistKind,
-} from '../utils/historyPersistDirty'
+import { applyHistoryPersistDirty, type HistoryPersistKind } from '../utils/historyPersistDirty'
 
 export type DiagramHistoryApi = {
   canUndo: boolean

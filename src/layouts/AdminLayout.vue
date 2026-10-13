@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import AppFooter from '../components/layout/AppFooter.vue'
 import AppHeader from '../components/layout/AppHeader.vue'
 
 const route = useRoute()
@@ -126,8 +125,6 @@ const { t } = useI18n()
         <RouterView />
       </div>
     </main>
-
-    <AppFooter />
   </div>
 </template>
 

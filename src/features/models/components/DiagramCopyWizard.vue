@@ -86,6 +86,9 @@ const resolvedLinks = computed(
 )
 
 function isEditableModel(model: ModelData): boolean {
+  // Prefer explicit Cerbos EDIT flag from API; legacy payloads without canEdit
+  // keep the previous rule (everything except VIEW is a copy target).
+  if (typeof model.canEdit === 'boolean') return model.canEdit
   return model.accessPermission !== 'VIEW'
 }
 
@@ -254,9 +257,12 @@ watch(
   }
 )
 
-watch(wizard.targetModelId, modelId => {
-  if (wizard.show.value) void loadFolders(modelId)
-})
+watch(
+  () => wizard.targetModelId.value,
+  modelId => {
+    if (wizard.show.value) void loadFolders(modelId)
+  }
+)
 </script>
 
 <template>

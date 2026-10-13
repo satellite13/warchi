@@ -1,16 +1,16 @@
-import { computed, onBeforeUnmount, ref, watch, type Ref } from "vue"
-import { buildApiUrl } from "@/api/config"
-import { getCsrfTokenFromCookie, CSRF_HEADER_NAME } from "@/utils/csrfCookie"
-import { apiGet, apiPost } from "@/composables/useApi"
-import type { DiagramLockStatusResponse } from "@/types/api"
-import type { PaginatedResponse } from "@/types/entities"
-import { paginatedContent } from "@/utils/paginatedResponse"
+import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { buildApiUrl } from '@/api/config'
+import { getCsrfTokenFromCookie, CSRF_HEADER_NAME } from '@/utils/csrfCookie'
+import { apiGet, apiPost } from '@/composables/useApi'
+import type { DiagramLockStatusResponse } from '@/types/api'
+import type { PaginatedResponse } from '@/types/entities'
+import { paginatedContent } from '@/utils/paginatedResponse'
 
 const HEARTBEAT_MS = 60_000
 const POLL_MS = 12_000
 const LOCKS_LIST_MS = 15_000
 
-const LOCKED_BY_OTHER = "LOCKED_BY_OTHER"
+const LOCKED_BY_OTHER = 'LOCKED_BY_OTHER'
 
 /** Сравнение ISO-времён диаграммы: сервер новее локального снимка (для кнопки «Загрузить с сервера»). */
 export function isDiagramServerNewerThanLocal(
@@ -25,9 +25,9 @@ export function isDiagramServerNewerThanLocal(
 }
 
 function isLockStatusPayload(value: unknown): value is DiagramLockStatusResponse {
-  if (value === null || typeof value !== "object") return false
+  if (value === null || typeof value !== 'object') return false
   const o = value as Record<string, unknown>
-  return typeof o.diagramId === "string" && typeof o.isLocked === "boolean"
+  return typeof o.diagramId === 'string' && typeof o.isLocked === 'boolean'
 }
 
 /**
@@ -45,6 +45,12 @@ export function useDiagramEditLock(options: {
    * Иначе acquire вернёт 404 — блокировка по несуществующему diagram id не имеет смысла.
    */
   isSelectedDiagramPersistedOnServer: Ref<boolean>
+  /**
+   * Есть ли несохранённые правки открытой диаграммы. Пока true — lock не
+   * отпускается при уходе вкладки в фон: иначе коллега мог бы занять lock и
+   * сохранить, а по возвращении пользователя его правки затерлись бы.
+   */
+  hasUnsavedDiagramChanges?: () => boolean
 }) {
   const locksList = ref<DiagramLockStatusResponse[]>([])
   /** Чужой lock на текущей выбранной диаграмме — блокируем редактирование canvas */
@@ -162,7 +168,7 @@ export function useDiagramEditLock(options: {
   function checkHeldLockRevoked(serverLocks: DiagramLockStatusResponse[]): void {
     if (!heldDiagramId.value) return
     if (lockOpInFlight > 0) return
-    const entry = serverLocks.find((l) => l.diagramId === heldDiagramId.value)
+    const entry = serverLocks.find(l => l.diagramId === heldDiagramId.value)
     const stillOurs =
       entry != null &&
       entry.isLocked &&
@@ -171,7 +177,7 @@ export function useDiagramEditLock(options: {
     void recoverLostLock()
   }
 
-  async function recoverLostLock(): Promise<"held" | "blocked" | "failed"> {
+  async function recoverLostLock(): Promise<'held' | 'blocked' | 'failed'> {
     beginLockOp()
     try {
       const diagramId = heldDiagramId.value ?? options.selectedDiagramId.value
@@ -180,24 +186,27 @@ export function useDiagramEditLock(options: {
       clearHeartbeat()
       preserveLocalCanvasAfterLockLoss.value = true
       lockLost.value = false
-      if (!diagramId) return "failed"
-      const res = await apiPost<DiagramLockStatusResponse>(`/diagram-locks/${diagramId}/acquire`, {})
+      if (!diagramId) return 'failed'
+      const res = await apiPost<DiagramLockStatusResponse>(
+        `/diagram-locks/${diagramId}/acquire`,
+        {}
+      )
       if (res.success && res.data && res.data.reason !== LOCKED_BY_OTHER) {
         heldDiagramId.value = diagramId
         heldByUserId.value = res.data.lockedByUserId ?? null
         startHeartbeat(diagramId)
         preserveLocalCanvasAfterLockLoss.value = false
-        return "held"
+        return 'held'
       }
       if (res.success && res.data?.reason === LOCKED_BY_OTHER) {
         isBlockedByOther.value = true
         lockHolderDisplay.value = res.data.lockedByDisplay ?? null
         remoteDiagramUpdatedAt.value = res.data.diagramUpdatedAt ?? null
         startBlockedPoll(diagramId)
-        return "blocked"
+        return 'blocked'
       }
       lockLost.value = true
-      return "failed"
+      return 'failed'
     } finally {
       endLockOp()
     }
@@ -208,7 +217,7 @@ export function useDiagramEditLock(options: {
     if (!isBlockedByOther.value) return
     const diagramId = options.selectedDiagramId.value
     if (!diagramId) return
-    const entry = locksList.value.find((l) => l.diagramId === diagramId)
+    const entry = locksList.value.find(l => l.diagramId === diagramId)
     const at = entry?.diagramUpdatedAt
     if (at) {
       remoteDiagramUpdatedAt.value = at
@@ -250,7 +259,10 @@ export function useDiagramEditLock(options: {
         return
       }
 
-      const res = await apiPost<DiagramLockStatusResponse>(`/diagram-locks/${diagramId}/acquire`, {})
+      const res = await apiPost<DiagramLockStatusResponse>(
+        `/diagram-locks/${diagramId}/acquire`,
+        {}
+      )
       if (seq !== lockOpSeq) return
 
       if (res.success && res.data) {
@@ -291,7 +303,7 @@ export function useDiagramEditLock(options: {
       if (!res.success && res.error.status === 409) {
         await fetchLocksList()
         if (seq !== lockOpSeq) return
-        const entry = locksList.value.find((l) => l.diagramId === diagramId && l.isLocked)
+        const entry = locksList.value.find(l => l.diagramId === diagramId && l.isLocked)
         if (entry) {
           lockLost.value = false
           isBlockedByOther.value = true
@@ -326,7 +338,7 @@ export function useDiagramEditLock(options: {
     blockedPollInFlight = true
     try {
       await fetchLocksList()
-      const entry = locksList.value.find((l) => l.diagramId === diagramId)
+      const entry = locksList.value.find(l => l.diagramId === diagramId)
       if (!entry || !entry.isLocked) {
         clearPoll()
         await applyLockForSelection()
@@ -358,7 +370,7 @@ export function useDiagramEditLock(options: {
 
   watch(
     () => options.modelId.value,
-    (mid) => {
+    mid => {
       void fetchLocksList()
       clearLocksListTimer()
       if (!mid) {
@@ -374,42 +386,45 @@ export function useDiagramEditLock(options: {
   const onBeforeWindowUnload = (): void => {
     const id = heldDiagramId.value
     if (!id) return
-    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     const csrfToken = getCsrfTokenFromCookie()
     if (csrfToken) {
       headers[CSRF_HEADER_NAME] = csrfToken
     }
     void fetch(buildApiUrl(`/diagram-locks/${id}/release`), {
-      method: "POST",
+      method: 'POST',
       headers,
-      body: "{}",
-      credentials: "include",
+      body: '{}',
+      credentials: 'include',
       keepalive: true,
     })
   }
 
   /** Пока вкладка в фоне — отпускаем lock, чтобы другой редактор мог работать; при возврате снова пытаемся взять. */
   const onDocumentVisibilityChange = (): void => {
-    if (typeof document === "undefined") return
-    if (document.visibilityState === "hidden") {
+    if (typeof document === 'undefined') return
+    if (document.visibilityState === 'hidden') {
+      // С несохранёнными правками держим lock: иначе по возвращении «сервер новее»
+      // и пользователь потеряет правки при перезагрузке с сервера.
+      if (options.hasUnsavedDiagramChanges?.()) return
       void releaseHeld().then(() => fetchLocksList())
       return
     }
     void applyLockForSelection()
   }
 
-  if (typeof window !== "undefined") {
-    window.addEventListener("beforeunload", onBeforeWindowUnload)
-    document.addEventListener("visibilitychange", onDocumentVisibilityChange)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', onBeforeWindowUnload)
+    document.addEventListener('visibilitychange', onDocumentVisibilityChange)
   }
 
   onBeforeUnmount(() => {
     clearHeartbeat()
     clearPoll()
     clearLocksListTimer()
-    if (typeof window !== "undefined") {
-      window.removeEventListener("beforeunload", onBeforeWindowUnload)
-      document.removeEventListener("visibilitychange", onDocumentVisibilityChange)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', onBeforeWindowUnload)
+      document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
     }
     void releaseHeld()
   })
@@ -436,13 +451,13 @@ export function useDiagramEditLock(options: {
       `/diagram-locks?modelId=${encodeURIComponent(mid)}`
     )
     if (!res.success) return false
-    const entry = paginatedContent(res.data).find((l) => l.diagramId === heldDiagramId.value)
+    const entry = paginatedContent(res.data).find(l => l.diagramId === heldDiagramId.value)
     const stillOurs =
       entry != null &&
       entry.isLocked &&
       (heldByUserId.value == null || entry.lockedByUserId === heldByUserId.value)
     if (stillOurs) return true
-    return (await recoverLostLock()) === "held"
+    return (await recoverLostLock()) === 'held'
   }
 
   return {

@@ -46,16 +46,10 @@ export function relationRulesMatrixCellKey(fromId: string, toId: string): string
 }
 
 export function buildRelationRulesMatrix(
-  input: BuildRelationRulesMatrixInput,
+  input: BuildRelationRulesMatrixInput
 ): RelationRulesMatrixResult {
-  const {
-    filters,
-    components,
-    relations,
-    relationRules,
-    untypedNodeTypeIds,
-    untypedLinkTypeIds,
-  } = input
+  const { filters, components, relations, relationRules, untypedNodeTypeIds, untypedLinkTypeIds } =
+    input
 
   const activeComponents = components
     .filter(c => !c._isDeleted && !untypedNodeTypeIds.has(c.nodeTypeId))
@@ -91,9 +85,7 @@ export function buildRelationRulesMatrix(
       : allowed
 
     const key = relationRulesMatrixCellKey(rule.fromComponentId, rule.toComponentId)
-    const relationNames = displayed
-      .map(id => relationNameById.get(id) ?? id)
-      .filter(Boolean)
+    const relationNames = displayed.map(id => relationNameById.get(id) ?? id).filter(Boolean)
 
     cells[key] = {
       fromId: rule.fromComponentId,

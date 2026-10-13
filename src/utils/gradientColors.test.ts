@@ -20,7 +20,7 @@ describe('getGradient', () => {
 
   it('may return different gradients for different ids', () => {
     const ids = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota']
-    const gradients = new Set(ids.map((id) => getGradient(id)))
+    const gradients = new Set(ids.map(id => getGradient(id)))
     expect(gradients.size).toBeGreaterThan(1)
   })
 

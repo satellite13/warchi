@@ -6,14 +6,10 @@ import type {
   NodeTypeResponse,
   NodeResponse,
   RelationResponse,
-  RelationRuleResponse
-} from "@/types/api"
-import type { NotationData } from "@/types/entities"
-import type {
-  DiagramAttrs,
-  ModelLinkAttrs,
-  ModelNodeAttrs
-} from "./modelAttrs"
+  RelationRuleResponse,
+} from '@/types/api'
+import type { NotationData } from '@/types/entities'
+import type { DiagramAttrs, ModelLinkAttrs, ModelNodeAttrs } from './modelAttrs'
 
 export type TreeParentScope = { kind: 'root' } | { kind: 'node'; nodeId: string }
 
@@ -42,14 +38,14 @@ export type ChildrenPageState = {
   totalElements: number
 }
 
-export type EditorNode = Omit<NodeResponse, "attrs"> & {
+export type EditorNode = Omit<NodeResponse, 'attrs'> & {
   parsedAttrs: ModelNodeAttrs
   _isNew?: boolean
   _isDirty?: boolean
   _isDeleted?: boolean
 }
 
-export type EditorLink = Omit<LinkResponse, "attrs"> & {
+export type EditorLink = Omit<LinkResponse, 'attrs'> & {
   parsedAttrs: ModelLinkAttrs
   _isNew?: boolean
   _isDirty?: boolean
@@ -74,7 +70,7 @@ export type EditorGraphNeighbor = {
   node: EditorNode
 }
 
-export type EditorDiagram = Omit<DiagramResponse, "attrs"> & {
+export type EditorDiagram = Omit<DiagramResponse, 'attrs'> & {
   parsedAttrs: DiagramAttrs
   /** true when list was loaded with includeAttrs=false — hydrate via GET /diagrams/{id}. */
   _attrsPending?: boolean
@@ -102,8 +98,8 @@ export type ModelEditorState = {
 }
 
 export const createEmptyModelEditorState = (): ModelEditorState => ({
-  modelId: "",
-  ownerId: "",
+  modelId: '',
+  ownerId: '',
   nodes: [],
   links: [],
   diagrams: [],
@@ -112,5 +108,5 @@ export const createEmptyModelEditorState = (): ModelEditorState => ({
   linkTypes: [],
   components: [],
   relations: [],
-  relationRules: []
+  relationRules: [],
 })

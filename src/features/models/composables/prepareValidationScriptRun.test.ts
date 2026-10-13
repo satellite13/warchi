@@ -91,7 +91,7 @@ describe('prepareValidationScriptRun', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.payload.openDiagramId).toBe('d1')
-      expect(result.payload.snapshot.model.nodes.map((n) => n.id)).toEqual(['on-canvas'])
+      expect(result.payload.snapshot.model.nodes.map(n => n.id)).toEqual(['on-canvas'])
       expect(result.payload.snapshot.model.diagrams[0]?.instances).toHaveLength(1)
     }
     expect(loadOverlayed).not.toHaveBeenCalled()

@@ -57,7 +57,7 @@ export function analyzeImportShapeConflicts(
     const rawCandidates = byName.get(key)
     if (!rawCandidates || rawCandidates.length === 0) continue
     const candidates = sortShapeCandidates(rawCandidates)
-    const geometryMatches = candidates.map((c) => outlinesEquivalent(imported.outline, c.outline))
+    const geometryMatches = candidates.map(c => outlinesEquivalent(imported.outline, c.outline))
     conflicts.push({ imported, candidates, geometryMatches })
   }
   return conflicts
@@ -66,7 +66,7 @@ export function analyzeImportShapeConflicts(
 export function defaultShapeImportResolutions(
   conflicts: ShapeImportConflict[]
 ): ShapeImportResolution[] {
-  return conflicts.map((conflict) => {
+  return conflicts.map(conflict => {
     const matchIndex = conflict.geometryMatches.findIndex(Boolean)
     if (matchIndex >= 0) {
       return {
@@ -87,5 +87,5 @@ export function setBulkShapeImportAction(
   resolutions: ShapeImportResolution[],
   action: ShapeImportAction
 ): ShapeImportResolution[] {
-  return resolutions.map((row) => ({ ...row, action }))
+  return resolutions.map(row => ({ ...row, action }))
 }

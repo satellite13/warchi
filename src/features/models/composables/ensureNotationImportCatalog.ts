@@ -62,7 +62,9 @@ export async function ensureNotationImportCatalog(params: {
   if (!modelId || !notationId) return
 
   const currentAtStart = unref(params.state)
-  const alreadyHasComponents = currentAtStart.components.some(item => item.notationId === notationId)
+  const alreadyHasComponents = currentAtStart.components.some(
+    item => item.notationId === notationId
+  )
   if (!force && loadedCatalogNotationIds.has(notationId) && alreadyHasComponents) {
     await params.ensureNotationRelationsAndRules(notationId)
     return

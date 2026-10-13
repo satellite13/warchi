@@ -40,9 +40,9 @@ describe('applyDiagramLiveMessage', () => {
       removeEdgeIds: ['e1'],
     }
     const next = applyDiagramLiveMessage(current, envelope, createLiveSnapshotBuffer())
-    expect(next?.nodes.map((n) => n.id).sort()).toEqual(['n1'])
+    expect(next?.nodes.map(n => n.id).sort()).toEqual(['n1'])
     expect(next?.nodes[0]?.x).toBe(9)
-    expect(next?.edges.map((e) => e.id)).toEqual(['e2'])
+    expect(next?.edges.map(e => e.id)).toEqual(['e2'])
   })
 
   it('replaces only after all snapshot chunks arrive', () => {

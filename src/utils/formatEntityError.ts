@@ -13,7 +13,7 @@ export function formatEntitySaveError(
   action: SaveAction | 'создания' | 'обновления' | 'удаления',
   entity: string,
   status: number,
-  message: string,
+  message: string
 ): string {
   const t = i18n.global.t
   if (status === 401 || status === 403) {
@@ -30,7 +30,7 @@ export function formatEntitySaveError(
       action: t(ACTION_KEYS[normalizedAction]),
       entity,
       message,
-    }),
+    })
   )
 }
 
@@ -38,7 +38,7 @@ export function formatEntitySaveError(
 export function formatTypeOperationError(
   operation: 'save' | 'delete',
   status: number,
-  message: string,
+  message: string
 ): string {
   const t = i18n.global.t
   if (status === 401 || status === 403) {

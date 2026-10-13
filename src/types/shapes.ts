@@ -1,10 +1,10 @@
 // Custom node shape outline (normalized coordinates 0–1)
 export type OutlineSegmentLine = {
-  type: "line"
+  type: 'line'
   points: [[number, number], [number, number]]
 }
 export type OutlineSegmentBezier = {
-  type: "bezier"
+  type: 'bezier'
   points: [[number, number], [number, number], [number, number], [number, number]]
 }
 export type OutlineSegment = OutlineSegmentLine | OutlineSegmentBezier
@@ -22,9 +22,7 @@ export type ScaleSlice = {
 export const DEFAULT_SCALE_SLICE_REF_WIDTH = 180
 export const DEFAULT_SCALE_SLICE_REF_HEIGHT = 120
 
-export function createDefaultScaleSlice(
-  partial?: Partial<ScaleSlice>
-): ScaleSlice {
+export function createDefaultScaleSlice(partial?: Partial<ScaleSlice>): ScaleSlice {
   return {
     left: 0,
     right: 0,

@@ -24,13 +24,21 @@ export const ICON_PLACEMENT_OPTIONS: readonly IconPlacement[] = [
 export type InsetSides = { top: number; right: number; bottom: number; left: number }
 export type InsetInput = number | { top?: number; right?: number; bottom?: number; left?: number }
 
+export const COMPOSITE_TYPE_ICONS: Record<string, string> = {
+  container: 'view_column',
+  text: 'text_fields',
+  icon: 'image',
+  divider: 'horizontal_rule',
+  shape: 'crop_square',
+}
+
 export type TextLabelWithSpacing = {
   inset?: InsetInput
 }
 
 export function normalizeIconPlacement(
   value: unknown,
-  fallback: IconPlacement = 'top-left',
+  fallback: IconPlacement = 'top-left'
 ): IconPlacement {
   if (typeof value !== 'string') return fallback
   return (ICON_PLACEMENT_OPTIONS as readonly string[]).includes(value)
@@ -45,8 +53,7 @@ export function toInsetSides(value: unknown, fallback = 0): InsetSides {
   if (value && typeof value === 'object') {
     const raw = value as { top?: unknown; right?: unknown; bottom?: unknown; left?: unknown }
     const top = typeof raw.top === 'number' && Number.isFinite(raw.top) ? raw.top : fallback
-    const right =
-      typeof raw.right === 'number' && Number.isFinite(raw.right) ? raw.right : fallback
+    const right = typeof raw.right === 'number' && Number.isFinite(raw.right) ? raw.right : fallback
     const bottom =
       typeof raw.bottom === 'number' && Number.isFinite(raw.bottom) ? raw.bottom : fallback
     const left = typeof raw.left === 'number' && Number.isFinite(raw.left) ? raw.left : fallback

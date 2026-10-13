@@ -27,7 +27,11 @@ const node = (id: string, name = id): EditorNode => ({
   parsedAttrs: parseNodeAttrs(null),
 })
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: Error) => void } {
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: Error) => void
+} {
   let resolve!: (value: T) => void
   let reject!: (error: Error) => void
   const promise = new Promise<T>((done, fail) => {

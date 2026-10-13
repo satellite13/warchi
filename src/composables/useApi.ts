@@ -10,11 +10,11 @@ export {
   apiDelete,
   uploadDiagramSvg,
   createDiagramShareLink,
-} from "../api/apiClient"
+} from '../api/apiClient'
 
 export type {
   ApiError,
   ApiResult,
   DiagramShareLinkPayload,
   DiagramShareLinkResponse,
-} from "../api/apiClient"
+} from '../api/apiClient'

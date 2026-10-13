@@ -149,9 +149,10 @@ export type PersistHistoryRendererLayoutInput = {
  * bends into one attrs snapshot. Splitting those writes lets syncDiagram
  * re-apply stale controlPoints from the first emit.
  */
-export function persistHistoryRendererLayout(
-  input: PersistHistoryRendererLayoutInput
-): { next: DiagramAttrs; changed: boolean } {
+export function persistHistoryRendererLayout(input: PersistHistoryRendererLayoutInput): {
+  next: DiagramAttrs
+  changed: boolean
+} {
   const next = JSON.parse(JSON.stringify(input.source)) as DiagramAttrs
   const { nodeChanged, controlPointsChanged } = applyNodeAndEditablePolylineChangesToDiagram(
     next,

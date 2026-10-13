@@ -6,7 +6,6 @@ import { useI18n } from 'vue-i18n'
 const router = useRouter()
 const { t } = useI18n()
 import MainLayout from '@/layouts/MainLayout.vue'
-import AppFooter from '@/components/layout/AppFooter.vue'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
@@ -15,6 +14,7 @@ import { listParams, PAGE_SIZE_NOTATION } from '@/api/queryHelpers'
 import { useAuth } from '@/composables/useAuth'
 import { useCanShare } from '@/composables/useCanShare'
 import { usePermissions } from '@/composables/usePermissions'
+import { canEditByAccessPermission } from '@/utils/accessPermission'
 import NotationMainPanelLayout from '@/features/notations/layout/NotationMainPanelLayout.vue'
 import NotationEditorHeader from '@/features/notations/layout/NotationEditorHeader.vue'
 import NotationComponentList from '@/features/notations/layout/NotationComponentList.vue'
@@ -73,10 +73,7 @@ const { checkPermission } = usePermissions()
 const showShareModal = ref(false)
 const showRelationRulesMatrix = ref(false)
 const { canShare: canShareNotation } = useCanShare(notation)
-const canInspectAttrsJson = computed(() => {
-  const permission = notation.value?.accessPermission ?? null
-  return permission === 'ADMIN' || permission === 'OWNER' || permission === 'EDIT'
-})
+const canInspectAttrsJson = computed(() => canEditByAccessPermission(notation.value))
 
 /** Кнопка wiki нотации в шапке: при VIEW показывать только если страница уже привязана */
 const showNotationWikiHeaderButton = computed(
@@ -85,36 +82,24 @@ const showNotationWikiHeaderButton = computed(
 
 const customPropertyValidationIssues = computed<ValidationIssue[]>(() => {
   const issues: ValidationIssue[] = []
-  for (const component of state.value.components) {
-    if (component._isDeleted) continue
-    for (let idx = 0; idx < component.parsedAttrs.customProperties.length; idx += 1) {
-      const property = component.parsedAttrs.customProperties[idx]
-      const errors = customPropertyErrors(property, t)
-      for (const msg of errors) {
-        issues.push({
-          code: 'CUSTOM_PROPERTY_INVALID',
-          message: msg,
-          path: `components.${component.id}.customProperties[${idx}]`,
-          severity: 'error',
-        })
+  const collectIssues = (items: (EditorComponent | EditorRelation)[], prefix: string) => {
+    for (const item of items) {
+      if (item._isDeleted) continue
+      for (let idx = 0; idx < item.parsedAttrs.customProperties.length; idx += 1) {
+        const errors = customPropertyErrors(item.parsedAttrs.customProperties[idx], t)
+        for (const msg of errors) {
+          issues.push({
+            code: 'CUSTOM_PROPERTY_INVALID',
+            message: msg,
+            path: `${prefix}.${item.id}.customProperties[${idx}]`,
+            severity: 'error',
+          })
+        }
       }
     }
   }
-  for (const relation of state.value.relations) {
-    if (relation._isDeleted) continue
-    for (let idx = 0; idx < relation.parsedAttrs.customProperties.length; idx += 1) {
-      const property = relation.parsedAttrs.customProperties[idx]
-      const errors = customPropertyErrors(property, t)
-      for (const msg of errors) {
-        issues.push({
-          code: 'CUSTOM_PROPERTY_INVALID',
-          message: msg,
-          path: `relations.${relation.id}.customProperties[${idx}]`,
-          severity: 'error',
-        })
-      }
-    }
-  }
+  collectIssues(state.value.components, 'components')
+  collectIssues(state.value.relations, 'relations')
   return issues
 })
 
@@ -1015,9 +1000,6 @@ onBeforeUnmount(() => {
           <span>{{ errorMessage }}</span>
         </div>
       </div>
-    </template>
-    <template #footer>
-      <AppFooter />
     </template>
   </MainLayout>
 

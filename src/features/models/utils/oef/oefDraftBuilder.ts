@@ -67,9 +67,7 @@ export function buildImportDraft(parsed: OefParsedModel): ImportDraft {
           targetNodeId: connection.targetNodeId,
           ...(isNoteLink ? { isNoteLink: true } : {}),
           ...(isDiagramOnlyLink ? { isDiagramOnlyLink: true } : {}),
-          ...(attachesToConnectionId
-            ? { attachesToConnectionId, attachEndpoint }
-            : {}),
+          ...(attachesToConnectionId ? { attachesToConnectionId, attachEndpoint } : {}),
         }
       }
     )
@@ -129,6 +127,8 @@ export function buildImportDraft(parsed: OefParsedModel): ImportDraft {
     diagrams,
     organizations: Array.isArray(parsed.organizations) ? parsed.organizations : [],
     sourceElementTypes: toUniqueSorted(parsed.elements.map(element => element.type)),
-    sourceRelationshipTypes: toUniqueSorted(parsed.relationships.map(relationship => relationship.type)),
+    sourceRelationshipTypes: toUniqueSorted(
+      parsed.relationships.map(relationship => relationship.type)
+    ),
   }
 }

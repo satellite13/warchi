@@ -1,4 +1,4 @@
-import { apiPost } from "@/api/apiClient"
+import { apiPost } from '@/api/apiClient'
 
 export interface NotationImportApiRequest {
   notation: { name: string; version: string; attrs?: string | null }
@@ -44,7 +44,7 @@ export interface NotationImportApiResponse {
 export async function importNotationViaApi(
   request: NotationImportApiRequest
 ): Promise<NotationImportApiResponse | null> {
-  const result = await apiPost<NotationImportApiResponse>("/notations/import", request)
+  const result = await apiPost<NotationImportApiResponse>('/notations/import', request)
   if (!result.success) return null
   return result.data
 }

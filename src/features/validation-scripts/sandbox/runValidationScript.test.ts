@@ -89,13 +89,11 @@ apply.addInstance({ nodeId: n.items[0].node.id, x: 10, y: 10 })
         })
       },
     }
-    const createElement = vi.spyOn(document, 'createElement').mockImplementation(((
-      tag: string
-    ) => {
+    const createElement = vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
       if (tag === 'iframe') return iframe as unknown as HTMLIFrameElement
       return document.createElement(tag)
     }) as typeof document.createElement)
-    const appendChild = vi.spyOn(document.body, 'appendChild').mockImplementation((node) => node)
+    const appendChild = vi.spyOn(document.body, 'appendChild').mockImplementation(node => node)
 
     try {
       const run = runValidationScript({

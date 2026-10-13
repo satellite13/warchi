@@ -1,10 +1,6 @@
-import { apiGet } from "@/composables/useApi"
-import { computeModelDiff, type ModelVersionDiff } from "@/utils/modelDiff"
-import type {
-  DiagramResponse,
-  LinkResponse,
-  NodeResponse,
-} from "@/types/api"
+import { apiGet } from '@/composables/useApi'
+import { computeModelDiff, type ModelVersionDiff } from '@/utils/modelDiff'
+import type { DiagramResponse, LinkResponse, NodeResponse } from '@/types/api'
 
 interface ApiNodeItem {
   id: string
@@ -36,21 +32,21 @@ interface ApiDiagramItem {
 
 export interface ModelDiffApiResponse {
   nodes: Array<{
-    kind: "added" | "removed" | "modified"
+    kind: 'added' | 'removed' | 'modified'
     path: string
     node?: ApiNodeItem
     base?: ApiNodeItem
     target?: ApiNodeItem
   }>
   links: Array<{
-    kind: "added" | "removed" | "modified"
+    kind: 'added' | 'removed' | 'modified'
     key: string
     link?: ApiLinkItem
     base?: ApiLinkItem
     target?: ApiLinkItem
   }>
   diagrams: Array<{
-    kind: "added" | "removed" | "modified"
+    kind: 'added' | 'removed' | 'modified'
     name: string
     diagram?: ApiDiagramItem
     base?: ApiDiagramItem
@@ -63,8 +59,8 @@ function toNodeResponse(n: ApiNodeItem): NodeResponse {
     id: n.id,
     stableId: n.stableId,
     name: n.name,
-    modelId: "",
-    ownerId: "",
+    modelId: '',
+    ownerId: '',
     nodeTypeId: n.nodeTypeId,
     parentNodeId: n.parentNodeId,
     attrs: n.attrs,
@@ -77,8 +73,8 @@ function toLinkResponse(l: ApiLinkItem): LinkResponse {
     stableId: l.stableId,
     sourceId: l.sourceNodeId,
     targetId: l.targetNodeId,
-    modelId: "",
-    ownerId: "",
+    modelId: '',
+    ownerId: '',
     linkTypeId: l.linkTypeId,
     attrs: l.attrs,
   }
@@ -89,8 +85,8 @@ function toDiagramResponse(d: ApiDiagramItem): DiagramResponse {
     id: d.id,
     name: d.name,
     version: d.version,
-    modelId: "",
-    ownerId: "",
+    modelId: '',
+    ownerId: '',
     notationId: d.notationId,
     attrs: d.attrs,
   }
@@ -101,18 +97,16 @@ function toDiagramResponse(d: ApiDiagramItem): DiagramResponse {
  * и возвращает sourcePath / targetPath.
  */
 function parseLinkKey(key: string): { sourcePath: string; targetPath: string } {
-  const parts = key.split("\t")
-  return { sourcePath: parts[0] ?? "", targetPath: parts[1] ?? "" }
+  const parts = key.split('\t')
+  return { sourcePath: parts[0] ?? '', targetPath: parts[1] ?? '' }
 }
 
-export function normalizeApiDiffResponse(
-  data: ModelDiffApiResponse
-): ModelVersionDiff {
+export function normalizeApiDiffResponse(data: ModelDiffApiResponse): ModelVersionDiff {
   return {
-    nodes: data.nodes.map((item) => {
-      if (item.kind === "modified") {
+    nodes: data.nodes.map(item => {
+      if (item.kind === 'modified') {
         return {
-          kind: "modified",
+          kind: 'modified',
           path: item.path,
           base: toNodeResponse(item.base!),
           target: toNodeResponse(item.target!),
@@ -125,11 +119,11 @@ export function normalizeApiDiffResponse(
       }
     }),
 
-    links: data.links.map((item) => {
+    links: data.links.map(item => {
       const { sourcePath, targetPath } = parseLinkKey(item.key)
-      if (item.kind === "modified") {
+      if (item.kind === 'modified') {
         return {
-          kind: "modified",
+          kind: 'modified',
           sourcePath,
           targetPath,
           base: toLinkResponse(item.base!),
@@ -144,10 +138,10 @@ export function normalizeApiDiffResponse(
       }
     }),
 
-    diagrams: data.diagrams.map((item) => {
-      if (item.kind === "modified") {
+    diagrams: data.diagrams.map(item => {
+      if (item.kind === 'modified') {
         return {
-          kind: "modified",
+          kind: 'modified',
           name: item.name,
           base: toDiagramResponse(item.base!),
           target: toDiagramResponse(item.target!),

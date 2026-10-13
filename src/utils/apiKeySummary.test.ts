@@ -20,10 +20,10 @@ function key(partial: Partial<ApiKey>): ApiKey {
 describe('formatApiKeySummary', () => {
   it('summarizes all-access read and write', () => {
     expect(formatApiKeySummary(key({ mode: 'all', scopes: ['models:read'] }), t)).toBe(
-      'profile.apiKeysSummaryAllRead',
+      'profile.apiKeysSummaryAllRead'
     )
     expect(formatApiKeySummary(key({ mode: 'all', scopes: ['models:write'] }), t)).toBe(
-      'profile.apiKeysSummaryAllWrite',
+      'profile.apiKeysSummaryAllWrite'
     )
   })
 
@@ -34,8 +34,8 @@ describe('formatApiKeySummary', () => {
           mode: 'grants',
           grants: [{ modelId: 'm1', scopes: ['models:write'] }],
         }),
-        t,
-      ),
+        t
+      )
     ).toBe('profile.apiKeysSummaryGrantsWrite:{"count":1}')
   })
 })

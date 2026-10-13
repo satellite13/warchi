@@ -1546,7 +1546,9 @@ describe('useModelLiveSync snapshot pull', () => {
         ownerId: 'owner-1',
         nodeTypeId: 'node-type-1',
         attrs: JSON.stringify({
-          customProperties: [{ id: 'status', name: 'status', type: 'string', defaultValue: 'draft' }],
+          customProperties: [
+            { id: 'status', name: 'status', type: 'string', defaultValue: 'draft' },
+          ],
         }),
       },
     ]

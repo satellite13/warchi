@@ -115,7 +115,13 @@ export function buildBatchSaveRequest(
           name: n.name.trim(),
           nodeTypeId: n.nodeTypeId,
           parentNodeId: n.parentNodeId ?? null,
-          attrs: serializeNodeAttrs(n.parsedAttrs),
+          // Auto-created узлы (org-tree sync): attrs защищены на бэкенде
+          // (AutoCreatedNodeGuard.requireProtectedScopesUnchanged → 403).
+          // Rename/move разрешены — attrs не отправляем (partial update).
+          ...(n.parsedAttrs.dpc?.autoCreated === true ||
+          n.parsedAttrs.typeProperties?.autoCreated === true
+            ? { attrs: null }
+            : { attrs: serializeNodeAttrs(n.parsedAttrs) }),
           baseUpdatedAt: n.updatedAt ?? null,
         })),
       delete: nodes.filter(n => n._isDeleted && !n._isNew).map(n => n.id),
@@ -207,7 +213,9 @@ export type DiagramNameVersionConflict = {
   suggestedVersion: string | null
 }
 
-export function parseDiagramNameVersionConflict(details: unknown): DiagramNameVersionConflict | null {
+export function parseDiagramNameVersionConflict(
+  details: unknown
+): DiagramNameVersionConflict | null {
   if (!details || typeof details !== 'object') return null
   const record = details as Record<string, unknown>
   const error = record.error
@@ -247,10 +255,7 @@ export async function batchSave(
   modelId: string,
   request: BatchSaveRequest
 ): Promise<ApiResult<BatchSaveResponse>> {
-  return apiPost<BatchSaveResponse>(
-    `/models/${encodeURIComponent(modelId)}/batch-save`,
-    request
-  )
+  return apiPost<BatchSaveResponse>(`/models/${encodeURIComponent(modelId)}/batch-save`, request)
 }
 
 export function hasBatchChanges(request: BatchSaveRequest): boolean {
@@ -311,7 +316,10 @@ export async function refreshBatchSavedEntityTimestamps(
   request: BatchSaveRequest,
   response: BatchSaveResponse
 ): Promise<void> {
-  const { nodeIds, linkIds, diagramIds } = collectEntityIdsForBatchTimestampRefresh(request, response)
+  const { nodeIds, linkIds, diagramIds } = collectEntityIdsForBatchTimestampRefresh(
+    request,
+    response
+  )
 
   const tasks: Promise<void>[] = []
 
@@ -370,22 +378,22 @@ export function applyBatchRemapping(
   // so we only clear dirty/new flags for those entities (not ones edited concurrently).
   const batchNodeIds = request
     ? new Set([
-        ...request.nodes.create.map((n) => n.tempId),
-        ...request.nodes.update.map((n) => n.id),
+        ...request.nodes.create.map(n => n.tempId),
+        ...request.nodes.update.map(n => n.id),
         ...request.nodes.delete,
       ])
     : null
   const batchLinkIds = request
     ? new Set([
-        ...request.links.create.map((l) => l.tempId),
-        ...request.links.update.map((l) => l.id),
+        ...request.links.create.map(l => l.tempId),
+        ...request.links.update.map(l => l.id),
         ...request.links.delete,
       ])
     : null
   const batchDiagramIds = request
     ? new Set([
-        ...request.diagrams.create.map((d) => d.tempId),
-        ...request.diagrams.update.map((d) => d.id),
+        ...request.diagrams.create.map(d => d.tempId),
+        ...request.diagrams.update.map(d => d.id),
         ...request.diagrams.delete,
       ])
     : null
@@ -395,7 +403,9 @@ export function applyBatchRemapping(
     currentId: string,
     previousId?: string
   ): boolean => {
-    return !batchIds || batchIds.has(currentId) || (previousId !== undefined && batchIds.has(previousId))
+    return (
+      !batchIds || batchIds.has(currentId) || (previousId !== undefined && batchIds.has(previousId))
+    )
   }
 
   for (const node of nodes) {

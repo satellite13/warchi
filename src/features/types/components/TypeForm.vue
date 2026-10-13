@@ -37,6 +37,7 @@ const emit = defineEmits<{
   removeProperty: [propertyId: string]
   updateName: [value: string]
   updateDefaultDirectoryPath: [value: string]
+  updateHideInTree: [value: boolean]
   updateIcon: [value: string]
   share: []
 }>()
@@ -138,6 +139,22 @@ watch(
             @input="emit('updateDefaultDirectoryPath', ($event.target as HTMLInputElement).value)"
           >
         </div>
+        <div v-if="selectedType.kind === 'node'" class="form-row">
+          <label class="form-label" :title="t('types.hideInTreeHint')">
+            {{ t("types.hideInTree") }}
+          </label>
+          <label class="hide-in-tree-toggle" :title="t('types.hideInTreeHint')">
+            <input
+              type="checkbox"
+              :checked="selectedType.parsedAttrs.hideInTree === true"
+              :disabled="!canEdit"
+              @change="
+                emit('updateHideInTree', ($event.target as HTMLInputElement).checked)
+              "
+            >
+            <span>{{ t("types.hideInTreeToggle") }}</span>
+          </label>
+        </div>
       </FormSection>
 
       <!-- Custom Properties -->
@@ -206,6 +223,23 @@ watch(
 .type-form {
   flex: 1;
   min-width: 0;
+}
+
+.hide-in-tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--base-text);
+  cursor: pointer;
+}
+
+.hide-in-tree-toggle input {
+  cursor: pointer;
+}
+
+.hide-in-tree-toggle input:disabled {
+  cursor: default;
 }
 
 .type-form__readonly-banner {

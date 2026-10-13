@@ -55,7 +55,7 @@ describe('applyDefaultCustomPropertyValues', () => {
         prop({ name: 'sys', defaultValue: 'x', system: true }),
         prop({ name: 'user', defaultValue: 'y' }),
       ],
-      { skipSystem: true },
+      { skipSystem: true }
     )
     expect(target).toEqual({ user: 'y' })
   })
@@ -67,7 +67,7 @@ describe('collectDefaultCustomPropertyValues', () => {
       collectDefaultCustomPropertyValues([
         prop({ name: 'sys', defaultValue: 'x', system: true }),
         prop({ name: 'user', defaultValue: 'y' }),
-      ]),
+      ])
     ).toEqual({ user: 'y' })
   })
 })

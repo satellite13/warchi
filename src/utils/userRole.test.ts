@@ -54,6 +54,16 @@ describe('normalizeUser', () => {
     expect(result.role).toBe('viewer')
   })
 
+  it('normalizes legacy roleOverride values', () => {
+    const normalized = normalizeUser({
+      id: 'u1',
+      email: 'legacy@example.com',
+      role: 'admin',
+      roleOverride: 'user' as unknown as User['roleOverride'],
+    } as User)
+    expect(normalized.roleOverride).toBe('reader')
+  })
+
   it('preserves featureGrants', () => {
     const result = normalizeUser(baseUser)
     expect(result.featureGrants).toEqual(['model.create'])

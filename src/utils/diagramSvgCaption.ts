@@ -26,8 +26,12 @@ export function appendDiagramCaption(svg: string, meta: DiagramCaptionMeta): str
   const viewBoxMatch = svg.match(/viewBox="0\s+0\s+([\d.]+)\s+([\d.]+)"/)
   const widthMatch = svg.match(/\bwidth="([\d.]+)"/)
   const heightMatch = svg.match(/\bheight="([\d.]+)"/)
-  const w = viewBoxMatch ? Number.parseFloat(viewBoxMatch[1] ?? '0') : Number.parseFloat(widthMatch?.[1] ?? '0')
-  const h = viewBoxMatch ? Number.parseFloat(viewBoxMatch[2] ?? '0') : Number.parseFloat(heightMatch?.[1] ?? '0')
+  const w = viewBoxMatch
+    ? Number.parseFloat(viewBoxMatch[1] ?? '0')
+    : Number.parseFloat(widthMatch?.[1] ?? '0')
+  const h = viewBoxMatch
+    ? Number.parseFloat(viewBoxMatch[2] ?? '0')
+    : Number.parseFloat(heightMatch?.[1] ?? '0')
   if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
     return svg
   }

@@ -3,7 +3,7 @@ import type { CustomProperty } from '@/domain/attrs/notationAttrs'
 export function coercePropertyValue(
   property: CustomProperty,
   raw: string,
-  checked?: boolean,
+  checked?: boolean
 ): unknown {
   if (property.type === 'boolean') return Boolean(checked)
   if (property.type === 'number') {

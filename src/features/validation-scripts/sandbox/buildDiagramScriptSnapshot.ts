@@ -1,7 +1,4 @@
-import type {
-  ScriptEditorDiagram,
-  ScriptEditorState,
-} from './editorStateContract'
+import type { ScriptEditorDiagram, ScriptEditorState } from './editorStateContract'
 import type {
   SnapshotDiagram,
   SnapshotLink,
@@ -21,7 +18,7 @@ function toPlainRecord(value: unknown): Record<string, unknown> | null {
 
 function toOpenSnapshotDiagram(diagram: ScriptEditorDiagram): SnapshotDiagram {
   const instances = diagram.parsedAttrs?.instances
-  const instanceNodes = (instances?.nodes ?? []).map((n) => ({
+  const instanceNodes = (instances?.nodes ?? []).map(n => ({
     id: n.id,
     modelNodeId: n.modelNodeId,
     x: n.x,
@@ -29,7 +26,7 @@ function toOpenSnapshotDiagram(diagram: ScriptEditorDiagram): SnapshotDiagram {
     ...(n.width != null ? { width: n.width } : {}),
     ...(n.height != null ? { height: n.height } : {}),
   }))
-  const instanceEdges = (instances?.edges ?? []).map((e) => ({
+  const instanceEdges = (instances?.edges ?? []).map(e => ({
     id: e.id,
     modelLinkId: e.modelLinkId,
     sourceInstanceId: e.sourceInstanceId,
@@ -38,14 +35,14 @@ function toOpenSnapshotDiagram(diagram: ScriptEditorDiagram): SnapshotDiagram {
   const nodeIds = [
     ...new Set(
       instanceNodes
-        .map((n) => n.modelNodeId)
+        .map(n => n.modelNodeId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0)
     ),
   ]
   const linkIds = [
     ...new Set(
       instanceEdges
-        .map((e) => e.modelLinkId)
+        .map(e => e.modelLinkId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0)
     ),
   ]
@@ -71,7 +68,7 @@ export function buildDiagramScriptSnapshot(input: {
   const openDiagram =
     openDiagramId == null
       ? undefined
-      : state.diagrams.find((d) => d.id === openDiagramId && !d._isDeleted)
+      : state.diagrams.find(d => d.id === openDiagramId && !d._isDeleted)
 
   if (!openDiagram) {
     const empty: ValidationSnapshot = {
@@ -98,8 +95,8 @@ export function buildDiagramScriptSnapshot(input: {
   const linkIdSet = new Set(diagram.linkIds)
 
   const nodes: SnapshotNode[] = state.nodes
-    .filter((n) => !n._isDeleted && nodeIdSet.has(n.id))
-    .map((n) => ({
+    .filter(n => !n._isDeleted && nodeIdSet.has(n.id))
+    .map(n => ({
       id: n.id,
       name: n.name,
       parentId: n.parentNodeId ?? null,
@@ -108,8 +105,8 @@ export function buildDiagramScriptSnapshot(input: {
     }))
 
   const links: SnapshotLink[] = state.links
-    .filter((l) => !l._isDeleted && linkIdSet.has(l.id))
-    .map((l) => ({
+    .filter(l => !l._isDeleted && linkIdSet.has(l.id))
+    .map(l => ({
       id: l.id,
       name: '',
       sourceId: l.sourceId,
@@ -119,28 +116,28 @@ export function buildDiagramScriptSnapshot(input: {
     }))
 
   const notations: SnapshotNotation[] = state.notations
-    .filter((n) => n.id === diagram.notationId)
-    .map((notation) => {
+    .filter(n => n.id === diagram.notationId)
+    .map(notation => {
       const components = state.components
-        .filter((c) => c.notationId === notation.id)
-        .map((c) => ({
+        .filter(c => c.notationId === notation.id)
+        .map(c => ({
           id: c.id,
           name: c.name,
           notationId: c.notationId,
           nodeTypeId: c.nodeTypeId,
         }))
       const relations = state.relations
-        .filter((r) => r.notationId === notation.id)
-        .map((r) => ({
+        .filter(r => r.notationId === notation.id)
+        .map(r => ({
           id: r.id,
           name: r.name,
           notationId: r.notationId,
           linkTypeId: r.linkTypeId,
         }))
-      const relationIds = new Set(relations.map((r) => r.id))
+      const relationIds = new Set(relations.map(r => r.id))
       const relationRules = state.relationRules
-        .filter((rr) => relationIds.has(rr.relationId))
-        .map((rr) => ({
+        .filter(rr => relationIds.has(rr.relationId))
+        .map(rr => ({
           id: rr.id,
           relationId: rr.relationId,
           fromComponentId: rr.fromComponentId,
@@ -156,8 +153,8 @@ export function buildDiagramScriptSnapshot(input: {
       }
     })
 
-  const nodeTypeIds = new Set(nodes.map((n) => n.nodeTypeId))
-  const linkTypeIds = new Set(links.map((l) => l.linkTypeId))
+  const nodeTypeIds = new Set(nodes.map(n => n.nodeTypeId))
+  const linkTypeIds = new Set(links.map(l => l.linkTypeId))
 
   const snapshot: ValidationSnapshot = {
     model: {
@@ -172,11 +169,11 @@ export function buildDiagramScriptSnapshot(input: {
     notations,
     types: {
       nodeTypes: state.nodeTypes
-        .filter((t) => nodeTypeIds.has(t.id))
-        .map((t) => ({ id: t.id, name: t.name, attrs: t.attrs ?? null })),
+        .filter(t => nodeTypeIds.has(t.id))
+        .map(t => ({ id: t.id, name: t.name, attrs: t.attrs ?? null })),
       linkTypes: state.linkTypes
-        .filter((t) => linkTypeIds.has(t.id))
-        .map((t) => ({ id: t.id, name: t.name, attrs: t.attrs ?? null })),
+        .filter(t => linkTypeIds.has(t.id))
+        .map(t => ({ id: t.id, name: t.name, attrs: t.attrs ?? null })),
     },
   }
 

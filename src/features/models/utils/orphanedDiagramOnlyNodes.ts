@@ -1,9 +1,7 @@
-export function canvasModelNodeIds(
-  instances: { nodes: Array<{ modelNodeId?: string }> },
-): string[] {
-  return instances.nodes
-    .map(node => node.modelNodeId)
-    .filter((id): id is string => Boolean(id))
+export function canvasModelNodeIds(instances: {
+  nodes: Array<{ modelNodeId?: string }>
+}): string[] {
+  return instances.nodes.map(node => node.modelNodeId).filter((id): id is string => Boolean(id))
 }
 
 export function orphanedUntypedNodeIds(input: {

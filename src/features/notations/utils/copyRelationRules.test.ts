@@ -4,7 +4,7 @@ import { copyRelationRulesFromComponent } from './copyRelationRules'
 
 const rule = (
   partial: Partial<EditorRelationRule> &
-    Pick<EditorRelationRule, 'id' | 'fromComponentId' | 'toComponentId' | 'allowedRelationIds'>,
+    Pick<EditorRelationRule, 'id' | 'fromComponentId' | 'toComponentId' | 'allowedRelationIds'>
 ): EditorRelationRule => ({ ...partial })
 
 describe('copyRelationRulesFromComponent', () => {
@@ -41,7 +41,7 @@ describe('copyRelationRulesFromComponent', () => {
         toComponentId: 'B',
         allowedRelationIds: ['r1', 'r2'],
         _isNew: true,
-      }),
+      })
     )
   })
 
@@ -60,8 +60,18 @@ describe('copyRelationRulesFromComponent', () => {
 
   it('merge unions relation ids on existing target rule', () => {
     const rules: EditorRelationRule[] = [
-      rule({ id: 'src', fromComponentId: 'A', toComponentId: 'C', allowedRelationIds: ['r2', 'r3'] }),
-      rule({ id: 'tgt', fromComponentId: 'B', toComponentId: 'C', allowedRelationIds: ['r1', 'r2'] }),
+      rule({
+        id: 'src',
+        fromComponentId: 'A',
+        toComponentId: 'C',
+        allowedRelationIds: ['r2', 'r3'],
+      }),
+      rule({
+        id: 'tgt',
+        fromComponentId: 'B',
+        toComponentId: 'C',
+        allowedRelationIds: ['r1', 'r2'],
+      }),
     ]
     copyRelationRulesFromComponent(rules, 'A', 'B', 'merge', () => 'new-1')
     const merged = rules.find(r => r.id === 'tgt')

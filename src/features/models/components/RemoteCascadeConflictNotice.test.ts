@@ -10,8 +10,7 @@ const i18n = createI18n({
     en: {
       models: {
         remoteCascadeConflictTitle: 'Remote node deletion conflicts with {count} local link(s).',
-        remoteCascadeConflictHelp:
-          'Discard those links or reload the model, then retry saving.',
+        remoteCascadeConflictHelp: 'Discard those links or reload the model, then retry saving.',
         remoteCascadeDiscard: 'Discard affected links',
         remoteCascadeReload: 'Reload model',
       },

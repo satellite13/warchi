@@ -6,7 +6,11 @@ import { toEditorDiagram, toEditorLink, toEditorNode } from './modelEditorMapper
 
 const FETCH_CONCURRENCY = 8
 
-async function mapPool<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+async function mapPool<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
   if (items.length === 0) return
   let index = 0
   const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
@@ -67,8 +71,12 @@ export async function discardUnsavedModelChanges(options: {
     }
   }
 
-  const nodesToFetch = state.nodes.filter(node => !node._isNew && node._isDirty).map(node => node.id)
-  const linksToFetch = state.links.filter(link => !link._isNew && link._isDirty).map(link => link.id)
+  const nodesToFetch = state.nodes
+    .filter(node => !node._isNew && node._isDirty)
+    .map(node => node.id)
+  const linksToFetch = state.links
+    .filter(link => !link._isNew && link._isDirty)
+    .map(link => link.id)
   const diagramsToFetch = state.diagrams
     .filter(diagram => !diagram._isNew && diagram._isDirty)
     .map(diagram => diagram.id)
@@ -100,7 +108,10 @@ export async function discardUnsavedModelChanges(options: {
       failures.push(`diagram ${id}: ${result.error.message}`)
       return
     }
-    restoredDiagrams.set(id, stripEditorFlags(toEditorDiagram(result.data, { attrsPending: false })))
+    restoredDiagrams.set(
+      id,
+      stripEditorFlags(toEditorDiagram(result.data, { attrsPending: false }))
+    )
   })
 
   if (failures.length > 0) {

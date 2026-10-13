@@ -3,11 +3,7 @@ import { applyDefaultCustomPropertyValuesFromAttrs } from '@/domain/attrs/custom
 import { applyDefaultsToEditorNode } from '../utils/syncDefaultsOnLoad'
 import { parseEntityAttrs } from '@/domain/attrs/notationAttrs'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
-import {
-  createId,
-  parseNodeAttrs,
-  resolveCompatibleNotationComponents,
-} from '../modelAttrs'
+import { createId, parseNodeAttrs, resolveCompatibleNotationComponents } from '../modelAttrs'
 import type { DiagramNodeInstance } from '../modelAttrs'
 import type { EditorDiagram, EditorNode, ModelEditorState, TreeParentScope } from '../types'
 import {
@@ -65,9 +61,7 @@ export type UseModelDiagramInstancesOptions = {
   markDiagramDirty: (diagramId: string) => void
   onDiagramInstancesChanged?: () => void
   markNodeDirty: (nodeId: string) => void
-  reconcileMaterializedRows?: (
-    affectedScopes?: readonly TreeParentScope[] | 'all'
-  ) => void
+  reconcileMaterializedRows?: (affectedScopes?: readonly TreeParentScope[] | 'all') => void
   setUiError: (message: string) => void
   t: (key: string) => string
 }
@@ -85,6 +79,12 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
   const bindNodeComponent = (node: EditorNode, componentId: string): void => {
     const notationId = options.activeNotationId.value
     if (!notationId) return
+    // Для auto-created узлов (org-tree sync) attrs защищены на бэкенде:
+    // любое изменение notationComponents/componentProperties даёт 403
+    // "Properties of auto-created nodes are managed by the sync".
+    // Привязка таких узлов — забота синхронизации; инстанс на канвасе может
+    // использовать компонент независимо (attrs.notationComponentId инстанса).
+    if (isAutoCreatedNode(node)) return
     node.parsedAttrs.notationComponents[notationId] = { componentId }
     if (!node.parsedAttrs.componentProperties[notationId]) {
       node.parsedAttrs.componentProperties[notationId] = {}
@@ -98,11 +98,16 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     if (component) {
       applyDefaultCustomPropertyValuesFromAttrs(
         node.parsedAttrs.componentProperties[notationId][componentId]!,
-        component.attrs,
+        component.attrs
       )
     }
     options.markNodeDirty(node.id)
   }
+
+  /** Auto-created узел (org-tree sync): attrs защищены от ручных изменений на бэкенде. */
+  const isAutoCreatedNode = (node: EditorNode): boolean =>
+    node.parsedAttrs.dpc?.autoCreated === true ||
+    node.parsedAttrs.typeProperties?.autoCreated === true
 
   const ensureNodeDefaultBinding = (node: EditorNode, componentId: string): void => {
     const notationId = options.activeNotationId.value
@@ -114,7 +119,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
   const getComponentDiagramStyle = (componentId: string) => {
     const notationId = options.activeNotationId.value
     const component = options.state.value.components.find(
-      item => item.id === componentId && (!notationId || item.notationId === notationId),
+      item => item.id === componentId && (!notationId || item.notationId === notationId)
     )
     return component ? parseEntityAttrs(component.attrs ?? null).diagramStyle : undefined
   }
@@ -126,7 +131,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     const instance = diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
     if (!instance) return
     const node = options.state.value.nodes.find(
-      item => item.id === instance.modelNodeId && !item._isDeleted,
+      item => item.id === instance.modelNodeId && !item._isDeleted
     )
     if (!node) return
 
@@ -156,7 +161,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     node: EditorNode,
     x: number,
     y: number,
-    componentId: string,
+    componentId: string
   ): void => {
     const diagram = options.activeDiagram.value
     if (!diagram) return
@@ -184,7 +189,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       },
       undo: () => {
         diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-          item => item.id !== nodeInstance.id,
+          item => item.id !== nodeInstance.id
         )
         options.markDiagramDirty(diagram.id)
         options.onDiagramInstancesChanged?.()
@@ -224,7 +229,7 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
     modelNodeId: string,
     x: number,
     y: number,
-    placement?: ExistingNodeDiagramPlacement,
+    placement?: ExistingNodeDiagramPlacement
   ): void => {
     const diagram = options.activeDiagram.value
     if (!diagram) return
@@ -258,23 +263,25 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       }
       options.executeDiagramHistoryCommand({
         execute: () => {
-          if (!diagram.parsedAttrs.instances.nodes.some(item => item.id === directoryNoteInstance.id)) {
+          if (
+            !diagram.parsedAttrs.instances.nodes.some(item => item.id === directoryNoteInstance.id)
+          ) {
             diagram.parsedAttrs.instances.nodes.push(deepClone(directoryNoteInstance))
           }
           options.markDiagramDirty(diagram.id)
-        options.onDiagramInstancesChanged?.()
+          options.onDiagramInstancesChanged?.()
         },
         undo: () => {
           diagram.parsedAttrs.instances.nodes = diagram.parsedAttrs.instances.nodes.filter(
-            item => item.id !== directoryNoteInstance.id,
+            item => item.id !== directoryNoteInstance.id
           )
           diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
             edge =>
               edge.sourceInstanceId !== directoryNoteInstance.id &&
-              edge.targetInstanceId !== directoryNoteInstance.id,
+              edge.targetInstanceId !== directoryNoteInstance.id
           )
           options.markDiagramDirty(diagram.id)
-        options.onDiagramInstancesChanged?.()
+          options.onDiagramInstancesChanged?.()
         },
       })
       return
@@ -331,12 +338,14 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
       const width = typeof diagramStyle?.width === 'number' ? diagramStyle.width : 160
       const height = typeof diagramStyle?.height === 'number' ? diagramStyle.height : 56
       const snap = (value: number): number =>
-        pending.snapGridSize ? Math.round(value / pending.snapGridSize) * pending.snapGridSize : value
+        pending.snapGridSize
+          ? Math.round(value / pending.snapGridSize) * pending.snapGridSize
+          : value
       placeExistingNodeInstance(
         node,
         snap(pending.centerX - width / 2),
         snap(pending.centerY - height / 2),
-        componentId,
+        componentId
       )
     } else if (node) {
       ensureNodeDefaultBinding(node, componentId)
@@ -460,9 +469,12 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
           item => item.id !== newInstance.id
         )
         diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          edge => edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
+          edge =>
+            edge.sourceInstanceId !== newInstance.id && edge.targetInstanceId !== newInstance.id
         )
-        options.selectedModelNodeIds.value = options.selectedModelNodeIds.value.filter(id => id !== nodeId)
+        options.selectedModelNodeIds.value = options.selectedModelNodeIds.value.filter(
+          id => id !== nodeId
+        )
         if (
           options.selectedNodeId.value === nodeId ||
           createdDirectoryIds.includes(options.selectedNodeId.value ?? '')
@@ -515,7 +527,8 @@ export function useModelDiagramInstances(options: UseModelDiagramInstancesOption
           item => item.id !== noteInstance.id
         )
         diagram.parsedAttrs.instances.edges = diagram.parsedAttrs.instances.edges.filter(
-          edge => edge.sourceInstanceId !== noteInstance.id && edge.targetInstanceId !== noteInstance.id
+          edge =>
+            edge.sourceInstanceId !== noteInstance.id && edge.targetInstanceId !== noteInstance.id
         )
         options.selectedModelNodeIds.value = options.selectedModelNodeIds.value.filter(
           id => id !== modelNodeId

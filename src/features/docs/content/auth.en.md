@@ -30,6 +30,17 @@ Access to **specific** models, notations, and other objects is still decided by 
 
 Admin capabilities (users, deleted resources, diagram locks, grant matrix) require `ADMIN_PANEL:VIEW` — typically the `admin` role. See [Administration](/docs/admin).
 
+### Temporary role switch
+
+An administrator can preview the interface as another role: the button next to the role badge in the header lists the roles (`architect`, `editor`, `reader`, `viewer`); after picking one, the session acts as that role — UI, feature grants and server-side permissions all follow it. The “Back” button next to the (highlighted as temporary) badge returns to the real role.
+
+Details:
+
+- the switch affects only the current cookie session and survives token refresh (`/auth/refresh`); a new login or logout resets it;
+- the role in the database is never changed — other admin sessions are not affected;
+- switching is only available from the `admin` role and only downwards (switching to `admin` is not allowed);
+- API keys and MCP sessions do not support role switching.
+
 ## Feature grants
 
 **Feature grants** are UI capability keys (`model.create`, `notation.nav`, …) returned in the user profile (`/auth/me` → `featureGrants`).

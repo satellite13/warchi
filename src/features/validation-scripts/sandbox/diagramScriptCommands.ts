@@ -4,7 +4,11 @@ export type DiagramScriptCommand =
   | { type: 'addEdge'; linkId: string }
   | { type: 'removeInstance'; instanceId: string }
   | { type: 'removeEdge'; edgeInstanceId: string }
-  | { type: 'align'; instanceIds: string[]; mode: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom' }
+  | {
+      type: 'align'
+      instanceIds: string[]
+      mode: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'
+    }
   | { type: 'distribute'; instanceIds: string[]; axis: 'horizontal' | 'vertical' }
   | { type: 'stack'; instanceIds: string[]; mode: 'vertical' | 'overlap' }
   | { type: 'setEdgeStyle'; edgeInstanceId?: string; linkId?: string; strokeColor: string }
@@ -18,9 +22,7 @@ export type ValidateCommandQueueInput = {
   commands: DiagramScriptCommand[]
 }
 
-export type ValidateCommandQueueResult =
-  | { ok: true }
-  | { ok: false; error: string }
+export type ValidateCommandQueueResult = { ok: true } | { ok: false; error: string }
 
 const HEX_STROKE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/
 
@@ -57,7 +59,10 @@ export function validateCommandQueue(input: ValidateCommandQueueInput): Validate
           return { ok: false, error: `addEdge: unknown link ${command.linkId}` }
         }
         if (!modelNodeIds.has(ends.sourceId) || !modelNodeIds.has(ends.targetId)) {
-          return { ok: false, error: `addEdge: endpoints of ${command.linkId} are not on the diagram` }
+          return {
+            ok: false,
+            error: `addEdge: endpoints of ${command.linkId} are not on the diagram`,
+          }
         }
         break
       }
@@ -96,7 +101,10 @@ export function validateCommandQueue(input: ValidateCommandQueueInput): Validate
       }
       case 'setEdgeStyle': {
         if (!HEX_STROKE.test(command.strokeColor ?? '')) {
-          return { ok: false, error: 'setEdgeStyle: strokeColor must be #rgb, #rrggbb or #rrggbbaa' }
+          return {
+            ok: false,
+            error: 'setEdgeStyle: strokeColor must be #rgb, #rrggbb or #rrggbbaa',
+          }
         }
         if (!command.edgeInstanceId && !command.linkId) {
           return { ok: false, error: 'setEdgeStyle: edgeInstanceId or linkId required' }

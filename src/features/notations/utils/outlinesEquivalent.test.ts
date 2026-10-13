@@ -2,10 +2,34 @@ import { describe, it, expect } from 'vitest'
 import { outlinesEquivalent } from './outlinesEquivalent'
 
 const rect = JSON.stringify([
-  { type: 'line', points: [[0, 0], [1, 0]] },
-  { type: 'line', points: [[1, 0], [1, 1]] },
-  { type: 'line', points: [[1, 1], [0, 1]] },
-  { type: 'line', points: [[0, 1], [0, 0]] },
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [1, 0],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 0],
+      [1, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 1],
+      [0, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [0, 1],
+      [0, 0],
+    ],
+  },
 ])
 
 describe('outlinesEquivalent', () => {
@@ -19,7 +43,15 @@ describe('outlinesEquivalent', () => {
   })
 
   it('returns false for different geometry', () => {
-    const other = JSON.stringify([{ type: 'line', points: [[0, 0], [2, 0]] }])
+    const other = JSON.stringify([
+      {
+        type: 'line',
+        points: [
+          [0, 0],
+          [2, 0],
+        ],
+      },
+    ])
     expect(outlinesEquivalent(rect, other)).toBe(false)
   })
 

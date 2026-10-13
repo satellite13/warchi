@@ -28,10 +28,9 @@ describe('boundaryAttach helpers', () => {
 
   it('returns null when every host is farther than the snap distance', () => {
     expect(
-      pickNearestOutlineHost(
-        { x: 0, y: 0 },
-        [{ id: 'host', point: { x: BOUNDARY_SNAP_DISTANCE + 1, y: 0 }, param: 0 }],
-      ),
+      pickNearestOutlineHost({ x: 0, y: 0 }, [
+        { id: 'host', point: { x: BOUNDARY_SNAP_DISTANCE + 1, y: 0 }, param: 0 },
+      ])
     ).toBeNull()
   })
 
@@ -41,21 +40,21 @@ describe('boundaryAttach helpers', () => {
         sourceInstanceId: 'host',
         targetInstanceId: 'guest',
         attach: { hostInstanceId: 'host', param: 0.1 },
-      }),
+      })
     ).toBe(true)
     expect(
       shouldHideBoundaryEdge({
         sourceInstanceId: 'host',
         targetInstanceId: 'guest',
         attach: { hostInstanceId: 'other', param: 0.1 },
-      }),
+      })
     ).toBe(false)
     expect(
       shouldHideBoundaryEdge({
         sourceInstanceId: 'host',
         targetInstanceId: 'guest',
         attach: undefined,
-      }),
+      })
     ).toBe(false)
   })
 
@@ -74,7 +73,7 @@ describe('boundaryAttach helpers', () => {
           ],
           edges: [],
         },
-      }),
+      })
     )
     expect(parsed.instances.nodes[0]?.attrs?.boundaryAttach).toEqual({
       hostInstanceId: 'host',
@@ -115,7 +114,7 @@ describe('boundaryAttach helpers', () => {
         linkIds: new Set(['keep']),
         guestInstanceId: 'inst-guest',
         newHostInstanceId: 'inst-b',
-      }),
+      })
     ).toBe(true)
     expect(edges[0]).toMatchObject({
       sourceInstanceId: 'inst-b',
@@ -138,7 +137,7 @@ describe('boundaryAttach helpers', () => {
           ],
           edges: [],
         },
-      }),
+      })
     )
     expect(parsed.instances.nodes[0]?.attrs?.boundaryAttach).toBeUndefined()
   })

@@ -5,17 +5,25 @@ describe('localStorage utils', () => {
 
   const mockLocalStorage = {
     getItem: vi.fn((key: string) => store.get(key) ?? null),
-    setItem: vi.fn((key: string, value: string) => { store.set(key, value) }),
-    removeItem: vi.fn((key: string) => { store.delete(key) }),
+    setItem: vi.fn((key: string, value: string) => {
+      store.set(key, value)
+    }),
+    removeItem: vi.fn((key: string) => {
+      store.delete(key)
+    }),
     clear: vi.fn(() => store.clear()),
-    get length() { return store.size },
+    get length() {
+      return store.size
+    },
     key: vi.fn(() => null),
   }
 
   beforeEach(() => {
     store.clear()
     mockLocalStorage.getItem.mockImplementation((key: string) => store.get(key) ?? null)
-    mockLocalStorage.setItem.mockImplementation((key: string, value: string) => { store.set(key, value) })
+    mockLocalStorage.setItem.mockImplementation((key: string, value: string) => {
+      store.set(key, value)
+    })
     vi.stubGlobal('window', { localStorage: mockLocalStorage })
   })
 

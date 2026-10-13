@@ -265,6 +265,11 @@ export function useOefImport(options: {
           ),
         ])
       )
+      const nodeTypeHideInTreeById = Object.fromEntries(
+        options.state.value.nodeTypes
+          .filter(nodeType => parseTypeAttrs(nodeType.attrs ?? null).hideInTree === true)
+          .map(nodeType => [nodeType.id, true])
+      )
       const componentPropertyDefaultsById = Object.fromEntries(
         options.state.value.components.map(component => [
           component.id,
@@ -315,6 +320,7 @@ export function useOefImport(options: {
         directoryNodeTypeId,
         parentNodeId: options.treeRootNodeId.value ?? null,
         nodeTypePropertyDefaultsById,
+        nodeTypeHideInTreeById,
         componentPropertyDefaultsById,
         relationPropertyDefaultsById,
         nodeTypeCustomPropertiesById,

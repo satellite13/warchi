@@ -1,5 +1,8 @@
 import type { ApiResult } from '@/api/apiClient'
-import type { BatchSaveRequest, BatchSaveResponse } from '@/features/models/composables/useModelBatchSave'
+import type {
+  BatchSaveRequest,
+  BatchSaveResponse,
+} from '@/features/models/composables/useModelBatchSave'
 
 export const OEF_NODE_CHUNK_SIZE = 800
 export const OEF_LINK_CHUNK_SIZE = 800

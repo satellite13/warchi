@@ -172,7 +172,9 @@ describe('ensureNotationImportCatalog', () => {
   it('writes the catalog onto the current state ref after a mid-await replacement', async () => {
     const state = ref(emptyState())
     const ensureNotationRelationsAndRules = vi.fn(async () => undefined)
-    let resolveComponents!: (value: Awaited<ReturnType<typeof fetchAllComponentsByNotationId>>) => void
+    let resolveComponents!: (
+      value: Awaited<ReturnType<typeof fetchAllComponentsByNotationId>>
+    ) => void
     vi.mocked(fetchAllComponentsByNotationId).mockReturnValue(
       new Promise(resolve => {
         resolveComponents = resolve

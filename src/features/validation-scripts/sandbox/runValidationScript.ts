@@ -80,7 +80,7 @@ function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRun
       ? crypto.randomUUID()
       : `run-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const iframe = document.createElement('iframe')
     iframe.setAttribute('sandbox', 'allow-scripts')
     iframe.setAttribute('title', 'validation-script-sandbox')
@@ -136,10 +136,7 @@ function runInIframe(options: RunValidationScriptOptions): Promise<ValidationRun
     const onMessage = (event: MessageEvent) => {
       if (event.source !== iframe.contentWindow) return
       const data = event.data as
-        | SandboxReadyMessage
-        | SandboxDoneMessage
-        | SandboxQueryMessage
-        | null
+        SandboxReadyMessage | SandboxDoneMessage | SandboxQueryMessage | null
       if (!data || typeof data !== 'object') return
 
       if (data.type === 'ready') {

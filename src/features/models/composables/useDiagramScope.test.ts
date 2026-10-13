@@ -171,7 +171,9 @@ describe('useDiagramScope', () => {
     const realLinkId = '2eee41d5-a848-93ed-d5c5-e621a92ad985'
     const state = createEmptyModelEditorState()
     state.modelId = 'model-1'
-    state.diagrams = [toEditorDiagram(diagramResponse('diagram-1', [diagramNodeId], [noteEdgeId, realLinkId]))]
+    state.diagrams = [
+      toEditorDiagram(diagramResponse('diagram-1', [diagramNodeId], [noteEdgeId, realLinkId])),
+    ]
     vi.mocked(apiFetch).mockImplementation(async (path, options) => {
       if (path.endsWith('/nodes:resolve')) {
         return ok({ nodes: [nodeResponse(diagramNodeId)], missingIds: [] })
@@ -384,7 +386,8 @@ describe('useDiagramScope', () => {
     const pendingDiagram = deferred<ReturnType<typeof ok>>()
     vi.mocked(apiFetch).mockImplementation(async path => {
       if (path === '/diagrams/diagram-1') return pendingDiagram.promise
-      if (path.endsWith('/nodes:resolve')) return ok({ nodes: [nodeResponse('late')], missingIds: [] })
+      if (path.endsWith('/nodes:resolve'))
+        return ok({ nodes: [nodeResponse('late')], missingIds: [] })
       return ok({ links: [], missingLinkIds: [] })
     })
     const mounted = mountScope(state)
@@ -535,6 +538,73 @@ describe('useDiagramScope', () => {
       expect(mounted.diagramScope.diagramScopeReady.value).toBe(true)
     })
 
+    mounted.vueScope.stop()
+  })
+
+  it('keeps the scope ready while a same-scope refresh is in flight', async () => {
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [toEditorDiagram(diagramResponse('diagram-1', ['n-1']))]
+    let nodeResolveCall = 0
+    const secondResolve = deferred<ReturnType<typeof ok>>()
+    vi.mocked(apiFetch).mockImplementation(async path => {
+      if (path.endsWith('/nodes:resolve')) {
+        nodeResolveCall += 1
+        if (nodeResolveCall === 1) return ok({ nodes: [nodeResponse('n-1')], missingIds: [] })
+        return secondResolve.promise
+      }
+      return ok({ links: [], missingLinkIds: [] })
+    })
+    const mounted = mountScope(state)
+
+    await mounted.diagramScope.open('diagram-1')
+    expect(mounted.diagramScope.diagramScopeReady.value).toBe(true)
+
+    const refresh = mounted.diagramScope.open('diagram-1')
+    await vi.waitFor(() => expect(nodeResolveCall).toBe(2))
+
+    // A live-sync refresh of the already-open scope must not unmount the canvas:
+    // readiness stays up and data merges in place when the fetch settles.
+    expect(mounted.diagramScope.diagramScopeReady.value).toBe(true)
+    expect(mounted.diagramScope.readyDiagramId.value).toBeNull()
+
+    secondResolve.resolve(ok({ nodes: [nodeResponse('n-1')], missingIds: [] }))
+    await refresh
+
+    expect(mounted.diagramScope.diagramScopeReady.value).toBe(true)
+    expect(mounted.diagramScope.readyDiagramId.value).toBe('diagram-1')
+    expect(mounted.state.value.nodes.map(node => node.id)).toEqual(['n-1'])
+    mounted.vueScope.stop()
+  })
+
+  it('drops readiness when a same-scope refresh fails', async () => {
+    const state = createEmptyModelEditorState()
+    state.modelId = 'model-1'
+    state.diagrams = [toEditorDiagram(diagramResponse('diagram-1', ['n-1']))]
+    let nodeResolveCall = 0
+    vi.mocked(apiFetch).mockImplementation(async path => {
+      if (path.endsWith('/nodes:resolve')) {
+        nodeResolveCall += 1
+        if (nodeResolveCall === 1) return ok({ nodes: [nodeResponse('n-1')], missingIds: [] })
+        return {
+          success: false as const,
+          error: { status: 500, message: 'resolve failed', cancelled: false },
+        }
+      }
+      return ok({ links: [], missingLinkIds: [] })
+    })
+    const mounted = mountScope(state)
+
+    await mounted.diagramScope.open('diagram-1')
+    expect(mounted.diagramScope.diagramScopeReady.value).toBe(true)
+
+    await mounted.diagramScope.open('diagram-1')
+
+    expect(mounted.diagramScope.diagramScopeReady.value).toBe(false)
+    expect(mounted.diagramScope.error.value).toEqual({
+      status: 500,
+      message: 'resolve failed',
+    })
     mounted.vueScope.stop()
   })
 })

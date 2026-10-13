@@ -5,9 +5,7 @@ import type { DiagramEdgeInstance, DiagramNodeInstance } from '../../modelAttrs'
 type Translate = (key: string) => string
 
 export type DiagramContextMenuLookups = {
-  findNodeEntity: (
-    papNodeId: string
-  ) => { modelNodeId: string; instanceId: string } | undefined
+  findNodeEntity: (papNodeId: string) => { modelNodeId: string; instanceId: string } | undefined
   findEdgeEntity: (papEdgeId: string) => { modelLinkId: string; edgeId: string } | undefined
   findNodeInstance: (instanceId: string) => DiagramNodeInstance | undefined
   findEdgeInstance: (edgeId: string) => DiagramEdgeInstance | undefined

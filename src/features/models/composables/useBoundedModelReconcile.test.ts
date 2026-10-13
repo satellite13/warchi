@@ -64,10 +64,7 @@ function harness(overrides?: {
   diagrams?: EditorDiagram[]
   scopes?: TreeParentScope[]
   fetchers?: Partial<BoundedModelReconcileFetchers>
-  refreshVisibleChildrenScope?: (
-    scope: TreeParentScope,
-    signal: AbortSignal
-  ) => Promise<void>
+  refreshVisibleChildrenScope?: (scope: TreeParentScope, signal: AbortSignal) => Promise<void>
   prepareVisibleChildrenScopeRefresh?: (
     scope: TreeParentScope,
     signal: AbortSignal

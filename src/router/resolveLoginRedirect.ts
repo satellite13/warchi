@@ -1,9 +1,7 @@
 import { isSafeSiteReturnUrl } from '../utils/safeRedirect'
 
 export type LoginRedirectDecision =
-  | { type: 'stay' }
-  | { type: 'home' }
-  | { type: 'return'; url: string }
+  { type: 'stay' } | { type: 'home' } | { type: 'return'; url: string }
 
 /**
  * When the login route thinks the user is already signed in, verify the session

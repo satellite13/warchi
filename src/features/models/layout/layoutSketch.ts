@@ -1,8 +1,5 @@
 import type { DiagramAttrs } from '../modelAttrs'
-import {
-  DEFAULT_LAYOUT_NODE_HEIGHT,
-  DEFAULT_LAYOUT_NODE_WIDTH,
-} from './diagramLayoutGraph'
+import { DEFAULT_LAYOUT_NODE_HEIGHT, DEFAULT_LAYOUT_NODE_WIDTH } from './diagramLayoutGraph'
 
 export type SketchNode = { id: string; x: number; y: number; width: number; height: number }
 export type LayoutSketchModel = {
@@ -11,10 +8,7 @@ export type LayoutSketchModel = {
 }
 
 /** Node-only preview sketch — edges omit because papirus orthogonal routes ≠ center lines. */
-export function buildLayoutSketchModel(
-  diagram: DiagramAttrs,
-  padding = 24
-): LayoutSketchModel {
+export function buildLayoutSketchModel(diagram: DiagramAttrs, padding = 24): LayoutSketchModel {
   const nodes: SketchNode[] = diagram.instances.nodes.map(n => ({
     id: n.id,
     x: n.x,

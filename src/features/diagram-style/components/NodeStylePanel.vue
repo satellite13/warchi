@@ -480,28 +480,6 @@ const catalogShapeOptions = computed(() =>
   catalogShapes.value.map((s) => ({ id: s.id, label: s.name }))
 )
 
-watch(
-  catalogShapes,
-  (shapes) => {
-    rememberNodeShapeAttrs(shapes)
-    if (
-      customShapeIdRef.value &&
-      !customScaleSliceRef.value &&
-      (nodeShape.value === "custom" ||
-        (nodeShape.value === "composite" && compositeShapeType.value === "custom"))
-    ) {
-      const resolved = resolveCustomScaleSlice({
-        customShapeId: customShapeIdRef.value,
-      })
-      if (resolved) {
-        customScaleSliceRef.value = resolved
-        emitNodeStyle()
-      }
-    }
-  },
-  { immediate: true, deep: true }
-)
-
 const EDGE_TYPE_OPTIONS = computed(() => ([
   { v: "straight", l: t("diagram.linkTypeStraight"), icon: "remove" },
   { v: "polyline", l: t("diagram.linkTypePolyline"), icon: "timeline" },
@@ -564,6 +542,28 @@ const {
   compositeShapeType, compositeAutoSize, compositeMinWidth, compositeMinHeight,
   loadNodeProps: loadNodePropsFromComposable, buildNodeStyle,
 } = useNodeStyleState();
+
+watch(
+  catalogShapes,
+  (shapes) => {
+    rememberNodeShapeAttrs(shapes)
+    if (
+      customShapeIdRef.value &&
+      !customScaleSliceRef.value &&
+      (nodeShape.value === "custom" ||
+        (nodeShape.value === "composite" && compositeShapeType.value === "custom"))
+    ) {
+      const resolved = resolveCustomScaleSlice({
+        customShapeId: customShapeIdRef.value,
+      })
+      if (resolved) {
+        customScaleSliceRef.value = resolved
+        emitNodeStyle()
+      }
+    }
+  },
+  { immediate: true, deep: true }
+);
 const iconSelectValue = computed(() => matchIconOptionId(iconName.value, iconSelectOptions.value));
 const componentPropsForA5 = computed(() => props.componentProperties ?? []);
 const nodeTypePropsForA5 = computed(() => props.nodeTypeProperties ?? []);

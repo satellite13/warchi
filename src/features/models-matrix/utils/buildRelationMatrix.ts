@@ -35,7 +35,9 @@ function buildRelationOptions(
   if (mode === 'notation') {
     const notationId = input.filters.notationId!
     const linkTypeIds = new Set(
-      input.relations.filter(relation => relation.notationId === notationId).map(relation => relation.linkTypeId)
+      input.relations
+        .filter(relation => relation.notationId === notationId)
+        .map(relation => relation.linkTypeId)
     )
     return sortOptions(
       input.linkTypes
@@ -59,7 +61,9 @@ function buildRelationOptions(
 
 function notationLinkTypeIds(input: BuildRelationMatrixInput, notationId: string): Set<string> {
   return new Set(
-    input.relations.filter(relation => relation.notationId === notationId).map(relation => relation.linkTypeId)
+    input.relations
+      .filter(relation => relation.notationId === notationId)
+      .map(relation => relation.linkTypeId)
   )
 }
 
@@ -82,7 +86,8 @@ function pushCellItem(
 ): void {
   cell.total += item.relationCount
   cell.items.push(item)
-  cell.relationCounts[item.relationId] = (cell.relationCounts[item.relationId] ?? 0) + item.relationCount
+  cell.relationCounts[item.relationId] =
+    (cell.relationCounts[item.relationId] ?? 0) + item.relationCount
   cell.allowedByNotationRules = cell.allowedByNotationRules || allowedByNotationRules
   if (!cell.relationIds.includes(item.relationId)) {
     cell.relationIds.push(item.relationId)
@@ -195,11 +200,17 @@ export function buildRelationMatrix(input: BuildRelationMatrixInput): RelationMa
         return aName.localeCompare(bName, undefined, { sensitivity: 'base' })
       }),
       items: [...cell.items].sort((a, b) => {
-        const sourceCmp = a.sourceNodeName.localeCompare(b.sourceNodeName, undefined, { sensitivity: 'base' })
+        const sourceCmp = a.sourceNodeName.localeCompare(b.sourceNodeName, undefined, {
+          sensitivity: 'base',
+        })
         if (sourceCmp !== 0) return sourceCmp
-        const targetCmp = a.targetNodeName.localeCompare(b.targetNodeName, undefined, { sensitivity: 'base' })
+        const targetCmp = a.targetNodeName.localeCompare(b.targetNodeName, undefined, {
+          sensitivity: 'base',
+        })
         if (targetCmp !== 0) return targetCmp
-        const relationCmp = a.relationName.localeCompare(b.relationName, undefined, { sensitivity: 'base' })
+        const relationCmp = a.relationName.localeCompare(b.relationName, undefined, {
+          sensitivity: 'base',
+        })
         if (relationCmp !== 0) return relationCmp
         return a.linkId.localeCompare(b.linkId)
       }),

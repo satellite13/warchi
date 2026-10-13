@@ -13,14 +13,10 @@ export function parseNotationAttrs(raw: string | null | undefined): JsonRecord {
   }
 }
 
-export function mergeNotationAttrs(
-  raw: string | null | undefined,
-  patch: JsonRecord
-): string {
+export function mergeNotationAttrs(raw: string | null | undefined, patch: JsonRecord): string {
   const base = parseNotationAttrs(raw)
   return JSON.stringify({
     ...base,
     ...patch,
   })
 }
-

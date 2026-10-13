@@ -17,16 +17,10 @@ export type DiagramNodeLabelTemplateContext = {
 export function resolveDiagramNodeLabelTemplate(
   template: string,
   nodeName: string,
-  ctx: DiagramNodeLabelTemplateContext,
+  ctx: DiagramNodeLabelTemplateContext
 ): string {
-  return resolveLabelTemplate(
-    template,
-    nodeName,
-    ctx.componentProperties,
-    ctx.typeProperties,
-    {
-      typeValues: ctx.typeValues,
-      componentValues: ctx.componentValues,
-    },
-  )
+  return resolveLabelTemplate(template, nodeName, ctx.componentProperties, ctx.typeProperties, {
+    typeValues: ctx.typeValues,
+    componentValues: ctx.componentValues,
+  })
 }

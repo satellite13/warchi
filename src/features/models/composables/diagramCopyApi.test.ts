@@ -66,10 +66,11 @@ function createPreview(
 describe('resolveDiagramCopyEntityAction', () => {
   it('prefers an explicit override', () => {
     expect(
-      resolveDiagramCopyEntityAction(
-        createEntityPreview({ autoMatchTargetId: 'target-1' }),
-        { sourceId: 'source-1', action: 'SKIP', kind: 'NODE' }
-      )
+      resolveDiagramCopyEntityAction(createEntityPreview({ autoMatchTargetId: 'target-1' }), {
+        sourceId: 'source-1',
+        action: 'SKIP',
+        kind: 'NODE',
+      })
     ).toBe('SKIP')
   })
 
@@ -106,10 +107,7 @@ describe('resolveDiagramCopyEntityAction', () => {
 describe('resolveDiagramCopyTargetId', () => {
   it('resolves auto-match targets without effectiveTargetId', () => {
     expect(
-      resolveDiagramCopyTargetId(
-        createEntityPreview({ autoMatchTargetId: 'target-1' }),
-        'MATCH'
-      )
+      resolveDiagramCopyTargetId(createEntityPreview({ autoMatchTargetId: 'target-1' }), 'MATCH')
     ).toBe('target-1')
   })
 })
@@ -238,10 +236,7 @@ describe('buildResolutionsFromPreview', () => {
 describe('pickDefaultTargetNotationId', () => {
   it('prefers source notation when available', () => {
     expect(
-      pickDefaultTargetNotationId(
-        [{ id: 'n-a' }, { id: 'n-source' }, { id: 'n-b' }],
-        'n-source'
-      )
+      pickDefaultTargetNotationId([{ id: 'n-a' }, { id: 'n-source' }, { id: 'n-b' }], 'n-source')
     ).toBe('n-source')
   })
 

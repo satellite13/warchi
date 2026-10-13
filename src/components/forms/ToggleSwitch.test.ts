@@ -53,7 +53,7 @@ describe('ToggleSwitch', () => {
   it('track does not have --on class when modelValue is false', () => {
     const wrapper = mount(ToggleSwitch, { props: { modelValue: false } })
     expect(wrapper.find('.toggle-switch__track').classes()).not.toContain(
-      'toggle-switch__track--on',
+      'toggle-switch__track--on'
     )
   })
 

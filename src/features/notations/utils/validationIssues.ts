@@ -6,5 +6,5 @@ export type { ValidationIssue } from '@/features/diagram-style/utils/validationI
 export { validateCompositeDiagramStyle } from '@/features/diagram-style/utils/validationIssues'
 
 export function customPropertyErrors(property: CustomProperty, t: ComposerTranslation): string[] {
-  return customPropertyValidationErrors(property, (key) => String(t(key)))
+  return customPropertyValidationErrors(property, key => String(t(key)))
 }

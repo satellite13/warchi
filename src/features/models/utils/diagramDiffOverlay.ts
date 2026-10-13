@@ -20,9 +20,5 @@ export function applyDiffOverlayToEdgeStyle(
 ): void {
   const c = DIFF_COLORS[state]
   ;(style as Record<string, unknown>).strokeColor = c.strokeColor
-  ;(style as Record<string, unknown>).strokeWidth = Math.max(
-    Number(style.strokeWidth) || 2,
-    2
-  )
+  ;(style as Record<string, unknown>).strokeWidth = Math.max(Number(style.strokeWidth) || 2, 2)
 }
-

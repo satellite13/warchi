@@ -4,7 +4,7 @@ import { applyRelationRuleCell } from './applyRelationRuleCell'
 
 const rule = (
   partial: Partial<EditorRelationRule> &
-    Pick<EditorRelationRule, 'id' | 'fromComponentId' | 'toComponentId' | 'allowedRelationIds'>,
+    Pick<EditorRelationRule, 'id' | 'fromComponentId' | 'toComponentId' | 'allowedRelationIds'>
 ): EditorRelationRule => ({ ...partial })
 
 describe('applyRelationRuleCell', () => {
@@ -30,7 +30,9 @@ describe('applyRelationRuleCell', () => {
   })
 
   it('updates an existing rule and marks dirty', () => {
-    const rules = [rule({ id: '1', fromComponentId: 'A', toComponentId: 'B', allowedRelationIds: ['r1'] })]
+    const rules = [
+      rule({ id: '1', fromComponentId: 'A', toComponentId: 'B', allowedRelationIds: ['r1'] }),
+    ]
     applyRelationRuleCell(rules, 'A', 'B', ['r2'], () => 'unused')
     expect(rules[0]).toMatchObject({
       allowedRelationIds: ['r2'],
@@ -72,7 +74,9 @@ describe('applyRelationRuleCell', () => {
   })
 
   it('soft-deletes an existing rule when clearing', () => {
-    const rules = [rule({ id: '1', fromComponentId: 'A', toComponentId: 'B', allowedRelationIds: ['r1'] })]
+    const rules = [
+      rule({ id: '1', fromComponentId: 'A', toComponentId: 'B', allowedRelationIds: ['r1'] }),
+    ]
     applyRelationRuleCell(rules, 'A', 'B', [], () => 'unused')
     expect(rules[0]).toMatchObject({
       _isDeleted: true,

@@ -45,6 +45,13 @@ config.global.stubs = {
     template: '<i class="ui-icon" :data-icon="name">{{ name }}</i>',
     props: ['name', 'alt'],
   },
+  // Глобально зарегистрированный в main.ts AppTooltip в тестах стабим лёгким
+  // инлайном (без Teleport-пузыря). ВАЖНО: рендерим text как атрибут — часть
+  // тестов ищет кнопки по селектору `[text="..."]` (порядок действий тулбара).
+  AppTooltip: {
+    template: '<span class="app-tooltip-stub" :text="text || undefined"><slot /></span>',
+    props: ['text', 'showDelay', 'hideDelay', 'placement', 'disabled'],
+  },
 }
 
 // Provide minimal i18n mock

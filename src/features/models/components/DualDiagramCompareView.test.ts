@@ -55,7 +55,7 @@ function makeCanvasStub() {
   }
 }
 
-vi.mock('vue-i18n', async (importOriginal) => {
+vi.mock('vue-i18n', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
@@ -72,7 +72,7 @@ vi.mock('@/composables/useResizablePropsPanel', () => ({
 
 vi.mock('../composables/useComparisonDiff', async () => {
   const actual = await vi.importActual<typeof import('../composables/useComparisonDiff')>(
-    '../composables/useComparisonDiff',
+    '../composables/useComparisonDiff'
   )
   return {
     ...actual,
@@ -98,9 +98,7 @@ vi.mock('../composables/useComparisonDiff', async () => {
       handleRightSelectNodes: vi.fn(),
       handleRightSelectLink: vi.fn(),
       handleRightSelectEdgeInstanceId: vi.fn(),
-      selectedPropertyRows: [
-        { key: 'name', base: 'A', target: 'B', changed: true },
-      ],
+      selectedPropertyRows: [{ key: 'name', base: 'A', target: 'B', changed: true }],
       selectedElementDiffKind: 'modified',
       comparePropWasLabel: 'was',
       comparePropBecameLabel: 'became',
@@ -293,7 +291,7 @@ describe('DualDiagramCompareView', () => {
     it('after paired fitToView, left fit wins (right snapped to left)', async () => {
       const wrapper = mountCompare({ withDiagrams: true })
       await nextTick()
-      await new Promise<void>((r) => requestAnimationFrame(() => r()))
+      await new Promise<void>(r => requestAnimationFrame(() => r()))
       await nextTick()
 
       const { left, right } = canvasStubs(wrapper)
@@ -301,7 +299,7 @@ describe('DualDiagramCompareView', () => {
       expect(right.vm.getViewport()).toEqual(LEFT_FIT_VP)
       expect(right.vm.setViewportCalls.at(-1)).toEqual(LEFT_FIT_VP)
       expect(left.vm.setViewportCalls.some((vp: Viewport) => vp.zoom === RIGHT_FIT_VP.zoom)).toBe(
-        false,
+        false
       )
     })
   })

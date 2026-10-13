@@ -71,9 +71,9 @@ describe('buildModelDiagramContextMenu', () => {
       edge: { id: 'pap-e1' },
     } as ContextMenuTarget)
 
-    const linkType = items.find(
-      item => 'label' in item && item.label === 'diagram.linkType'
-    ) as { items?: Array<{ label: string; action: () => void }> }
+    const linkType = items.find(item => 'label' in item && item.label === 'diagram.linkType') as {
+      items?: Array<{ label: string; action: () => void }>
+    }
     expect(linkType?.items?.length).toBe(4)
     linkType.items![0]!.action()
     expect(setEdgeType).toHaveBeenCalledWith('e1', 'straight')

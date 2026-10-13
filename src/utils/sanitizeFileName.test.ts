@@ -10,7 +10,7 @@ describe('sanitizeFileName', () => {
   it('transliterates cyrillic to ascii instead of dropping letters', () => {
     expect(sanitizeFileName('С4 композиция')).toBe('s4-kompozitsiya')
     expect(sanitizeFileName('C4 с композитными компонентами')).toBe(
-      'c4-s-kompozitnymi-komponentami',
+      'c4-s-kompozitnymi-komponentami'
     )
   })
 

@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import ModelPropertiesPanel from './ModelPropertiesPanel.vue'
 
-vi.mock('vue-i18n', async (importOriginal) => {
+vi.mock('vue-i18n', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
@@ -261,6 +261,127 @@ describe('ModelPropertiesPanel', () => {
 
     await select.vm.$emit('update:modelValue', 'rel-2')
     expect(wrapper.emitted('bindLinkRelation')).toEqual([['rel-2']])
+  })
+
+  it('renders node type properties as table with meta columns', () => {
+    const wrapper = mount(ModelPropertiesPanel, {
+      props: {
+        activeNotationId: 'not-1',
+        selectedNode: {
+          id: 'node-1',
+          name: 'App',
+          modelId: 'm1',
+          ownerId: 'u1',
+          nodeTypeId: 'nt-1',
+          parsedAttrs: {
+            treeOrder: 0,
+            notationComponents: {},
+            componentProperties: {},
+            typeProperties: { Owner: 'ACME' },
+          },
+        },
+        selectedLink: null,
+        nodeBindingComponentId: null,
+        linkBindingRelationId: null,
+        availableComponents: [],
+        availableRelations: [],
+        nodeScopedValues: {},
+        linkScopedValues: {},
+        nodeTypeCustomProperties: [
+          {
+            id: 'p1',
+            name: 'Owner',
+            type: 'string',
+            required: true,
+            min: null,
+            max: null,
+          },
+        ],
+        nodeTypeScopedValues: { Owner: 'ACME' },
+      },
+      global: {
+        stubs: {
+          UiIcon: true,
+          SearchableSelect: true,
+          ToggleSwitch: true,
+        },
+      },
+    })
+
+    expect(wrapper.find('table.mp-table').exists()).toBe(true)
+    expect(wrapper.findAll('thead th').length).toBe(3)
+    const names = wrapper.findAll('.mp-field__name').map(node => node.text())
+    expect(names).toContain('Owner')
+    expect(wrapper.find('.mp-table__required-row').text()).toContain('types.requiredShort')
+    expect(wrapper.find('input').element.value).toBe('ACME')
+  })
+
+  it('shows system node type properties read-only with system badge', async () => {
+    const wrapper = mount(ModelPropertiesPanel, {
+      props: {
+        activeNotationId: 'not-1',
+        selectedNode: {
+          id: 'node-1',
+          name: 'App',
+          modelId: 'm1',
+          ownerId: 'u1',
+          nodeTypeId: 'nt-1',
+          parsedAttrs: {
+            treeOrder: 0,
+            notationComponents: {},
+            componentProperties: {},
+            typeProperties: { owner: 'ACME', autoCreated: true },
+          },
+        },
+        selectedLink: null,
+        nodeBindingComponentId: null,
+        linkBindingRelationId: null,
+        availableComponents: [],
+        availableRelations: [],
+        nodeScopedValues: {},
+        linkScopedValues: {},
+        nodeTypeCustomProperties: [
+          {
+            id: 'p1',
+            name: 'owner',
+            type: 'string',
+            required: false,
+            min: null,
+            max: null,
+            system: true,
+          },
+          {
+            id: 'p2',
+            name: 'autoCreated',
+            type: 'boolean',
+            required: false,
+            min: null,
+            max: null,
+            system: true,
+          },
+        ],
+        nodeTypeScopedValues: { owner: 'ACME', autoCreated: true },
+      },
+      global: {
+        stubs: {
+          UiIcon: true,
+          SearchableSelect: true,
+          ToggleSwitch: true,
+        },
+      },
+    })
+
+    const names = wrapper.findAll('.mp-field__name').map(node => node.text())
+    expect(names).toContain('owner')
+    expect(names).not.toContain('autoCreated')
+    expect(wrapper.find('.mp-table__system-badge').exists()).toBe(true)
+
+    const input = wrapper.find('input')
+    expect(input.element.value).toBe('ACME')
+    expect(input.attributes('readonly')).toBeDefined()
+
+    await input.setValue('CHANGED')
+    expect(wrapper.emitted('setNodeTypePropertyValue')).toBeUndefined()
   })
 
   it('uses SearchableSelect for interactive diagram property', async () => {

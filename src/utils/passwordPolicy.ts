@@ -2,11 +2,7 @@ export const PASSWORD_MIN_LENGTH = 8
 
 export type PasswordStrength = 'weak' | 'medium' | 'strong'
 
-export type PasswordRuleId =
-  | 'minLength'
-  | 'uppercase'
-  | 'lowercase'
-  | 'digit'
+export type PasswordRuleId = 'minLength' | 'uppercase' | 'lowercase' | 'digit'
 
 export interface PasswordRule {
   id: PasswordRuleId
@@ -23,12 +19,12 @@ export function evaluatePasswordRules(password: string): PasswordRule[] {
 }
 
 export function isPasswordPolicySatisfied(password: string): boolean {
-  return evaluatePasswordRules(password).every((rule) => rule.passed)
+  return evaluatePasswordRules(password).every(rule => rule.passed)
 }
 
 export function passwordStrength(password: string): PasswordStrength {
   const rules = evaluatePasswordRules(password)
-  const passedCount = rules.filter((rule) => rule.passed).length
+  const passedCount = rules.filter(rule => rule.passed).length
   if (passedCount <= 1) return 'weak'
   if (passedCount <= 3) return 'medium'
   return 'strong'

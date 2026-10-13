@@ -1,4 +1,11 @@
-import type { OefElement, OefParsedModel, OefRelationship, OefView, OefViewConnection, OefViewNode } from './types'
+import type {
+  OefElement,
+  OefParsedModel,
+  OefRelationship,
+  OefView,
+  OefViewConnection,
+  OefViewNode,
+} from './types'
 
 const XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance'
 
@@ -96,7 +103,10 @@ function parseElements(model: Element, definitionNames: Map<string, string>): Oe
     .filter((item): item is OefElement => item !== null)
 }
 
-function parseRelationships(model: Element, definitionNames: Map<string, string>): OefRelationship[] {
+function parseRelationships(
+  model: Element,
+  definitionNames: Map<string, string>
+): OefRelationship[] {
   const relationshipsRoot = getDirectChild(model, 'relationships')
   if (!relationshipsRoot) return []
 
@@ -143,8 +153,7 @@ function parseViewNodes(view: Element): OefViewNode[] {
       if (typeof width === 'number') parsed.width = width
       if (typeof height === 'number') parsed.height = height
       if (isOefDiagramNoteNode(nodeType) || isOefDiagramContainerNode(nodeType)) {
-        parsed.labelText =
-          textOfFirstDirectChild(el, 'label') || textOfFirstDirectChild(el, 'name')
+        parsed.labelText = textOfFirstDirectChild(el, 'label') || textOfFirstDirectChild(el, 'name')
       }
       return parsed
     })

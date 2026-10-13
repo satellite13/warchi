@@ -66,9 +66,7 @@ describe('detached snapshot consumer isolation', () => {
   it('uses a translated fallback when the load error is not an Error', async () => {
     fetchAllByModelIdMock.mockRejectedValue('boom')
     const vueScope = effectScope()
-    const loader = vueScope.run(() =>
-      useDetachedModelSnapshot(ref('model-1'), { t: key => key })
-    )!
+    const loader = vueScope.run(() => useDetachedModelSnapshot(ref('model-1'), { t: key => key }))!
 
     await loader.load()
     expect(loader.error.value).toBe('models.detachedSnapshotFailed')

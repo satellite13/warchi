@@ -14,5 +14,6 @@ export function normalizeUserRole(role?: string | null): UserRole {
 export const normalizeUser = (user: User): User => ({
   ...user,
   role: normalizeUserRole(user.role),
+  roleOverride: user.roleOverride ? normalizeUserRole(user.roleOverride) : undefined,
   featureGrants: Array.isArray(user.featureGrants) ? user.featureGrants : [],
 })

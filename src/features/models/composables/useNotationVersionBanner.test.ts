@@ -20,7 +20,9 @@ function emptyState(): ModelEditorState {
     nodes: [],
     links: [],
     diagrams: [],
-    notations: [{ id: 'not-new', name: 'ArchiMate', version: '1.0.0', ownerId: 'owner-1', attrs: null }],
+    notations: [
+      { id: 'not-new', name: 'ArchiMate', version: '1.0.0', ownerId: 'owner-1', attrs: null },
+    ],
     nodeTypes: [],
     linkTypes: [],
     components: [],
@@ -55,8 +57,8 @@ describe('useNotationVersionBanner', () => {
     const scope = effectScope()
     const state = ref(emptyState())
     const selectedDiagramId = ref<string | null>(null)
-    const activeDiagram = computed(() =>
-      state.value.diagrams.find(item => item.id === selectedDiagramId.value) ?? null
+    const activeDiagram = computed(
+      () => state.value.diagrams.find(item => item.id === selectedDiagramId.value) ?? null
     )
     const activeNotationId = computed(() => activeDiagram.value?.notationId ?? null)
     const ensureNotationRelationsAndRules = vi.fn(async () => undefined)

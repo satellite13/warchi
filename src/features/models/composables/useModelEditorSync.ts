@@ -23,6 +23,8 @@ export function useModelEditorSync(options: {
   canEditModel: Ref<boolean>
   canInspectDiagramJson: Ref<boolean>
   isSelectedDiagramPersistedOnServer: Ref<boolean>
+  /** Несохранённые правки открытой диаграммы: lock не отпускается в фоне */
+  hasUnsavedDiagramChanges: Ref<boolean>
   currentUserId: Ref<string | null | undefined>
   getDiagramRenderer: () => DiagramRenderer | null
   ensureNotationRelationsAndRules: (notationId: string) => Promise<void>
@@ -40,6 +42,7 @@ export function useModelEditorSync(options: {
     isActiveDiagramLatest: options.isActiveDiagramLatest,
     canEditModel: options.canEditModel,
     isSelectedDiagramPersistedOnServer: options.isSelectedDiagramPersistedOnServer,
+    hasUnsavedDiagramChanges: () => options.hasUnsavedDiagramChanges.value,
   })
 
   watch(
@@ -65,7 +68,7 @@ export function useModelEditorSync(options: {
   const activeDiagram = computed(() =>
     options.selectedDiagramId.value
       ? (options.state.value.diagrams.find(
-          (diagram) => diagram.id === options.selectedDiagramId.value && !diagram._isDeleted
+          diagram => diagram.id === options.selectedDiagramId.value && !diagram._isDeleted
         ) ?? null)
       : null
   )

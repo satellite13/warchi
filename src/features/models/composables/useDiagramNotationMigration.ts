@@ -28,10 +28,7 @@ export function useDiagramNotationMigration(options: {
     notationId: string,
     options?: { force?: boolean }
   ) => Promise<void>
-  ensureNotationImportCatalog: (
-    notationId: string,
-    options?: { force?: boolean }
-  ) => Promise<void>
+  ensureNotationImportCatalog: (notationId: string, options?: { force?: boolean }) => Promise<void>
 }) {
   const showMigrateModal = ref(false)
   const migrateTarget = ref<NotationResponse | null>(null)
@@ -75,7 +72,10 @@ export function useDiagramNotationMigration(options: {
       ...relations,
     ]
 
-    if (!options.state.value.notations.some(item => item.id === notationId) && migrateTarget.value) {
+    if (
+      !options.state.value.notations.some(item => item.id === notationId) &&
+      migrateTarget.value
+    ) {
       const target = migrateTarget.value
       const asData: NotationData = {
         id: target.id,
@@ -185,9 +185,7 @@ export function useDiagramNotationMigration(options: {
       migrateTarget.value = null
     } catch (error) {
       options.setUiError(
-        error instanceof Error
-          ? error.message
-          : options.t('diagram.migrateNotationFailed')
+        error instanceof Error ? error.message : options.t('diagram.migrateNotationFailed')
       )
     } finally {
       isMigrating.value = false

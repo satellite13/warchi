@@ -18,7 +18,7 @@ export function usePersistedToolbarState<T extends Record<string, unknown>>(
   fields: { [K in keyof T]: Ref<T[K]> },
   options?: {
     validate?: FieldValidators<T>
-  },
+  }
 ): void {
   const keys = Object.keys(fields) as (keyof T)[]
 
@@ -45,16 +45,11 @@ export function usePersistedToolbarState<T extends Record<string, unknown>>(
     saveJson(userScopedStorageKey(storagePrefix, userIdValue), next)
   }
 
-  watch(
-    userId,
-    id => applyState(loadJson<T>(userScopedStorageKey(storagePrefix, id))),
-    { immediate: true },
-  )
+  watch(userId, id => applyState(loadJson<T>(userScopedStorageKey(storagePrefix, id))), {
+    immediate: true,
+  })
 
-  watch(
-    [...keys.map(key => fields[key]), userId],
-    () => {
-      persistState(userId.value)
-    },
-  )
+  watch([...keys.map(key => fields[key]), userId], () => {
+    persistState(userId.value)
+  })
 }

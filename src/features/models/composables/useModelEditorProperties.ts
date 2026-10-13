@@ -1,5 +1,6 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
 import { parseEntityAttrs, type CustomProperty } from '@/domain/attrs/notationAttrs'
+import { isHiddenSystemProperty } from '@/domain/attrs/hiddenSystemProperties'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import {
   getDiagramScopedLinkValues,
@@ -36,8 +37,9 @@ export function useModelEditorProperties(options: {
     if (!notationId || !node) return null
     const instanceId = options.selectedNodeInstanceId.value
     const instance = instanceId
-      ? (options.activeDiagram.value?.parsedAttrs.instances.nodes.find(item => item.id === instanceId) ??
-        null)
+      ? (options.activeDiagram.value?.parsedAttrs.instances.nodes.find(
+          item => item.id === instanceId
+        ) ?? null)
       : null
     return resolveInstanceComponentId({
       instance,
@@ -74,7 +76,11 @@ export function useModelEditorProperties(options: {
   const nodeTypeCustomProperties = computed<CustomProperty[]>(() => {
     const nt = selectedNodeTypeEntity.value
     if (!nt) return []
-    return parseEntityAttrs(nt.attrs ?? null).customProperties.filter(property => !property.system)
+    // Схема типа целиком (включая system-свойства синка) — панель показывает их read-only.
+    // Именной скрытый список (autoCreated/group/boundary/locked/noDiagrams) не показывается никогда.
+    return parseEntityAttrs(nt.attrs ?? null).customProperties.filter(
+      property => !isHiddenSystemProperty(property.name)
+    )
   })
 
   const nodeTypeScopedValues = computed<Record<string, unknown>>(() => {
@@ -206,6 +212,7 @@ export function useModelEditorProperties(options: {
       const instance = instanceId
         ? diagram.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
         : null
+      if (!instance) return
       const beforeAttrs = clonePlainDeep(instance?.attrs)
       const changed = setDiagramScopedNodeValue({
         diagram: diagram.parsedAttrs,
@@ -247,6 +254,14 @@ export function useModelEditorProperties(options: {
       return
     }
 
+    // Fallback-запись в attrs узла (не диаграммы) для auto-created узлов запрещена:
+    // protected-скоупы componentProperties на бэкенде охраняет AutoCreatedNodeGuard → 403.
+    if (
+      node.parsedAttrs.dpc?.autoCreated === true ||
+      node.parsedAttrs.typeProperties?.autoCreated === true
+    ) {
+      return
+    }
     if (!node.parsedAttrs.componentProperties[notationId]) {
       node.parsedAttrs.componentProperties[notationId] = {}
     }
@@ -267,7 +282,9 @@ export function useModelEditorProperties(options: {
     const diagram = options.activeDiagram.value
     if (!notationId || !relationId || !link || !diagram) return
     const edgeId = options.selectedLinkEdgeInstanceId.value
-    const edge = edgeId ? diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId) : null
+    const edge = edgeId
+      ? diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId)
+      : null
     const beforeAttrs = clonePlainDeep(edge?.attrs)
     const changed = setDiagramScopedLinkValue({
       diagram: diagram.parsedAttrs,

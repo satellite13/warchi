@@ -1,5 +1,6 @@
 export const FEATURE_GRANT_KEYS = [
   'model.create',
+  'model.shareAccess',
   'model.importPackage',
   'model.export',
   'model.exportDiagramImage',
@@ -13,18 +14,23 @@ export const FEATURE_GRANT_KEYS = [
   'validationScript.nav',
   'validationScript.create',
   'model.tree.createRoot',
+  'model.tree.createRootNode',
   'model.tree.createChildFolder',
+  'model.tree.createNode',
   'model.tree.renameDeleteMoveFolder',
+  'model.diagram.create',
   'model.compareVersions',
   'model.relationMatrix',
   'model.wiki.create',
   'model.importOef',
   'model.runValidationScripts',
+  'model.validationReport',
   'model.inspectJson',
   'model.createBaseline',
   'ui.languageSwitch',
   'model.comments',
   'profile.apiKeys',
+  'profile.nav',
 ] as const
 
 export type FeatureGrantKey = (typeof FEATURE_GRANT_KEYS)[number]

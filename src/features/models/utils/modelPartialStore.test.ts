@@ -151,10 +151,9 @@ describe('ModelPartialStore tree scopes', () => {
 
   it('keeps one protected outside winner when childrenScope returns the same id', () => {
     const store = new ModelPartialStore()
-    store.mergeNodes(
-      [node('moved', 'outside', { name: 'local winner', _isDirty: true })],
-      { kind: 'partial' }
-    )
+    store.mergeNodes([node('moved', 'outside', { name: 'local winner', _isDirty: true })], {
+      kind: 'partial',
+    })
     const request = store.beginChildrenRequest(childScope('inside'))
     store.mergeNodes(
       [],
@@ -439,10 +438,9 @@ describe('ModelPartialStore entity merges', () => {
   it('reindexes a point-synced local link before projecting trace rows', () => {
     const store = new ModelPartialStore()
     store.mergeNodes([node('old-target'), node('new-target')], { kind: 'partial' })
-    store.mergeLinks(
-      [link('moved-link', { sourceId: 'old-source', targetId: 'old-target' })],
-      { kind: 'partial' }
-    )
+    store.mergeLinks([link('moved-link', { sourceId: 'old-source', targetId: 'old-target' })], {
+      kind: 'partial',
+    })
 
     store.upsertLocalLink(
       link('moved-link', {

@@ -149,7 +149,9 @@ describe('useModelEditor load sessions', () => {
 
     catalog.resolve({
       ...emptyCatalog,
-      notations: [{ id: 'not-archi', name: 'ArchiMate', version: '1.0.0', ownerId: 'owner-1', attrs: null }],
+      notations: [
+        { id: 'not-archi', name: 'ArchiMate', version: '1.0.0', ownerId: 'owner-1', attrs: null },
+      ],
     })
     await loading
 

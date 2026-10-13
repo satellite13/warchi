@@ -19,6 +19,7 @@ import {
   type InsetSides,
 } from '../../utils/styleHelpers'
 import type { OutlineSegment, ScaleSlice } from '@/domain/attrs/notationAttrs'
+import { isHiddenSystemProperty } from '@/domain/attrs/hiddenSystemProperties'
 import type {
   DiagramStyle,
   CustomProperty,
@@ -113,20 +114,6 @@ const { list: catalogShapes, fetchList: fetchNodeShapes } = useNodeShapes()
 const catalogShapeOptions = computed(() =>
   catalogShapes.value.map((s) => ({ id: s.id, label: s.name })),
 )
-watch(
-  catalogShapes,
-  (shapes) => {
-    rememberNodeShapeAttrs(shapes)
-    if (customShapeId.value && !customScaleSlice.value && compositeShapeType.value === 'custom') {
-      const resolved = resolveCustomScaleSlice({ customShapeId: customShapeId.value })
-      if (resolved) {
-        customScaleSlice.value = resolved
-        emitStyle()
-      }
-    }
-  },
-  { immediate: true, deep: true }
-)
 function ensureCatalogShapesLoaded() {
   void fetchNodeShapes({ size: 200 })
 }
@@ -148,6 +135,21 @@ onBeforeUnmount(() => {
 const customShapeId = ref<string | null>(null)
 const customOutline = ref<OutlineSegment[] | undefined>(undefined)
 const customScaleSlice = ref<ScaleSlice | undefined>(undefined)
+
+watch(
+  catalogShapes,
+  (shapes) => {
+    rememberNodeShapeAttrs(shapes)
+    if (customShapeId.value && !customScaleSlice.value && compositeShapeType.value === 'custom') {
+      const resolved = resolveCustomScaleSlice({ customShapeId: customShapeId.value })
+      if (resolved) {
+        customScaleSlice.value = resolved
+        emitStyle()
+      }
+    }
+  },
+  { immediate: true, deep: true }
+)
 
 function handleCustomShapeSelect(shapeId: string) {
   const shape = catalogShapes.value.find((s) => s.id === shapeId)
@@ -178,12 +180,23 @@ const flatTreeNodes = computed(() => {
 })
 
 // A5 props
-const componentPropsForA5 = computed(() => props.componentProperties ?? [])
-const stringProperties = computed(() => [
-  ...(props.componentProperties ?? []),
-  ...(props.nodeTypeProperties ?? []),
-].filter(p => p.type === 'string'))
-const nodeTypePropsForA5 = computed(() => props.nodeTypeProperties ?? [])
+// Системные свойства (system-флаг синка и именной скрытый список, см. isHiddenSystemProperty)
+// скрыты из биндингов стилей.
+const visibleStyleProperties = (properties: CustomProperty[]): CustomProperty[] =>
+  properties.filter(p => !p.system && !isHiddenSystemProperty(p.name))
+const componentPropsForA5 = computed(() =>
+  visibleStyleProperties(props.componentProperties ?? [])
+)
+const stringProperties = computed(() =>
+  visibleStyleProperties(
+    [...(props.componentProperties ?? []), ...(props.nodeTypeProperties ?? [])].filter(
+      p => p.type === 'string'
+    )
+  )
+)
+const nodeTypePropsForA5 = computed(() =>
+  visibleStyleProperties(props.nodeTypeProperties ?? [])
+)
 
 // Validation
 const compositeValidationIssues = computed(() =>

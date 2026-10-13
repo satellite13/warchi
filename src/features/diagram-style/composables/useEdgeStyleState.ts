@@ -6,12 +6,7 @@ import type {
   ExtendedEdgeStyle,
   ExtendedTextStyle,
 } from '../types/papirusExtended'
-import {
-  toInsetSides,
-  insetToPlain,
-  getLabelSpacing,
-  type InsetSides,
-} from '../utils/styleHelpers'
+import { toInsetSides, insetToPlain, getLabelSpacing, type InsetSides } from '../utils/styleHelpers'
 
 export function useEdgeStyleState() {
   // --- Edge style refs ---
@@ -23,8 +18,12 @@ export function useEdgeStyleState() {
   const edgeLineStyle = ref<'solid' | 'dashed'>('solid')
   const edgeLineDashPattern = ref('8,4')
   const edgeType = ref<'straight' | 'polyline' | 'editable-polyline' | 'bezier'>('polyline')
-  const edgeEndMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'>('open')
-  const edgeStartMarker = ref<'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'>('none')
+  const edgeEndMarker = ref<
+    'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'
+  >('open')
+  const edgeStartMarker = ref<
+    'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'
+  >('none')
   const edgeOpacity = ref(1)
   const edgeLabelColor = ref('#333333')
   const edgeLabelOpacity = ref(1)
@@ -63,43 +62,24 @@ export function useEdgeStyleState() {
     edgeStrokeWidth.value = styleFromDiagram?.strokeWidth ?? style.strokeWidth ?? 2
     edgeOpacity.value = styleFromDiagram?.opacity ?? style.opacity ?? 1
     edgeType.value = (styleFromDiagram?.edgeType ?? edge.type ?? 'polyline') as
-      | 'straight'
-      | 'polyline'
-      | 'editable-polyline'
-      | 'bezier'
+      'straight' | 'polyline' | 'editable-polyline' | 'bezier'
 
     const lineDash = style.lineDash ?? styleFromDiagram?.lineDash ?? []
     edgeLineStyle.value = lineDash.length > 0 ? 'dashed' : 'solid'
     edgeLineDashPattern.value = lineDash.length > 0 ? lineDash.join(',') : '8,4'
 
     edgeEndMarker.value = (styleFromDiagram?.endMarkerType ?? edge.endMarker?.type ?? 'none') as
-      | 'none'
-      | 'arrow'
-      | 'open'
-      | 'diamond'
-      | 'circle'
-      | 'square'
-      | 'stealth'
+      'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'
     edgeStartMarker.value = (styleFromDiagram?.startMarkerType ??
       edge.startMarker?.type ??
-      'none') as
-      | 'none'
-      | 'arrow'
-      | 'open'
-      | 'diamond'
-      | 'circle'
-      | 'square'
-      | 'stealth'
+      'none') as 'none' | 'arrow' | 'open' | 'diamond' | 'circle' | 'square' | 'stealth'
 
     const eLabelStyle = edge.label?.style as ExtendedTextStyle | undefined
     edgeLabelColor.value = styleFromDiagram?.labelColor ?? eLabelStyle?.color ?? '#333333'
     edgeLabelOpacity.value = styleFromDiagram?.labelOpacity ?? eLabelStyle?.opacity ?? 1
     edgeLabelFontSize.value = styleFromDiagram?.labelFontSize ?? eLabelStyle?.fontSize ?? 14
     const edgeLabelSpacing = getLabelSpacing(edge.label)
-    edgeLabelInset.value = toInsetSides(
-      styleFromDiagram?.labelInset ?? edgeLabelSpacing.inset,
-      8,
-    )
+    edgeLabelInset.value = toInsetSides(styleFromDiagram?.labelInset ?? edgeLabelSpacing.inset, 8)
     edgeLabelOffset.value = styleFromDiagram?.edgeLabelOffset ?? edge.labelOffset ?? 0
     edgeLabelPosition.value = styleFromDiagram?.edgeLabelPosition ?? edge.labelPosition ?? 0.5
     edgeLabelFollowPath.value =
@@ -110,9 +90,7 @@ export function useEdgeStyleState() {
     edgeLabelBgOpacity.value =
       styleFromDiagram?.labelBgOpacity ?? edgeRuntime.labelBackground?.opacity ?? 1
     edgeLabelBgBorderRadius.value =
-      styleFromDiagram?.labelBgBorderRadius ??
-      edgeRuntime.labelBackground?.borderRadius ??
-      2
+      styleFromDiagram?.labelBgBorderRadius ?? edgeRuntime.labelBackground?.borderRadius ?? 2
     edgeStartMarkerSize.value = styleFromDiagram?.startMarkerSize ?? edge.startMarker?.size ?? 12
     edgeStartMarkerFillColor.value =
       styleFromDiagram?.startMarkerFillColor ?? edge.startMarker?.fillColor ?? '#000000'
@@ -157,8 +135,8 @@ export function useEdgeStyleState() {
       const pattern = edgeLineDashPattern.value.trim() || '8,4'
       style.lineDash = pattern
         .split(',')
-        .map((s) => parseFloat(s.trim()))
-        .filter((n) => !isNaN(n))
+        .map(s => parseFloat(s.trim()))
+        .filter(n => !isNaN(n))
     }
     const template = edgeLabelTemplate.value.trim()
     if (template) {

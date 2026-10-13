@@ -93,9 +93,7 @@ export class ModelPartialStore {
   prepareChildrenScopeRefresh(scope: TreeParentScope): void {
     const scopeKey = this.scopeKey(scope)
     const scopedIds = new Set(this.childrenByParent.get(scopeKey) ?? [])
-    this.replaceNodes(
-      this.nodes.filter(row => !scopedIds.has(row.id) || isProtectedLocal(row))
-    )
+    this.replaceNodes(this.nodes.filter(row => !scopedIds.has(row.id) || isProtectedLocal(row)))
   }
 
   beginRequest(requestKey: string): ModelPartialRequestGuard {

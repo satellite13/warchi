@@ -42,7 +42,7 @@ describe('notationAttrs composite schema', () => {
           labelPlacement: 'bottom',
           labelGap: 6,
         },
-      }),
+      })
     )
     expect(parsed.diagramStyle?.labelPlacement).toBe('bottom')
     expect(parsed.diagramStyle?.labelGap).toBe(6)
@@ -54,7 +54,7 @@ describe('notationAttrs composite schema', () => {
         tags: [],
         customProperties: [],
         diagramStyle: { lockTransform: true, width: 50, height: 50 },
-      }),
+      })
     )
     expect(parsed.diagramStyle?.lockTransform).toBe(true)
   })
@@ -150,4 +150,3 @@ describe('notationAttrs composite schema', () => {
     }
   })
 })
-

@@ -11,7 +11,7 @@ export type NotationExportImportResult =
     }
 
 export async function uploadNotationExportDocument(
-  document: unknown,
+  document: unknown
 ): Promise<NotationExportImportResult> {
   const result = await apiPost<NotationImportApiResponse>('/notations/import', document)
   if (!result.success) {

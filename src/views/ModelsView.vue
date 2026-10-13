@@ -3,7 +3,6 @@
 import MainLayout from "../layouts/MainLayout.vue";
 import AppHeader from "../components/layout/AppHeader.vue";
 import ModelsCatalog from "../features/models/ModelsCatalog.vue";
-import AppFooter from "../components/layout/AppFooter.vue";
 </script>
 
 <template>
@@ -13,9 +12,6 @@ import AppFooter from "../components/layout/AppFooter.vue";
     </template>
     <template #default>
       <ModelsCatalog/>
-    </template>
-    <template #footer>
-      <AppFooter/>
     </template>
   </MainLayout>
 </template>

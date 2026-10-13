@@ -1,9 +1,5 @@
 import { computed, onScopeDispose, ref, watch, type Ref } from 'vue'
-import type {
-  DiagramReferenceResponse,
-  LinkResponse,
-  NodeResponse,
-} from '@/types/api'
+import type { DiagramReferenceResponse, LinkResponse, NodeResponse } from '@/types/api'
 import type {
   EditorGraphNeighbor,
   ModelPartialRequestGuard,
@@ -318,11 +314,15 @@ export function useLazyTraceability(options: {
     })
 
     try {
-      const result = await fetchDiagramReferences(modelId, { nodeId }, {
-        page,
-        size: TRACEABILITY_PAGE_SIZE,
-        signal: session.controller.signal,
-      })
+      const result = await fetchDiagramReferences(
+        modelId,
+        { nodeId },
+        {
+          page,
+          size: TRACEABILITY_PAGE_SIZE,
+          signal: session.controller.signal,
+        }
+      )
       if (!isDiagramSessionCurrent(key, session)) return false
       if (!result.success) {
         replaceDiagramPage(key, {

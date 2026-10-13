@@ -1,4 +1,8 @@
-import type { CustomProperty, CompositeSerializedCComponent, DiagramStyle } from '@/domain/attrs/notationAttrs'
+import type {
+  CustomProperty,
+  CompositeSerializedCComponent,
+  DiagramStyle,
+} from '@/domain/attrs/notationAttrs'
 import { normalizeIconName, resolveIconMarkup } from '@/utils/libraryIconResolve'
 
 const OUTER_TARGET_ID = '__compositeOuter__'
@@ -37,7 +41,7 @@ function readPropertyType(
   ctx: CompositeBindingContext
 ): PropertyType | undefined {
   const list = source === 'component' ? ctx.componentProperties : ctx.nodeTypeProperties
-  return list.find((p) => p.name === propertyName)?.type
+  return list.find(p => p.name === propertyName)?.type
 }
 
 function readPropertyValue(
@@ -57,7 +61,9 @@ function evalWhen(when: Record<string, unknown>, value: unknown): boolean {
     case 'equals':
       return value === when.value
     case 'contains':
-      return typeof value === 'string' && typeof when.value === 'string' && value.includes(when.value)
+      return (
+        typeof value === 'string' && typeof when.value === 'string' && value.includes(when.value)
+      )
     case 'matchesRegex':
       if (typeof value !== 'string' || typeof when.value !== 'string') return false
       try {
@@ -159,7 +165,7 @@ export function applyStylePropertyBindings(
     const propType = readPropertyType(group.valueSource, group.propertyName, ctx)
     const raw = readPropertyValue(group.valueSource, group.propertyName, ctx)
     const value = normalizeMissingValue(propType, raw)
-    const match = group.branches.find((branch) =>
+    const match = group.branches.find(branch =>
       evalWhen(branch.when as unknown as Record<string, unknown>, value)
     )
     if (!match) continue
@@ -184,6 +190,16 @@ export function applyStylePropertyBindings(
 
 export const BIND_TO_NAME = '__name__'
 
+/**
+ * Keep a display wrapper from the authored text: if the authored child text is
+ * fully wrapped in square brackets (draw.io-style C4 type line, e.g. "[Person]"),
+ * substituted values keep the brackets. Empty values clear the line.
+ */
+function applyAuthoredWrapper(authored: string, value: string): string {
+  if (/^\[[^[\]]*\]$/.test(authored.trim())) return `[${value}]`
+  return value
+}
+
 export function injectCompositeNameAndIcon(
   base: CompositeSerializedCComponent,
   options: {
@@ -191,7 +207,7 @@ export function injectCompositeNameAndIcon(
     notationIconName?: string
     propertyValues?: Record<string, unknown>
     libraryByName?: ReadonlyMap<string, string> | Record<string, string> | null
-  },
+  }
 ): CompositeSerializedCComponent {
   const next = clone(base)
   const propValues = options.propertyValues ?? {}
@@ -202,7 +218,7 @@ export function injectCompositeNameAndIcon(
         node.text = options.displayName
       } else if (node.bindToProperty && node.bindToProperty in propValues) {
         const val = propValues[node.bindToProperty]
-        node.text = val != null ? String(val) : ''
+        node.text = val != null ? applyAuthoredWrapper(node.text ?? '', String(val)) : ''
       }
     }
     if (node.type === 'icon') {
@@ -261,7 +277,7 @@ export function countCompositeNodeMatches(
  * Returns the icon id (e.g. "widgets") or undefined if not found.
  */
 export function resolveCompositeBoundIconName(
-  root: CompositeSerializedCComponent | undefined,
+  root: CompositeSerializedCComponent | undefined
 ): string | undefined {
   if (!root) return undefined
   let found: string | undefined
@@ -284,4 +300,3 @@ export function resolveCompositeBoundIconName(
   visit(root)
   return found
 }
-

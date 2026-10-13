@@ -23,7 +23,8 @@ export const modelsMessages = {
       accessTitle: 'Доступ к модели',
       versionTreeTitle: 'Дерево версий: {name}',
       versionTreeEmpty: 'Нет данных о происхождении версий.',
-      versionTreeMultipleRoots: 'Несколько независимых веток (созданы с нуля или источник вне списка).',
+      versionTreeMultipleRoots:
+        'Несколько независимых веток (созданы с нуля или источник вне списка).',
       documentation: 'Страница в Wiki',
       diagramDocumentation: 'Страница диаграммы в Wiki',
       diagramCopy: {
@@ -111,8 +112,7 @@ export const modelsMessages = {
       packageImportStageDone: 'Импорт пакета… завершение',
       packageExportFailed: 'Не удалось экспортировать пакет модели: {message}',
       packageImportCompletedWithWarnings: 'Пакет импортирован с предупреждениями: {count}',
-      packageImportCompletedWithWarningsDetail:
-        'Пакет импортирован. Предупреждения: {messages}',
+      packageImportCompletedWithWarningsDetail: 'Пакет импортирован. Предупреждения: {messages}',
       packageImportMissingIcons:
         'Иконки отсутствуют в каталоге и библиотеке инстанса: {names}. Обратитесь к администратору.',
       oefImportTargetNotation: 'Целевая нотация',
@@ -181,7 +181,8 @@ export const modelsMessages = {
         relationshipEndpointIsRelationship:
           'Связи, прикреплённые к другим связям, будут импортированы только на диаграмму',
         viewNodeMissingElementRef: 'Узлы диаграммы ссылаются на отсутствующий элемент',
-        viewConnectionMissingRelationshipRef: 'Соединения диаграммы ссылаются на отсутствующую связь',
+        viewConnectionMissingRelationshipRef:
+          'Соединения диаграммы ссылаются на отсутствующую связь',
         viewConnectionMissingSourceNode: 'У соединений диаграммы отсутствует исходный узел',
         viewConnectionMissingTargetNode: 'У соединений диаграммы отсутствует целевой узел',
         viewNodeMissingCoordinates: 'У узлов диаграммы некорректные координаты',
@@ -224,10 +225,8 @@ export const modelsMessages = {
       oefImportWarningRelationsBranchSkipped: 'Пропущена ветка Relations из organizations',
       oefImportWarningDirectoryTypeMissing: 'Нет типа Directory — папки не созданы',
       oefImportWarningDirectoryTypeCreated: 'Тип Directory создан автоматически',
-      oefImportWarningPropertyConversionFailed:
-        'Значение свойства OEF не удалось привести к типу',
-      oefImportWarningPropertyUnmatched:
-        'Свойство OEF не совпало ни с одним кастомным свойством',
+      oefImportWarningPropertyConversionFailed: 'Значение свойства OEF не удалось привести к типу',
+      oefImportWarningPropertyUnmatched: 'Свойство OEF не совпало ни с одним кастомным свойством',
       oefImportDirectoryTypeCreateFailed:
         'Не удалось создать тип Directory для папок импорта: {message}',
       oefImportStatFolders: 'Папок: {count}',
@@ -287,15 +286,21 @@ export const modelsMessages = {
       searchResultsTruncated: 'Показаны первые {count} результатов. Уточните запрос.',
       createFolderOrNodeHint: 'Создайте папку или ноду в шапке',
       addChildFolder: 'Добавить дочернюю папку',
+      treeHiddenMarker:
+        'Скрыто в дереве для пользователей с ролью ниже админа (свойство типа «Скрыть в дереве»)',
       addChildNode: 'Добавить дочернюю ноду',
       renameFolder: 'Переименовать папку',
+      copyNode: 'Копировать',
+      pasteNode: 'Вставить',
       renameDiagram: 'Переименовать диаграмму',
       openDiagramDoubleClick: 'Открыть диаграмму (двойной клик)',
       diagramLockHeldBy: 'Диаграмма занята: {name}',
       diagramLockRetryEdit: 'Попробовать редактировать',
-      diagramLockLost: 'Блокировка редактирования потеряна. Несохранённые изменения на холсте остались локально.',
+      diagramLockLost:
+        'Блокировка редактирования потеряна. Несохранённые изменения на холсте остались локально.',
       diagramLockLostChip: 'Блокировка потеряна',
-      diagramLockLostSaveBlocked: 'Нельзя сохранить холст: блокировка редактирования потеряна. Нажмите «Попробовать редактировать» или дождитесь освобождения.',
+      diagramLockLostSaveBlocked:
+        'Нельзя сохранить холст: блокировка редактирования потеряна. Нажмите «Попробовать редактировать» или дождитесь освобождения.',
       diagramLockReload: 'Загрузить с сервера',
       diagramLockBadgeYou: 'Вы держите блокировку редактирования',
       diagramLockBadgeOther: 'Редактирует: {name}',
@@ -313,9 +318,28 @@ export const modelsMessages = {
       nodeTypeProperties: 'Свойства типа ноды',
       linkTypeProperties: 'Свойства типа связи',
       notationComponentProperties: 'Свойства компонента нотации',
+      propertyTableValue: 'Значение',
       propertySourceBadgeType: 'Тип ноды',
       propertySourceBadgeLinkType: 'Тип связи',
       propertySourceBadgeComponent: 'Компонент',
+      autoCreatedNodeLockedLead: 'Автосозданный элемент',
+      autoCreatedNodeLocked:
+        ' — свойства типа задаёт синхронизация. Свойства представления на диаграмме можно изменить.',
+      autoCreatedMoveForbidden:
+        'Автосозданный элемент нельзя перемещать — структура модели управляется синхронизацией.',
+      pasteNodeUnknownType:
+        'Скопированный элемент имеет тип, отсутствующий в этой модели. Вставка невозможна.',
+      folderLocked:
+        'Папка защищена — изменение, перемещение, удаление и создание дочерних узлов недоступны.',
+      folderNoDiagrams: 'В этой папке запрещено создание диаграмм.',
+      syncRootForbidden:
+        'Модель управляется синхронизацией — корневые папки и узлы создаёт синхронизация.',
+      syncNodesForbidden:
+        'Элементы управляются синхронизацией — узлы нельзя создавать вручную в этой модели.',
+      diagramViewsOnly:
+        'Диаграммы в этой модели можно создавать только в ветке Views и её подпапках.',
+      viewsNodesForbidden:
+        'В ветке Views можно создавать только папки — элементы управляются синхронизацией.',
       propertyDiagramLabelTokenHint:
         'Шаблон подписи на фигуре: # и ключ свойства — значение типа ноды; $ и ключ — значение компонента нотации. Имя ноды — отдельный плейсхолдер: доллар и слово name.',
       propertyDiagramLabelTokenHintLink:
@@ -337,6 +361,10 @@ export const modelsMessages = {
       diagramVersion: 'Версия диаграммы',
       copyDiagramLink: 'Скопировать ссылку на диаграмму',
       copyDiagramLinkFailed: 'Не удалось скопировать ссылку',
+      version: 'Версия',
+      author: 'Автор',
+      createdAt: 'Создана',
+      lastModified: 'Изменена',
       viewOnly: 'Только просмотр',
       docLinkRegisterFailed: 'Не удалось привязать документ к модели: {message}',
       createBaseline: 'Создать базовую версию',
@@ -373,6 +401,9 @@ export const modelsMessages = {
       deleteNodeFromDiagramMultiple: 'Удалить {count} нод(ы) с текущей диаграммы?',
       deleteNodeFromModelSingle: 'Удалить ноду {name} из модели?',
       deleteNodeFromModelMultiple: 'Удалить {count} нод(ы) из модели?',
+      nodeUsedOnDiagrams:
+        'Этот элемент используется на диаграммах: {count}. Удаление скроет его со всех диаграмм модели.',
+      nodeUsedOnDiagramsShort: 'На диаграммах: {count}',
       deleteDiagramTitle: 'Удаление диаграммы',
       deleteDiagramConfirm: 'Удалить диаграмму {name}?',
       deleteLinkTitle: 'Удаление связи',
@@ -402,6 +433,40 @@ export const modelsMessages = {
         'Принудительно записать ваши данные. Чужие правки будут потеряны.',
       batchSaveConflictReload: 'Подтянуть с сервера',
       batchSaveConflictOverwrite: 'Перезаписать',
+      saveAudit: {
+        title: 'Проверка перед сохранением',
+        blockingIntro:
+          'Найдено {count} проблем(ы), которые нужно исправить, прежде чем сохранить модель.',
+        warnIntro: '{count} предупреждений — можно сохранить как есть.',
+        cancel: 'Отмена',
+        save: 'Сохранить',
+        findInTree: 'Найти в дереве',
+        kind: {
+          duplicateNodeName: 'Дубль имени узла',
+          autoCreatedConflict: 'Конфликт с автосозданным',
+          duplicateLink: 'Дубль связи',
+          treeCycle: 'Цикл в дереве',
+          brokenLinkRef: 'Битая связь',
+          staleDiagramInstance: 'Устаревший элемент диаграммы',
+        },
+        duplicateNodeName:
+          'Несколько узлов с именем «{name}» в одном разделе ({count}). Переименуйте или удалите дубли.',
+        autoCreatedConflict:
+          'Узел «{name}» совпадает с автосозданным «{keepName}». Связи будут перепривязаны к автосозданному.',
+        duplicateLink: 'Параллельные связи ({count}) между одними и теми же элементами.',
+        treeCycle: 'Узел «{name}» образует цикл в дереве. Переместите его в корень.',
+        brokenLinkRef: 'Связь ссылается на удалённый или отсутствующий элемент.',
+        staleDiagramInstance:
+          'Диаграмма «{name}» содержит {count} элементов, ссылающихся на удалённые сущности.',
+        fix: {
+          deleteNodes: 'Удалить дубли',
+          deleteLinks: 'Удалить лишние связи',
+          renameNode: 'Переименовать',
+          reuseAutoCreated: 'Переиспользовать автосозданный',
+          reparentNode: 'Перенести в корень',
+          dropStaleInstances: 'Удалить из диаграммы',
+        },
+      },
       batchSaveConflictCompareToggle: 'Сравнить',
       batchSaveConflictCompareTimestampOnly:
         'Полевых расхождений нет — только метка времени. После обновления данные совпадут.',
@@ -441,8 +506,7 @@ export const modelsMessages = {
       batchSaveConflictFieldColField: 'Поле',
       batchSaveConflictFieldColLocal: 'У вас',
       batchSaveConflictFieldColServer: 'На сервере',
-      batchSaveConflictRepeatHint:
-        'При следующем сохранении сервер проверяется заново.',
+      batchSaveConflictRepeatHint: 'При следующем сохранении сервер проверяется заново.',
       batchSaveConflictKindNode: 'Нода',
       batchSaveConflictKindLink: 'Связь',
       batchSaveConflictKindDiagram: 'Диаграмма',
@@ -489,6 +553,9 @@ export const modelsMessages = {
       validationReportKeepAria: 'Оставить эту копию',
       validationReportMergeInto: 'Слить с оставшейся',
       validationReportKeep: 'Останется',
+      validationReportAutoCreatedHint:
+        'Элемент создан автоматически (OEF-импорт). Рекомендуется оставить именно его — остальные копии будут слиты в него.',
+      validationReportInArchive: 'Архив',
       validationReportInFolder: 'в папке {name}',
       validationReportConflict: 'Отчёт устарел. Обновите его и повторите слияние.',
       validationReportRefresh: 'Обновить отчёт',
@@ -500,11 +567,15 @@ export const modelsMessages = {
       validationReportCancel: 'Отмена',
       validationReportLoadError: 'Не удалось загрузить отчёт валидации',
       validationReportShownOf: '{shown} из {total}',
+      validationLoadMore: 'Показать ещё ({count})',
       validationTabEmpty: 'Проблем в этой категории не найдено',
+      validationReportAutoCreated: 'Автосозданные',
       validationTabDescNodes:
         'Ищутся узлы с одинаковым именем и типом — кандидаты на слияние. Дубликаты обычно появляются при повторных импортах и копировании веток модели. Слейте копии в одну: несколько «канонических» экземпляров одного элемента раскидывают связи, диаграммы и документы по разным узлам и искажают отчёты.',
       validationTabDescLinks:
         'Ищутся повторяющиеся связи между одной парой узлов с одним типом связи. Обычно это артефакт повторных импортов и слияний. Каждая копия попадает в диаграммы и экспорты отдельно и завышает число связей — оставьте одну, остальные слейте.',
+      validationTabDescAuto:
+        'Предложения слияния, в которых участвуют автосозданные элементы (например, при OEF-импорте). Такие группы собраны отдельно: по умолчанию остаётся автосозданный экземпляр — он помечен значком «А», наведите на него для пояснения.',
       validationTabDescDiagrams:
         'Сверяются экземпляры на холстах диаграмм с сущностями модели: ссылки на удалённые узлы и связи, несовпадение концов визуальной связи с концами модельной, дубли instance id. Битые элементы не обновляются вместе с моделью и могут пропасть при экспорте — удалите их или перепривяжите.',
       validationTabDescUnused:
@@ -515,11 +586,13 @@ export const modelsMessages = {
       validationAutoMergeDialogTitle: 'Автослияние дубликатов',
       validationAutoMergeRulesTitle: 'Как будут слиты элементы',
       validationAutoMergeRuleKeep:
-        'Выжившая копия — та, что чаще всего используется в диаграммах ({nodes} групп узлов)',
+        'Выжившая копия — автосозданная (иначе — наиболее используемая в диаграммах); копия из папки «Архив» не может стать выжившей ({nodes} групп узлов)',
       validationAutoMergeRuleLinks:
         'Уникальные связи удаляемой копии переезжают на выжившую, дубли связей удаляются',
       validationAutoMergeRuleDiagrams:
         'Упоминания удаляемой копии в диаграммах и её диаграммы переезжают на выжившую',
+      validationAutoMergeRuleJunction:
+        'Джанкшены (And/Or Junction) не участвуют в автослиянии — их объединение зависит от контекста использования',
       validationAutoMergeRuleDecision:
         'Для повторных импортов сохранится решение: OEF-сущность → выживший узел',
       validationAutoMergeRuleDocuments:
@@ -675,7 +748,8 @@ export const modelsMessages = {
       notationMetaUnavailable: 'Метаданные нотации недоступны. Работа с диаграммой ограничена.',
       notationNameDeleted: '{name} (удалена)',
       notationRelationRulesLoadFailed: 'Не удалось загрузить правила связей для активной нотации.',
-      notationRelationRulesRefreshFailed: 'Не удалось обновить relations и правила связей для диаграммы.',
+      notationRelationRulesRefreshFailed:
+        'Не удалось обновить relations и правила связей для диаграммы.',
       directoryTypeNotFound: 'Тип Directory не найден. Невозможно создать папку.',
       noAvailableNodeTypes: 'Нет доступных типов нод, кроме Directory.',
       diagramSwitchFailed: 'Не удалось открыть выбранную диаграмму после обновления данных.',
@@ -710,15 +784,16 @@ export const modelsMessages = {
         'У ноды «{node}» не заполнено обязательное свойство типа «{prop}».',
       validationNodeComponentPropRequired:
         'У ноды «{node}» не заполнено обязательное свойство компонента «{prop}» на диаграмме «{diagram}».',
-      validationLinkPropRequired:
-        'У связи «{link}» не заполнено обязательное свойство «{prop}».',
+      validationLinkPropRequired: 'У связи «{link}» не заполнено обязательное свойство «{prop}».',
       noMatchingComponent: 'В выбранной нотации нет подходящего компонента для типа узла.',
       cannotCreateNodeWithoutDirectory: 'Нельзя создать ноду без активной директории диаграммы.',
       directoryTypeRequiredForAutoPath: 'Для автосоздания пути нужен тип узла Directory.',
       newNoteText: 'Новая заметка',
       deleteContainer: 'Удалить контейнер',
-      noComponentsForLink: 'Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.',
-      noAllowedRelationRules: 'Для этой пары компонентов нет разрешённых связей по правилам нотации.',
+      noComponentsForLink:
+        'Перед созданием связи нужно выбрать компоненты для обеих нод в текущей нотации.',
+      noAllowedRelationRules:
+        'Для этой пары компонентов нет разрешённых связей по правилам нотации.',
       noAvailableRelations: 'Для этой пары компонентов нет доступных relation по правилам нотации.',
       figureComponentNotFound: 'Для выбранной фигуры не найден компонент нотации.',
       edgeRelationNotFound: 'Для выбранной связи не найден relation нотации.',
@@ -783,7 +858,8 @@ export const modelsMessages = {
       accessTitle: 'Model access',
       versionTreeTitle: 'Version tree: {name}',
       versionTreeEmpty: 'No version lineage data.',
-      versionTreeMultipleRoots: 'Multiple independent branches (created from scratch or source not in list).',
+      versionTreeMultipleRoots:
+        'Multiple independent branches (created from scratch or source not in list).',
       documentation: 'Page in Wiki',
       diagramDocumentation: 'Diagram page in Wiki',
       diagramCopy: {
@@ -985,8 +1061,7 @@ export const modelsMessages = {
       oefImportWarningDirectoryTypeCreated: 'Directory node type was created automatically',
       oefImportWarningPropertyConversionFailed:
         'OEF property value could not be converted to the target type',
-      oefImportWarningPropertyUnmatched:
-        'OEF property did not match any custom property',
+      oefImportWarningPropertyUnmatched: 'OEF property did not match any custom property',
       oefImportDirectoryTypeCreateFailed:
         'Failed to create Directory type for import folders: {message}',
       oefImportStatFolders: 'Folders: {count}',
@@ -1006,8 +1081,7 @@ export const modelsMessages = {
         'Nodes: {create} create · {reuse} reuse · {update} update · {ambiguous} ambiguous',
       oefImportReuseSummaryLinks:
         'Links: {create} create · {reuse} reuse · {update} update · {ambiguous} ambiguous',
-      oefImportReuseLabelHydrateHint:
-        'Diagram contents will be loaded to compare edge labels.',
+      oefImportReuseLabelHydrateHint: 'Diagram contents will be loaded to compare edge labels.',
       oefImportReuseHydrateFailed: 'Failed to load diagrams for label matching: {message}',
       oefImportWarningNodeMatchAmbiguous: 'Multiple matching nodes — picked lowest id',
       oefImportWarningLinkMatchAmbiguous: 'Multiple matching links — picked lowest id',
@@ -1047,15 +1121,20 @@ export const modelsMessages = {
       searchResultsTruncated: 'Showing the first {count} results. Refine your query.',
       createFolderOrNodeHint: 'Create a folder or node in the header',
       addChildFolder: 'Add child folder',
+      treeHiddenMarker:
+        'Hidden from the model tree for users with a role below admin (the "Hide in tree" type property)',
       addChildNode: 'Add child node',
       renameFolder: 'Rename folder',
+      copyNode: 'Copy',
+      pasteNode: 'Paste',
       renameDiagram: 'Rename diagram',
       openDiagramDoubleClick: 'Open diagram (double click)',
       diagramLockHeldBy: 'Diagram is locked by {name}',
       diagramLockRetryEdit: 'Try to edit',
       diagramLockLost: 'The edit lock was lost. Unsaved canvas changes are still kept locally.',
       diagramLockLostChip: 'Lock lost',
-      diagramLockLostSaveBlocked: 'Cannot save the canvas: the edit lock was lost. Click “Try to edit” or wait until the diagram is free.',
+      diagramLockLostSaveBlocked:
+        'Cannot save the canvas: the edit lock was lost. Click “Try to edit” or wait until the diagram is free.',
       diagramLockReload: 'Reload from server',
       diagramLockBadgeYou: 'You hold the edit lock',
       diagramLockBadgeOther: 'Being edited by {name}',
@@ -1073,9 +1152,27 @@ export const modelsMessages = {
       nodeTypeProperties: 'Node type properties',
       linkTypeProperties: 'Link type properties',
       notationComponentProperties: 'Notation component properties',
+      propertyTableValue: 'Value',
       propertySourceBadgeType: 'Node type',
       propertySourceBadgeLinkType: 'Link type',
       propertySourceBadgeComponent: 'Component',
+      autoCreatedNodeLockedLead: 'Auto-created element',
+      autoCreatedNodeLocked:
+        ' — type properties are managed by the sync. Notation properties on the diagram can be edited.',
+      autoCreatedMoveForbidden:
+        'Auto-created elements cannot be moved — the model structure is managed by the sync.',
+      pasteNodeUnknownType:
+        'The copied element has a type that does not exist in this model. Paste is not possible.',
+      folderLocked: 'Folder is locked — rename, move, delete and child creation are unavailable.',
+      folderNoDiagrams: 'Diagram creation is forbidden in this folder.',
+      syncRootForbidden:
+        'This model is sync-managed — root-level folders and nodes are created by the sync.',
+      syncNodesForbidden:
+        'Elements are managed by the sync — nodes cannot be created manually in this model.',
+      diagramViewsOnly:
+        'Diagrams in this model can be created only inside the Views branch and its subfolders.',
+      viewsNodesForbidden:
+        'Only folders can be created inside the Views branch — elements are managed by the sync.',
       propertyDiagramLabelTokenHint:
         'Diagram label template: # plus key = node-type property value; $ plus key = notation component property. Node display name uses a separate placeholder: dollar sign and the word name.',
       propertyDiagramLabelTokenHintLink:
@@ -1098,6 +1195,10 @@ export const modelsMessages = {
       diagramVersion: 'Diagram version',
       copyDiagramLink: 'Copy diagram link',
       copyDiagramLinkFailed: 'Could not copy the link',
+      version: 'Version',
+      author: 'Author',
+      createdAt: 'Created',
+      lastModified: 'Modified',
       viewOnly: 'View only',
       docLinkRegisterFailed: 'Could not link the document to the model: {message}',
       createBaseline: 'Create baseline',
@@ -1133,6 +1234,9 @@ export const modelsMessages = {
       deleteNodeFromDiagramMultiple: 'Delete {count} node(s) from the current diagram?',
       deleteNodeFromModelSingle: 'Delete node {name} from the model?',
       deleteNodeFromModelMultiple: 'Delete {count} node(s) from the model?',
+      nodeUsedOnDiagrams:
+        'This element is used on {count} diagrams. Deleting it will remove it from all diagrams of the model.',
+      nodeUsedOnDiagramsShort: 'Used on: {count}',
       deleteDiagramTitle: 'Delete diagram',
       deleteDiagramConfirm: 'Delete diagram {name}?',
       deleteLinkTitle: 'Delete link',
@@ -1161,6 +1265,39 @@ export const modelsMessages = {
         "Force-save your data. Other users' changes will be lost.",
       batchSaveConflictReload: 'Reload from server',
       batchSaveConflictOverwrite: 'Overwrite',
+      saveAudit: {
+        title: 'Pre-save check',
+        blockingIntro: '{count} issue(s) must be fixed before the model can be saved.',
+        warnIntro: '{count} warning(s) - you can save as is.',
+        cancel: 'Cancel',
+        save: 'Save',
+        findInTree: 'Find in tree',
+        kind: {
+          duplicateNodeName: 'Duplicate node name',
+          autoCreatedConflict: 'Auto-created conflict',
+          duplicateLink: 'Duplicate link',
+          treeCycle: 'Tree cycle',
+          brokenLinkRef: 'Broken link',
+          staleDiagramInstance: 'Stale diagram element',
+        },
+        duplicateNodeName:
+          'Several nodes named "{name}" in the same folder ({count}). Rename or remove the duplicates.',
+        autoCreatedConflict:
+          'Node "{name}" matches the auto-created "{keepName}". Links will be rebound to the auto-created node.',
+        duplicateLink: 'Duplicate links ({count}) between the same elements.',
+        treeCycle: 'Node "{name}" forms a cycle in the tree. Move it to the root.',
+        brokenLinkRef: 'A link references a deleted or missing element.',
+        staleDiagramInstance:
+          'Diagram "{name}" contains {count} element(s) referencing deleted entities.',
+        fix: {
+          deleteNodes: 'Remove duplicates',
+          deleteLinks: 'Remove extra links',
+          renameNode: 'Rename',
+          reuseAutoCreated: 'Reuse auto-created',
+          reparentNode: 'Move to root',
+          dropStaleInstances: 'Remove from diagram',
+        },
+      },
       batchSaveConflictCompareToggle: 'Compare',
       batchSaveConflictCompareTimestampOnly:
         'No field differences - only the timestamp differs. Reload will sync.',
@@ -1200,8 +1337,7 @@ export const modelsMessages = {
       batchSaveConflictFieldColField: 'Field',
       batchSaveConflictFieldColLocal: 'Yours',
       batchSaveConflictFieldColServer: 'On server',
-      batchSaveConflictRepeatHint:
-        'The next save will re-check the server.',
+      batchSaveConflictRepeatHint: 'The next save will re-check the server.',
       batchSaveConflictKindNode: 'Node',
       batchSaveConflictKindLink: 'Link',
       batchSaveConflictKindDiagram: 'Diagram',
@@ -1248,6 +1384,9 @@ export const modelsMessages = {
       validationReportKeepAria: 'Keep this copy',
       validationReportMergeInto: 'Merge into remaining',
       validationReportKeep: 'Will remain',
+      validationReportAutoCreatedHint:
+        'Element created automatically (OEF import). It is recommended to keep this copy — the other copies will be merged into it.',
+      validationReportInArchive: 'Archive',
       validationReportInFolder: 'in folder {name}',
       validationReportConflict: 'The report is stale. Refresh it and merge again.',
       validationReportRefresh: 'Refresh report',
@@ -1259,11 +1398,15 @@ export const modelsMessages = {
       validationReportCancel: 'Cancel',
       validationReportLoadError: 'Failed to load validation report',
       validationReportShownOf: '{shown} of {total}',
+      validationLoadMore: 'Show more ({count})',
       validationTabEmpty: 'No issues in this category',
+      validationReportAutoCreated: 'Auto-created',
       validationTabDescNodes:
         'Finds nodes with the same name and type — merge candidates. Duplicates usually come from repeated imports or copied model branches. Merge copies into one: multiple "canonical" instances of the same element scatter links, diagrams and documents across nodes and distort reports.',
       validationTabDescLinks:
         'Finds repeated links between the same pair of nodes with the same link type — usually an artifact of repeated imports and merges. Every copy lands in diagrams and exports separately, inflating link counts: keep one and merge the rest.',
+      validationTabDescAuto:
+        'Merge suggestions involving auto-created elements (e.g. from OEF import). These groups are collected separately: the auto-created copy is kept by default — it is marked with an "A" icon, hover it for details.',
       validationTabDescDiagrams:
         'Cross-checks diagram canvas instances against model entities: references to deleted nodes and links, visual edge endpoints vs model link endpoints, duplicate instance ids. Broken items no longer follow model changes and may vanish on export — delete or re-attach them.',
       validationTabDescUnused:
@@ -1274,11 +1417,13 @@ export const modelsMessages = {
       validationAutoMergeDialogTitle: 'Auto-merge duplicates',
       validationAutoMergeRulesTitle: 'How items will be merged',
       validationAutoMergeRuleKeep:
-        'The surviving copy is the one most used in diagrams ({nodes} node groups)',
+        'The surviving copy is the auto-created one (otherwise the most used in diagrams); a copy in the "Archive" folder cannot become the survivor ({nodes} node groups)',
       validationAutoMergeRuleLinks:
         'Unique links of the removed copy move to the surviving copy, duplicate links are deleted',
       validationAutoMergeRuleDiagrams:
         'References to the removed copy in diagrams and its own diagrams move to the surviving copy',
+      validationAutoMergeRuleJunction:
+        'Junctions (And/Or Junction) are excluded from auto-merge — their merging depends on usage context',
       validationAutoMergeRuleDecision:
         'For future imports a decision is stored: OEF entity → surviving node',
       validationAutoMergeRuleDocuments:
@@ -1434,7 +1579,8 @@ export const modelsMessages = {
       notationMetaUnavailable: 'Notation metadata unavailable. Diagram functionality is limited.',
       notationNameDeleted: '{name} (deleted)',
       notationRelationRulesLoadFailed: 'Failed to load relation rules for the active notation.',
-      notationRelationRulesRefreshFailed: 'Failed to refresh relations and relation rules for the diagram.',
+      notationRelationRulesRefreshFailed:
+        'Failed to refresh relations and relation rules for the diagram.',
       directoryTypeNotFound: 'Directory type not found. Cannot create folder.',
       noAvailableNodeTypes: 'No available node types besides Directory.',
       diagramSwitchFailed: 'Failed to open the selected diagram after refreshing data.',
@@ -1452,25 +1598,21 @@ export const modelsMessages = {
         'Cannot save: {count} element(s) have an empty name. Set a name and try again.',
       remoteCascadeSaveBlocked:
         'Cannot save: a remote node deletion conflicts with {count} local link(s). Discard the affected links or reload the model, then retry saving.',
-      remoteCascadeConflictTitle:
-        'Remote node deletion conflicts with {count} local link(s).',
+      remoteCascadeConflictTitle: 'Remote node deletion conflicts with {count} local link(s).',
       remoteCascadeConflictHelp:
         'Discard the affected links or reload the model, then retry saving.',
       remoteCascadeDiscard: 'Discard affected links',
       remoteCascadeReload: 'Reload model',
       detachedLinksStale: 'Model links changed on the server.',
       detachedLinksRefresh: 'Refresh links',
-      granularSyncError:
-        'Could not refresh {entity}. Local data is marked stale.',
+      granularSyncError: 'Could not refresh {entity}. Local data is marked stale.',
       granularSyncRetry: 'Retry sync',
       oefDetachedLinksStale:
         'Model links changed. Refresh the complete links snapshot before continuing the import.',
-      validationNodeTypePropRequired:
-        'Node "{node}" is missing required type property "{prop}".',
+      validationNodeTypePropRequired: 'Node "{node}" is missing required type property "{prop}".',
       validationNodeComponentPropRequired:
         'Node "{node}" is missing required component property "{prop}" on diagram "{diagram}".',
-      validationLinkPropRequired:
-        'Link "{link}" is missing required property "{prop}".',
+      validationLinkPropRequired: 'Link "{link}" is missing required property "{prop}".',
       noMatchingComponent: 'No matching notation component for this node type.',
       cannotCreateNodeWithoutDirectory: 'Cannot create a node without an active diagram directory.',
       directoryTypeRequiredForAutoPath: 'Directory node type is required for auto-path creation.',
@@ -1484,8 +1626,7 @@ export const modelsMessages = {
       saveConflictNameVersion: 'A model with this name and version already exists.',
       saveModelUpdateError: 'Error updating model: {message}',
       savePreparingValidation: 'Preparing model validation',
-      saveValidationSnapshotFailed:
-        'Could not load the full model for validation. Retry save.',
+      saveValidationSnapshotFailed: 'Could not load the full model for validation. Retry save.',
       detachedSnapshotFailed: 'Could not load the full model for validation.',
       validationScriptsPreparing: 'Preparing script validation',
       validationScriptsSnapshotFailed:

@@ -19,7 +19,7 @@ export type CustomPropertyEditorOptions<T extends CustomPropertyHost> = {
  * Shared custom-property list mutations for type/notation editors.
  */
 export function useCustomPropertyEditor<T extends CustomPropertyHost>(
-  options: CustomPropertyEditorOptions<T>,
+  options: CustomPropertyEditorOptions<T>
 ) {
   const { selectedItem, onMutateItem, validateProperty } = options
 
@@ -32,7 +32,7 @@ export function useCustomPropertyEditor<T extends CustomPropertyHost>(
     const target = selectedItem.value
     if (!target) return false
     return (target.parsedAttrs.customProperties ?? []).some(
-      (property) => propertyErrors(property).length > 0,
+      property => propertyErrors(property).length > 0
     )
   })
 
@@ -43,7 +43,7 @@ export function useCustomPropertyEditor<T extends CustomPropertyHost>(
   }
 
   const addCustomProperty = () => {
-    mutate((item) => {
+    mutate(item => {
       if (!item.parsedAttrs.customProperties) {
         item.parsedAttrs.customProperties = []
       }
@@ -52,7 +52,7 @@ export function useCustomPropertyEditor<T extends CustomPropertyHost>(
   }
 
   const addCustomPropertyFromType = (typeProperty: CustomProperty) => {
-    mutate((item) => {
+    mutate(item => {
       if (!item.parsedAttrs.customProperties) {
         item.parsedAttrs.customProperties = []
       }
@@ -66,9 +66,9 @@ export function useCustomPropertyEditor<T extends CustomPropertyHost>(
   }
 
   const removeCustomProperty = (propertyId: string) => {
-    mutate((item) => {
+    mutate(item => {
       item.parsedAttrs.customProperties = (item.parsedAttrs.customProperties ?? []).filter(
-        (p) => p.id !== propertyId,
+        p => p.id !== propertyId
       )
     })
   }

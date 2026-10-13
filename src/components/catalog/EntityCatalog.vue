@@ -6,7 +6,7 @@ import { useAuth } from "../../composables/useAuth";
 import { useEntityList, type EntityListConfig } from "../../composables/useEntityList";
 import { getUserDisplayName } from "../../utils/userDisplay";
 import { resolveOwnerLabel } from "../../utils/resolveOwnerNames";
-import { toAccessLabel } from "../../utils/accessPermission";
+import { canEditByAccessPermission, toAccessLabel } from "../../utils/accessPermission";
 import type { VersionedEntity } from "../../types/entities";
 import type { ShareResourceType } from "../../types/api";
 import ListHeader from "../list/ListHeader.vue";
@@ -22,7 +22,7 @@ import IconPicker from "../forms/IconPicker.vue";
 import VersionTreeModal from "../modals/VersionTreeModal.vue";
 import AppAlert from "@/components/ui/AppAlert.vue";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   entityListConfig: EntityListConfig<VersionedEntity & { attrs?: string | null }>
   editorRouteName: string
   i18nPrefix: string
@@ -44,7 +44,17 @@ const props = defineProps<{
   actionStatusMessage?: string | null
   /** Долгая операция (импорт пакета) — блокирует каталог и скрывает empty state. */
   actionBusy?: boolean
-}>();
+  /** Скрывать поиск и счётчик (каталог моделей для ролей без model.create). */
+  showSearch?: boolean
+  /** Разрешать переименование выбранной сущности (для моделей — грант model.create). */
+  canRename?: boolean
+  /** Разрешать удаление выбранной сущности (для моделей — грант model.create). */
+  canDelete?: boolean
+}>(), {
+  showSearch: true,
+  actionErrorMessage: undefined,
+  actionStatusMessage: undefined,
+});
 
 const canCreateEntity = computed(() => props.canCreate !== false);
 
@@ -169,9 +179,7 @@ function canEditSelected(group: {
 }): boolean {
   const selected = getSelectedItem(group);
   if (!selected) return false;
-  return selected.accessPermission === "OWNER" ||
-    selected.accessPermission === "ADMIN" ||
-    selected.accessPermission === "EDIT";
+  return canEditByAccessPermission(selected);
 }
 
 function canShareSelected(group: {
@@ -183,12 +191,26 @@ function canShareSelected(group: {
   return selected.accessPermission === "OWNER" || selected.accessPermission === "ADMIN";
 }
 
+function canDeleteSelected(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}): boolean {
+  return props.canDelete !== false && canEditSelected(group);
+}
+
+function canRenameSelected(group: {
+  name: string
+  versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
+}): boolean {
+  return props.canRename !== false && canEditSelected(group);
+}
+
 function handleDelete(group: {
   name: string
   versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
 }) {
   const selected = getSelectedItem(group);
-  if (!selected || !canEditSelected(group)) return;
+  if (!selected || !canDeleteSelected(group)) return;
   openDeleteModal(selected);
 }
 
@@ -197,7 +219,7 @@ function handleRename(group: {
   versions: (VersionedEntity & { attrs?: string | null; sourceId?: string | null })[]
 }) {
   const selected = getSelectedItem(group);
-  if (!selected || !canEditSelected(group)) return;
+  if (!selected || !canRenameSelected(group)) return;
   openRenameModal(selected);
 }
 
@@ -273,6 +295,7 @@ function handleExport(group: {
           </AppTooltip>
         </div>
         <ListHeader
+          v-if="showSearch"
           v-model="searchQuery"
           class="catalog-toolbar__search"
           :placeholder="t(`${i18nPrefix}.searchPlaceholder`)"
@@ -322,8 +345,8 @@ function handleExport(group: {
         :can-share="canShareSelected(group)"
         :can-export="canExport"
         :export-title="exportTitle"
-        :can-delete="canEditSelected(group)"
-        :can-rename="canEditSelected(group)"
+        :can-delete="canDeleteSelected(group)"
+        :can-rename="canRenameSelected(group)"
         :updated-at="getSelectedItem(group)?.updatedAt"
         :icon="canChangeIcon ? (parseIconFromAttrs(getSelectedItem(group)?.attrs) ?? icon) : undefined"
         :can-change-icon="canChangeIcon && canEditSelected(group)"

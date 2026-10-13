@@ -18,7 +18,7 @@ export interface UseDropdownPanelOptions {
 export function useDropdownPanel(
   controlRef: Ref<HTMLDivElement | null>,
   searchInputRef: Ref<HTMLInputElement | null>,
-  options: UseDropdownPanelOptions,
+  options: UseDropdownPanelOptions
 ) {
   const isOpen = ref(false)
   const searchQuery = ref('')
@@ -64,13 +64,13 @@ export function useDropdownPanel(
     close()
   }
 
-  watch(isOpen, (opened) => {
+  watch(isOpen, opened => {
     if (opened) {
-      window.addEventListener('scroll', updatePanelPosition, true)
-      window.addEventListener('resize', updatePanelPosition)
+      globalThis.addEventListener('scroll', updatePanelPosition, true)
+      globalThis.addEventListener('resize', updatePanelPosition)
     } else {
-      window.removeEventListener('scroll', updatePanelPosition, true)
-      window.removeEventListener('resize', updatePanelPosition)
+      globalThis.removeEventListener('scroll', updatePanelPosition, true)
+      globalThis.removeEventListener('resize', updatePanelPosition)
     }
   })
 
@@ -80,8 +80,8 @@ export function useDropdownPanel(
 
   onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutside, true)
-    window.removeEventListener('scroll', updatePanelPosition, true)
-    window.removeEventListener('resize', updatePanelPosition)
+    globalThis.removeEventListener('scroll', updatePanelPosition, true)
+    globalThis.removeEventListener('resize', updatePanelPosition)
   })
 
   return {

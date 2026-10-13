@@ -159,4 +159,129 @@ describe('useModelEditorProperties', () => {
     })
     scope.stop()
   })
+
+  it('writes notation properties of auto-created nodes onto the diagram instance, not node attrs', () => {
+    const scope = effectScope()
+    scope.run(() => {
+      const node = createNode({
+        parsedAttrs: parseNodeAttrs(
+          JSON.stringify({
+            dpc: { autoCreated: true },
+            typeProperties: { autoCreated: true, Owner: 'ACME' },
+            notationComponents: { 'not-1': { componentId: 'cmp-1' } },
+          })
+        ),
+      })
+      const diagram = {
+        id: 'd-1',
+        name: 'Main',
+        version: '1.0.0',
+        notationId: 'not-1',
+        modelId: 'm-1',
+        ownerId: 'o-1',
+        nodeId: null,
+        parsedAttrs: parseDiagramAttrs(
+          JSON.stringify({
+            instances: {
+              nodes: [{ id: 'inst-1', modelNodeId: 'n-1', x: 0, y: 0 }],
+              edges: [],
+            },
+          })
+        ),
+      }
+      const state = ref({
+        ...createEmptyModelEditorState(),
+        modelId: 'm-1',
+        nodes: [node],
+        diagrams: [diagram],
+        components: [
+          {
+            id: 'cmp-1',
+            name: 'Application',
+            notationId: 'not-1',
+            nodeTypeId: 'nt-1',
+            version: '1.0.0',
+            ownerId: 'o-1',
+          },
+        ],
+      })
+      const markDiagramDirty = vi.fn()
+      const markNodeDirty = vi.fn()
+
+      const api = useModelEditorProperties({
+        state,
+        activeDiagram: computed(() => diagram),
+        activeNotationId: computed(() => 'not-1'),
+        selectedNode: computed(() => node),
+        selectedLink: computed(() => null),
+        selectedNodeInstanceId: ref('inst-1'),
+        selectedLinkEdgeInstanceId: ref(null),
+        markNodeDirty,
+        markLinkDirty: vi.fn(),
+        markDiagramDirty,
+        recordDiagramHistory: vi.fn(),
+        applyEdgeInstanceStyleSnapshot: vi.fn(),
+      })
+
+      api.setNodeScopedValue('Alias', 'shown')
+
+      expect(markDiagramDirty).toHaveBeenCalledWith('d-1')
+      expect(markNodeDirty).not.toHaveBeenCalled()
+      expect(node.parsedAttrs.componentProperties).toEqual({})
+      expect(diagram.parsedAttrs.instances.nodes[0]?.attrs?.componentProperties).toMatchObject({
+        'not-1': { 'cmp-1': { Alias: 'shown' } },
+      })
+    })
+    scope.stop()
+  })
+
+  it('does not fall back to writing notation properties onto auto-created node attrs', () => {
+    const scope = effectScope()
+    scope.run(() => {
+      const node = createNode({
+        parsedAttrs: parseNodeAttrs(
+          JSON.stringify({
+            typeProperties: { autoCreated: true },
+            notationComponents: { 'not-1': { componentId: 'cmp-1' } },
+          })
+        ),
+      })
+      const state = ref({
+        ...createEmptyModelEditorState(),
+        nodes: [node],
+        components: [
+          {
+            id: 'cmp-1',
+            name: 'Application',
+            notationId: 'not-1',
+            nodeTypeId: 'nt-1',
+            version: '1.0.0',
+            ownerId: 'o-1',
+          },
+        ],
+      })
+      const markNodeDirty = vi.fn()
+
+      const api = useModelEditorProperties({
+        state,
+        activeDiagram: computed(() => null),
+        activeNotationId: computed(() => 'not-1'),
+        selectedNode: computed(() => node),
+        selectedLink: computed(() => null),
+        selectedNodeInstanceId: ref(null),
+        selectedLinkEdgeInstanceId: ref(null),
+        markNodeDirty,
+        markLinkDirty: vi.fn(),
+        markDiagramDirty: vi.fn(),
+        recordDiagramHistory: vi.fn(),
+        applyEdgeInstanceStyleSnapshot: vi.fn(),
+      })
+
+      api.setNodeScopedValue('Alias', 'shown')
+
+      expect(markNodeDirty).not.toHaveBeenCalled()
+      expect(node.parsedAttrs.componentProperties).toEqual({})
+    })
+    scope.stop()
+  })
 })

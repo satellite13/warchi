@@ -17,10 +17,7 @@ function deepMerge(...objects: DeepRecord[]): DeepRecord {
     for (const key of Object.keys(obj)) {
       const val = obj[key]
       if (val && typeof val === 'object' && !Array.isArray(val)) {
-        result[key] = deepMerge(
-          (result[key] ?? {}) as DeepRecord,
-          val as DeepRecord,
-        )
+        result[key] = deepMerge((result[key] ?? {}) as DeepRecord, val as DeepRecord)
       } else {
         result[key] = val
       }
@@ -39,7 +36,7 @@ const mergedMessages = deepMerge(
   homeMessages,
   docsMessages,
   validationScriptsMessages,
-  commentsMessages,
+  commentsMessages
 ) as typeof commonMessages &
   typeof authMessages &
   typeof modelsMessages &

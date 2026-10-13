@@ -1,7 +1,10 @@
 /** Matches arepos BatchNodeCreate/BatchDiagramCreate @Size(max = 255) on name. */
 export const OEF_ENTITY_NAME_MAX_LENGTH = 255
 
-export function truncateOefEntityName(name: string, maxLength = OEF_ENTITY_NAME_MAX_LENGTH): string {
+export function truncateOefEntityName(
+  name: string,
+  maxLength = OEF_ENTITY_NAME_MAX_LENGTH
+): string {
   if (name.length <= maxLength) return name
   return name.slice(0, maxLength)
 }

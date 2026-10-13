@@ -33,6 +33,8 @@ type MemberRow = {
   name: string
   parentName: string | null
   diagramCount: number | null
+  autoCreated?: boolean
+  inArchive?: boolean
 }
 
 type ChipState = {
@@ -49,6 +51,8 @@ const members = computed<MemberRow[]>(() => {
       name: node.name,
       parentName: node.parentName,
       diagramCount: node.diagramCount ?? null,
+      autoCreated: node.autoCreated,
+      inArchive: node.inArchive,
     }))
   }
   return props.linkMembers.map(link => ({
@@ -56,6 +60,7 @@ const members = computed<MemberRow[]>(() => {
     name: link.id,
     parentName: null,
     diagramCount: link.diagramCount ?? null,
+    autoCreated: link.autoCreated,
   }))
 })
 
@@ -72,9 +77,12 @@ watch(
       keepId.value = ''
       return
     }
-    if (!rows.some(row => row.id === keepId.value)) {
-      keepId.value = rows[0]?.id ?? ''
-    }
+    const current = rows.find(row => row.id === keepId.value)
+    if (current && !current.inArchive) return
+    // Ноды в папке «Archive» не могут быть survivor'ом: выключаем их из кандидатов.
+    const eligible = rows.filter(row => !row.inArchive)
+    const preferred = eligible.find(row => row.autoCreated) ?? eligible[0]
+    keepId.value = preferred?.id ?? ''
   },
   { immediate: true }
 )
@@ -155,6 +163,7 @@ function onMerge(dropId: string): void {
                 type="radio"
                 :name="radioGroupName"
                 :value="member.id"
+                :disabled="member.inArchive"
                 :aria-label="t('models.validationReportKeepAria')"
               />
             </label>
@@ -169,6 +178,21 @@ function onMerge(dropId: string): void {
             </button>
             <span v-else class="validation-duplicate-group__name validation-duplicate-group__name--static">
               {{ member.name }}
+            </span>
+
+            <span
+              v-if="member.autoCreated"
+              class="validation-duplicate-group__auto"
+              :title="t('models.validationReportAutoCreatedHint')"
+              aria-label="A"
+            >А</span>
+
+            <span
+              v-if="member.inArchive"
+              class="validation-duplicate-group__archive"
+              :title="t('models.validationReportInArchive')"
+            >
+              {{ t('models.validationReportInArchive') }}
             </span>
 
             <span
@@ -194,7 +218,7 @@ function onMerge(dropId: string): void {
             </span>
 
             <button
-              v-if="member.id !== keepId"
+              v-if="member.id !== keepId && keepId"
               type="button"
               class="validation-duplicate-group__merge"
               @click.stop="onMerge(member.id)"
@@ -332,6 +356,36 @@ function onMerge(dropId: string): void {
 .validation-duplicate-group__name--static {
   color: var(--base-text);
   cursor: default;
+}
+
+.validation-duplicate-group__auto {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 50%;
+  cursor: help;
+  user-select: none;
+}
+
+.validation-duplicate-group__archive {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 8px;
+  cursor: help;
+  user-select: none;
 }
 
 .validation-duplicate-group__parent {

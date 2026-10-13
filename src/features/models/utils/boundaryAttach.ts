@@ -10,13 +10,18 @@ export function distance2(a: Point2, b: Point2): number {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
-export function guestCenter(guest: { x: number; y: number; width: number; height: number }): Point2 {
+export function guestCenter(guest: {
+  x: number
+  y: number
+  width: number
+  height: number
+}): Point2 {
   return { x: guest.x + guest.width / 2, y: guest.y + guest.height / 2 }
 }
 
 export function placeGuestCenterAt(
   guest: { x: number; y: number; width: number; height: number },
-  point: Point2,
+  point: Point2
 ): void {
   guest.x = point.x - guest.width / 2
   guest.y = point.y - guest.height / 2
@@ -31,7 +36,7 @@ export type OutlineCandidate = {
 export function pickNearestOutlineHost(
   center: Point2,
   candidates: OutlineCandidate[],
-  snapDistance = BOUNDARY_SNAP_DISTANCE,
+  snapDistance = BOUNDARY_SNAP_DISTANCE
 ): (OutlineCandidate & { dist: number }) | null {
   let best: (OutlineCandidate & { dist: number }) | null = null
   for (const candidate of candidates) {
@@ -68,11 +73,13 @@ export function listBoundaryLinksToGuest(args: {
   })
 }
 
-export function retargetBoundaryEdges<T extends {
-  modelLinkId: string
-  sourceInstanceId: string
-  targetInstanceId: string
-}>(args: {
+export function retargetBoundaryEdges<
+  T extends {
+    modelLinkId: string
+    sourceInstanceId: string
+    targetInstanceId: string
+  },
+>(args: {
   edges: T[]
   linkIds: Set<string>
   guestInstanceId: string

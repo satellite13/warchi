@@ -5,11 +5,7 @@ import i18n from '@/i18n'
 import { useSaveState } from '@/composables/useSaveState'
 import type { ModelData } from '@/types/entities'
 import type { DiagramResponse } from '@/types/api'
-import {
-  createEmptyModelEditorState,
-  type EditorDiagram,
-  type ModelEditorState,
-} from '../types'
+import { createEmptyModelEditorState, type EditorDiagram, type ModelEditorState } from '../types'
 import {
   createModelEditorLoadProgressTracker,
   type ModelEditorLoadProgress,
@@ -118,6 +114,8 @@ type ModelEditorReturn = {
   rejectModelDraft: () => void
   /** Запланировать (дебаунс) запись черновика — используется при прямых правках холста */
   scheduleDraftSave: () => void
+  /** Синхронно записать черновик (beforeunload/pagehide), отменяя pending-таймер */
+  persistModelDraft: () => void
   partialStore: ReturnType<typeof useModelPartialStore>
 }
 
@@ -133,7 +131,8 @@ export const useModelEditor = (): ModelEditorReturn => {
   const errorMessage = ref<string | null>(null)
   const catalogLoadWarning = ref<string | null>(null)
   const catalogReady = ref(true)
-  const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } = useSaveState()
+  const { isSaving, saveError, saveSuccess, saveProgress, startSave, completeSave, finishSave } =
+    useSaveState()
   const pendingForceBatch = ref(false)
   const batchSaveConflict = ref<BatchConflictItem[] | null>(null)
   const diagramNameVersionConflict = ref<DiagramNameVersionConflict | null>(null)
@@ -191,6 +190,10 @@ export const useModelEditor = (): ModelEditorReturn => {
   }
 
   const persistModelDraft = (): void => {
+    if (draftSaveTimer !== null) {
+      clearTimeout(draftSaveTimer)
+      draftSaveTimer = null
+    }
     const current = model.value
     if (!current) return
     saveModelEditorDraft(current.id, createModelEditorDraftSnapshot(state.value, current))
@@ -350,11 +353,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     })
     if (isLoadSessionActive(generation, modelId)) catalogReady.value = applied
   }
-  const markBackgroundReady = (
-    resolve: () => void,
-    generation: number,
-    modelId: string
-  ): void => {
+  const markBackgroundReady = (resolve: () => void, generation: number, modelId: string): void => {
     resolve()
     if (isLoadSessionActive(generation, modelId)) {
       initialSnapshotReady.value = true
@@ -672,6 +671,7 @@ export const useModelEditor = (): ModelEditorReturn => {
     applyModelDraft,
     rejectModelDraft,
     scheduleDraftSave,
+    persistModelDraft,
     partialStore,
   }
 }

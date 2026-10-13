@@ -51,7 +51,7 @@ describe('diagramNodeFactory', () => {
     'slanted-rectangle',
     'custom',
     'composite',
-  ] as const)('resolves %s node shape', (nodeShape) => {
+  ] as const)('resolves %s node shape', nodeShape => {
     expect(resolveDiagramNodeShape({ nodeShape } as DiagramStyle)).toBe(nodeShape)
   })
 

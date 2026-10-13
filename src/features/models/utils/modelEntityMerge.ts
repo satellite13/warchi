@@ -3,7 +3,7 @@
  * Локальные черновики (_isNew / _isDirty / _isDeleted) не перезаписываются с сервера.
  */
 
-import type { EditorDiagram } from "../types"
+import type { EditorDiagram } from '../types'
 
 export type MergeableEntity = {
   id: string
@@ -33,8 +33,8 @@ export function mergeEntityListFromRemote<L extends MergeableEntity, R extends {
   remoteRows: R[],
   toEditor: (r: R) => L
 ): MergeEntityListFromRemoteResult<L> {
-  const remoteMap = new Map(remoteRows.map((r) => [r.id, r]))
-  const localById = new Map(local.map((l) => [l.id, l]))
+  const remoteMap = new Map(remoteRows.map(r => [r.id, r]))
+  const localById = new Map(local.map(l => [l.id, l]))
   const result: L[] = []
   const missingRemoteIds: string[] = []
   const droppedIds: string[] = []
@@ -83,8 +83,8 @@ export function preserveOpenDiagramCanvasAfterRemoteMerge(
     return merged
   }
   if (!openDiagramId) return merged
-  const prev = previous.find((d) => d.id === openDiagramId)
-  const idx = merged.findIndex((d) => d.id === openDiagramId)
+  const prev = previous.find(d => d.id === openDiagramId)
+  const idx = merged.findIndex(d => d.id === openDiagramId)
   if (!prev || idx < 0) return merged
   if (prev._isDirty || prev._isNew || prev._isDeleted) return merged
 

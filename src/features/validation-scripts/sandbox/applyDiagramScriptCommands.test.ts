@@ -10,9 +10,7 @@ function diagramWith(n1 = true): ScriptEditorDiagram {
     notationId: 'not1',
     parsedAttrs: {
       instances: {
-        nodes: n1
-          ? [{ id: 'ia', modelNodeId: 'n1', x: 0, y: 0, width: 10, height: 10 }]
-          : [],
+        nodes: n1 ? [{ id: 'ia', modelNodeId: 'n1', x: 0, y: 0, width: 10, height: 10 }] : [],
         edges: [],
       },
     },
@@ -30,7 +28,7 @@ describe('applyDiagramScriptCommands', () => {
         { type: 'addEdge', linkId: 'l1' },
       ],
       linkEndpoints: { l1: { sourceId: 'n1', targetId: 'n2' } },
-      executeHistory: (cmd) => history.push(cmd),
+      executeHistory: cmd => history.push(cmd),
       createId: (() => {
         let i = 0
         return () => `new-${++i}`
@@ -38,10 +36,10 @@ describe('applyDiagramScriptCommands', () => {
     })
     expect(history).toHaveLength(1)
     history[0]!.execute()
-    expect(diagram.parsedAttrs.instances.nodes.some((n) => n.modelNodeId === 'n2')).toBe(true)
-    expect(diagram.parsedAttrs.instances.edges.some((e) => e.modelLinkId === 'l1')).toBe(true)
+    expect(diagram.parsedAttrs.instances.nodes.some(n => n.modelNodeId === 'n2')).toBe(true)
+    expect(diagram.parsedAttrs.instances.edges.some(e => e.modelLinkId === 'l1')).toBe(true)
     history[0]!.undo()
-    expect(diagram.parsedAttrs.instances.nodes.some((n) => n.modelNodeId === 'n2')).toBe(false)
+    expect(diagram.parsedAttrs.instances.nodes.some(n => n.modelNodeId === 'n2')).toBe(false)
     expect(diagram.parsedAttrs.instances.edges).toEqual([])
   })
 
@@ -66,13 +64,13 @@ describe('applyDiagramScriptCommands', () => {
       diagram,
       commands: [{ type: 'removeInstance', instanceId: 'ib' }],
       linkEndpoints: {},
-      executeHistory: (cmd) => history.push(cmd),
+      executeHistory: cmd => history.push(cmd),
     })
     history[0]!.execute()
-    expect(diagram.parsedAttrs.instances.nodes.map((n) => n.id)).toEqual(['ia'])
+    expect(diagram.parsedAttrs.instances.nodes.map(n => n.id)).toEqual(['ia'])
     expect(diagram.parsedAttrs.instances.edges).toEqual([])
     history[0]!.undo()
-    expect(diagram.parsedAttrs.instances.nodes.some((n) => n.id === 'ib')).toBe(true)
+    expect(diagram.parsedAttrs.instances.nodes.some(n => n.id === 'ib')).toBe(true)
   })
 
   it('paints an existing edge via setEdgeStyle', () => {
@@ -96,7 +94,7 @@ describe('applyDiagramScriptCommands', () => {
       diagram,
       commands: [{ type: 'setEdgeStyle', linkId: 'l1', strokeColor: '#dc3545' }],
       linkEndpoints: {},
-      executeHistory: (cmd) => history.push(cmd),
+      executeHistory: cmd => history.push(cmd),
     })
     history[0]!.execute()
     expect(diagram.parsedAttrs.instances.edges[0]?.attrs?.diagramStyle).toEqual({

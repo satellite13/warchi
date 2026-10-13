@@ -24,7 +24,9 @@ export function useModelSelection(options: {
 
   const selectedTreeNode = computed(() =>
     selectedNodeId.value
-      ? (options.state.value.nodes.find(node => node.id === selectedNodeId.value && !node._isDeleted) ?? null)
+      ? (options.state.value.nodes.find(
+          node => node.id === selectedNodeId.value && !node._isDeleted
+        ) ?? null)
       : null
   )
   const selectedDiagramNode = computed(() =>
@@ -54,12 +56,7 @@ export function useModelSelection(options: {
       return true
     }
     const modelId = options.state.value.modelId
-    if (
-      !modelId ||
-      !options.mergeNodes ||
-      !options.beginRequest ||
-      !options.isRequestCurrent
-    ) {
+    if (!modelId || !options.mergeNodes || !options.beginRequest || !options.isRequestCurrent) {
       return false
     }
 
@@ -115,27 +112,25 @@ export function useModelSelection(options: {
     return id ? ensureNodeMaterialized(id) : Promise.resolve(false)
   }
 
-  watch(
-    [fallbackSelectedNodeId, () => options.state.value.modelId],
-    ([id]) => {
-      cancelNodeMaterialization()
-      selectedNodeError.value = null
-      if (
-        id &&
-        !isDiagramOnlyNodeModelNodeId(id) &&
-        !options.state.value.nodes.some(node => node.id === id && !node._isDeleted)
-      ) {
-        void ensureNodeMaterialized(id)
-      }
+  watch([fallbackSelectedNodeId, () => options.state.value.modelId], ([id]) => {
+    cancelNodeMaterialization()
+    selectedNodeError.value = null
+    if (
+      id &&
+      !isDiagramOnlyNodeModelNodeId(id) &&
+      !options.state.value.nodes.some(node => node.id === id && !node._isDeleted)
+    ) {
+      void ensureNodeMaterialized(id)
     }
-  )
+  })
 
   onScopeDispose(cancelNodeMaterialization)
 
   const selectedLink = computed(() =>
     selectedModelLinkId.value
-      ? (options.state.value.links.find(link => link.id === selectedModelLinkId.value && !link._isDeleted) ??
-        null)
+      ? (options.state.value.links.find(
+          link => link.id === selectedModelLinkId.value && !link._isDeleted
+        ) ?? null)
       : null
   )
 
@@ -154,7 +149,9 @@ export function useModelSelection(options: {
       : null
     const modelNodeId = selectedNode.value?.id
     if (!diagram || !modelNodeId) return null
-    return diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === modelNodeId)?.id ?? null
+    return (
+      diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === modelNodeId)?.id ?? null
+    )
   })
 
   const selectedLinkEdgeInstanceId = computed<string | null>(() => {

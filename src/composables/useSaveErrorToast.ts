@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { getCurrentInstance, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 
 const DEFAULT_TOAST_MS = 5000
 
@@ -29,11 +29,16 @@ export function useSaveErrorToast(saveError: Ref<string | null>, durationMs = DE
     }, durationMs)
   })
 
-  onBeforeUnmount(() => {
-    if (!toastTimer) return
-    clearTimeout(toastTimer)
-    toastTimer = null
-  })
+  // onBeforeUnmount требует component instance: в effectScope (unit-тесты
+  // композаблов) его нет, и Vue сыплет "[Vue warn]: onBeforeUnmount is called
+  // ...". Таймер и так очищается сам по завершению, guard только для тишины.
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      if (!toastTimer) return
+      clearTimeout(toastTimer)
+      toastTimer = null
+    })
+  }
 
   return {
     toastError,

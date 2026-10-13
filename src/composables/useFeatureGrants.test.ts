@@ -46,4 +46,18 @@ describe('useFeatureGrants', () => {
     expect(hasGrant('model.create')).toBe(false)
     expect(hasGrant('ui.languageSwitch')).toBe(false)
   })
+
+  it('admin has the new role model v2 keys', () => {
+    currentUser.value = {
+      id: 'u1',
+      email: 'admin@example.com',
+      role: 'admin',
+      featureGrants: [],
+    }
+
+    const { hasGrant } = useFeatureGrants()
+    expect(hasGrant('model.diagram.create')).toBe(true)
+    expect(hasGrant('model.tree.createNode')).toBe(true)
+    expect(hasGrant('profile.nav')).toBe(true)
+  })
 })

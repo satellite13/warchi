@@ -7,7 +7,7 @@ describe('resolvePaletteIconName', () => {
       resolvePaletteIconName({
         diagramStyle: { iconName: 'database' },
         paletteMaterialIcon: 'apps',
-      }),
+      })
     ).toBe('apps')
   })
 

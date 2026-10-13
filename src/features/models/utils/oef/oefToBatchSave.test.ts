@@ -134,19 +134,28 @@ describe('oefToBatchSave', async () => {
         expect(edge.modelLinkId.startsWith('__diagram-note-edge__:')).toBe(true)
       } else {
         expect(linkIds.has(edge.modelLinkId)).toBe(true)
+        expect((edge.attrs?.diagramStyle as { edgeType?: string } | undefined)?.edgeType).toBe(
+          'polyline'
+        )
       }
     }
 
-    const serviceNode = result.request.nodes.create.find(item => item.nodeTypeId === 'nt-business-service')
+    const serviceNode = result.request.nodes.create.find(
+      item => item.nodeTypeId === 'nt-business-service'
+    )
     expect(serviceNode).toBeTruthy()
     const serviceNodeAttrs = parseNodeAttrs(serviceNode!.attrs)
     expect(serviceNodeAttrs.typeProperties.owner).toBe('Team A')
-    expect(serviceNodeAttrs.componentProperties['notation-1']?.['cmp-business-service']?.status).toBe('draft')
+    expect(
+      serviceNodeAttrs.componentProperties['notation-1']?.['cmp-business-service']?.status
+    ).toBe('draft')
 
     const servingLink = result.request.links.create.find(item => item.linkTypeId === 'lt-serving')
     expect(servingLink).toBeTruthy()
     const servingLinkAttrs = parseLinkAttrs(servingLink!.attrs)
-    expect(servingLinkAttrs.relationProperties['notation-1']?.['rel-serving']?.confidence).toBe('high')
+    expect(servingLinkAttrs.relationProperties['notation-1']?.['rel-serving']?.confidence).toBe(
+      'high'
+    )
   })
 
   it('updates the existing diagram matched by stored OEF view id', async () => {
@@ -225,14 +234,15 @@ describe('oefToBatchSave', async () => {
     const attrs = parseDiagramAttrs(result.request.diagrams.create[0]!.attrs)
     const containers = attrs.instances.nodes.filter(node => node.attrs?.isContainer === true)
     const anchors = attrs.instances.nodes.filter(node => node.attrs?.isEdgeAnchor === true)
-    const diagramOnlyEdges = attrs.instances.edges.filter(edge => edge.attrs?.isDiagramOnly === true)
+    const diagramOnlyEdges = attrs.instances.edges.filter(
+      edge => edge.attrs?.isDiagramOnly === true
+    )
     const modelEdges = attrs.instances.edges.filter(edge => edge.attrs?.isDiagramOnly !== true)
 
     expect(containers).toHaveLength(1)
     expect(containers[0]?.attrs?.containerLabel).toBe('Group')
     const containerStyle = containers[0]?.attrs?.diagramStyle as
-      | { labelAlign?: string; labelVerticalAlign?: string }
-      | undefined
+      { labelAlign?: string; labelVerticalAlign?: string } | undefined
     expect(containerStyle?.labelVerticalAlign).toBe('top')
     expect(containerStyle?.labelAlign).toBe('left')
     expect(anchors).toHaveLength(1)
@@ -241,8 +251,7 @@ describe('oefToBatchSave', async () => {
     expect(diagramOnlyEdges).toHaveLength(1)
     expect(
       diagramOnlyEdges.some(
-        edge =>
-          edge.sourceInstanceId === anchors[0]?.id || edge.targetInstanceId === anchors[0]?.id
+        edge => edge.sourceInstanceId === anchors[0]?.id || edge.targetInstanceId === anchors[0]?.id
       )
     ).toBe(true)
   })
@@ -321,12 +330,16 @@ describe('oefToBatchSave', async () => {
       parentNodeId: 'root-node-id',
     })
 
-    const directories = result.request.nodes.create.filter(item => item.nodeTypeId === 'nt-directory')
+    const directories = result.request.nodes.create.filter(
+      item => item.nodeTypeId === 'nt-directory'
+    )
     expect(directories).toHaveLength(2)
     expect(directories[0]!.parentNodeId).toBe('root-node-id')
     const businessTempId = directories[0]!.tempId
     const viewsTempId = directories[1]!.tempId
-    expect(result.request.nodes.create.some(item => item.parentNodeId === businessTempId)).toBe(true)
+    expect(result.request.nodes.create.some(item => item.parentNodeId === businessTempId)).toBe(
+      true
+    )
     expect(result.request.diagrams.create[0]!.nodeId).toBe(viewsTempId)
   })
 
@@ -419,9 +432,9 @@ describe('oefToBatchSave', async () => {
     })
 
     expect(result.request.links.create).toHaveLength(5)
-    expect(result.warnings.filter(item => item.code === 'linkImportedAgainstRelationRules')).toHaveLength(
-      5
-    )
+    expect(
+      result.warnings.filter(item => item.code === 'linkImportedAgainstRelationRules')
+    ).toHaveLength(5)
   })
 
   it('merges OEF properties into type and component values by name', async () => {
@@ -469,6 +482,100 @@ describe('oefToBatchSave', async () => {
     expect(
       result.warnings.some(w => w.code === 'propertyUnmatched' && w.message.includes('OrphanProp'))
     ).toBe(true)
+  })
+
+  it('stamps system.hideInTree on nodes of hide-in-tree types (create + update)', async () => {
+    const draft: ImportDraft = {
+      sourceModelId: 'src',
+      sourceModelName: 'S',
+      sourceElementTypes: ['Junction', 'BusinessService'],
+      sourceRelationshipTypes: [],
+      nodes: [
+        { sourceElementId: 'j1', sourceType: 'Junction', name: 'And' },
+        { sourceElementId: 's1', sourceType: 'BusinessService', name: 'CRM' },
+      ],
+      links: [],
+      diagrams: [],
+      organizations: [],
+    }
+    const result = await buildOefBatchSaveRequest({
+      draft,
+      mapping: {
+        elementTypeMap: {
+          Junction: { nodeTypeId: 'nt-junction', componentId: 'cmp-j' },
+          BusinessService: { nodeTypeId: 'nt-svc', componentId: 'cmp-s' },
+        },
+        relationshipTypeMap: {},
+      },
+      notationId: 'notation-1',
+      nodeTypeHideInTreeById: { 'nt-junction': true },
+      existingNodes: [
+        editorNode({
+          id: 'n-j',
+          name: 'Junction',
+          nodeTypeId: 'nt-junction',
+          parsedAttrs: {
+            treeOrder: 0,
+            notationComponents: {},
+            componentProperties: {},
+            typeProperties: {},
+            oef: { properties: {}, entityId: 'j1', syncedAt: '2026-01-01T00:00:00Z' },
+          },
+        }),
+      ],
+      reuseSettings: {
+        ...createDefaultOefReuseSettings(),
+        nodesMode: 'reuseMatching',
+        onNodeMatch: 'updateFromOef',
+      },
+    })
+
+    // Reuse matches j1 as update: marker stamped (no explicit override existed).
+    const updated = result.request.nodes.update.find(entry => entry.id === 'n-j')
+    expect(updated?.attrs != null).toBe(true)
+    const updatedAttrs = parseNodeAttrs(updated!.attrs)
+    expect(updatedAttrs.system?.hideInTree).toBe(true)
+
+    // New service node of a non-hidden type stays clean.
+    const created = result.request.nodes.create.find(entry => entry.name === 'CRM')
+    expect(parseNodeAttrs(created!.attrs).system?.hideInTree).toBeUndefined()
+  })
+
+  it('keeps an explicit system.hideInTree override on re-import', async () => {
+    const draft: ImportDraft = {
+      sourceModelId: 'src',
+      sourceModelName: 'S',
+      sourceElementTypes: ['Junction'],
+      sourceRelationshipTypes: [],
+      nodes: [{ sourceElementId: 'j1', sourceType: 'Junction', name: 'And' }],
+      links: [],
+      diagrams: [],
+      organizations: [],
+    }
+    const existing = editorNode({ id: 'n-j', name: 'And', nodeTypeId: 'nt-junction' })
+    existing.parsedAttrs = {
+      ...existing.parsedAttrs,
+      system: { hideInTree: false },
+      oef: { properties: {}, entityId: 'j1', syncedAt: '2026-01-01T00:00:00Z' },
+    }
+    const result = await buildOefBatchSaveRequest({
+      draft,
+      mapping: {
+        elementTypeMap: { Junction: { nodeTypeId: 'nt-junction', componentId: 'cmp-j' } },
+        relationshipTypeMap: {},
+      },
+      notationId: 'notation-1',
+      nodeTypeHideInTreeById: { 'nt-junction': true },
+      existingNodes: [existing],
+      reuseSettings: {
+        ...createDefaultOefReuseSettings(),
+        nodesMode: 'reuseMatching',
+        onNodeMatch: 'updateFromOef',
+      },
+    })
+
+    const updated = result.request.nodes.update.find(entry => entry.id === 'n-j')
+    expect(parseNodeAttrs(updated!.attrs).system?.hideInTree).toBe(false)
   })
 
   it('reuses matching existing nodes by id without create', async () => {
@@ -1036,5 +1143,49 @@ describe('oefToBatchSave', async () => {
     ).toHaveLength(0)
     expect(result.reuseCounts.nodesReused).toBe(4)
     expect(result.warnings.some(w => w.code === 'directoryMatchAmbiguous')).toBe(false)
+  })
+
+  it('deduplicates parallel links on a fresh import', async () => {
+    const draft = buildImportDraft(parseOefXml(mainXml))
+    draft.organizations = [
+      {
+        label: 'FolderA',
+        children: [
+          { refId: 'el-1', refKind: 'element' },
+          { refId: 'el-2', refKind: 'element' },
+        ],
+      },
+    ]
+    draft.nodes = [
+      { sourceElementId: 'el-1', sourceType: 'BusinessService', name: 'A' },
+      { sourceElementId: 'el-2', sourceType: 'BusinessProcess', name: 'B' },
+    ]
+    draft.links = [
+      {
+        sourceRelationshipId: 'rel-1',
+        sourceType: 'Serving',
+        sourceElementId: 'el-1',
+        targetElementId: 'el-2',
+      },
+      {
+        sourceRelationshipId: 'rel-2',
+        sourceType: 'Serving',
+        sourceElementId: 'el-1',
+        targetElementId: 'el-2',
+      },
+    ]
+
+    const result = await buildOefBatchSaveRequest({
+      draft,
+      mapping: buildFullMappingState(),
+      notationId: 'notation-1',
+      directoryNodeTypeId: 'nt-directory',
+      parentNodeId: 'root-node-id',
+      existingNodes: [],
+      reuseSettings: { ...createDefaultOefReuseSettings(), nodesMode: 'reuseMatching' },
+    })
+
+    expect(result.request.links.create).toHaveLength(1)
+    expect(result.warnings.some(w => w.code === 'parallelLinkSkipped')).toBe(true)
   })
 })

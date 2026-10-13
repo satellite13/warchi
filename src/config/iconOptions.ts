@@ -17,7 +17,7 @@ export function iconSelectRequiresMinSearch(optionCount: number): boolean {
 
 export function sanitizeIconOptions(options: IconOption[]): IconOption[] {
   const seen = new Set<string>()
-  return options.flatMap((option) => {
+  return options.flatMap(option => {
     const id = option.id.trim()
     if (!id || seen.has(id)) return []
     seen.add(id)

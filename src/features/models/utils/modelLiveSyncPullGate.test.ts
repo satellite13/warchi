@@ -3,7 +3,13 @@ import { decideCollectionPull } from './modelLiveSyncPullGate'
 
 describe('decideCollectionPull', () => {
   it('skips opportunistic pulls until the local snapshot is ready', () => {
-    for (const reason of ['ws_connect', 'session_resync', 'poll_timer', 'visibility', 'auth_refresh'] as const) {
+    for (const reason of [
+      'ws_connect',
+      'session_resync',
+      'poll_timer',
+      'visibility',
+      'auth_refresh',
+    ] as const) {
       expect(
         decideCollectionPull({
           reason,

@@ -63,6 +63,7 @@ export function useModelEditorToolbarActions(options: {
   snapEnabled: Ref<boolean>
   state: Ref<ModelEditorState>
   t: Translate
+  focusDiagramInTree: (diagramId: string) => Promise<void>
 }) {
   const { hasGrant } = useFeatureGrants()
   const handleToolbarAction = async (event: string) => {
@@ -105,6 +106,8 @@ export function useModelEditorToolbarActions(options: {
         options.diagramCanvasRef.value?.redo()
         break
       case 'zoom-in':
+        // DGTW-4060: пункты zoom-in/zoom-out удалены из меню зума хедера (макет View Actions),
+        // кейсы оставлены — действия доступны из других источников (клавиатура/канвас).
         options.diagramCanvasRef.value?.zoomIn()
         break
       case 'zoom-out':
@@ -279,6 +282,11 @@ export function useModelEditorToolbarActions(options: {
         options.handleOpenDiagramDoc()
         break
       }
+      case 'show-diagram-in-tree':
+        if (options.selectedDiagramId.value) {
+          void options.focusDiagramInTree(options.selectedDiagramId.value)
+        }
+        break
     }
   }
 

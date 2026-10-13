@@ -3,16 +3,24 @@ import { apiPost } from '@/composables/useApi'
 import type { EditorNode } from '../types'
 
 type DocModalTarget = { kind: 'model' | 'node' | 'diagram'; id: string } | null
-type DocModalContext =
-  | { kind: 'property'; propertyKey: string; scope?: 'nodeType' | 'notationComponent' }
-  | null
+type DocModalContext = {
+  kind: 'property'
+  propertyKey: string
+  scope?: 'nodeType' | 'notationComponent'
+} | null
 
 export interface DocumentModalDeps {
   model: Ref<{ name: string; attrs?: string | null } | null>
   state: Ref<{
     modelId: string
     nodes: EditorNode[]
-    diagrams: { id: string; name: string; notationId: string; parsedAttrs: { documentFileId?: string }; _isDeleted?: boolean }[]
+    diagrams: {
+      id: string
+      name: string
+      notationId: string
+      parsedAttrs: { documentFileId?: string }
+      _isDeleted?: boolean
+    }[]
   }>
   selectedDiagramId: Ref<string | null>
   selectedNode: ComputedRef<EditorNode | null>
@@ -79,9 +87,7 @@ export function useDocumentModal(deps: DocumentModalDeps) {
   }
 
   function handleOpenDiagramDoc() {
-    const diagram = deps.state.value.diagrams.find(
-      (d) => d.id === deps.selectedDiagramId.value,
-    )
+    const diagram = deps.state.value.diagrams.find(d => d.id === deps.selectedDiagramId.value)
     if (!diagram) return
     docModalTarget.value = { kind: 'diagram', id: diagram.id }
     docModalTitle.value = diagram.name
@@ -129,7 +135,7 @@ export function useDocumentModal(deps: DocumentModalDeps) {
             deps.onDocLinkFailed?.(res.error.message)
             return
           }
-          const existing = deps.documentsFromApi.value.find((d) => d.fileId === res.data.fileId)
+          const existing = deps.documentsFromApi.value.find(d => d.fileId === res.data.fileId)
           if (!existing) deps.documentsFromApi.value = [...deps.documentsFromApi.value, res.data]
         }
         deps.setNodeTypePropertyValue(ctx.propertyKey, fileId)
@@ -146,7 +152,7 @@ export function useDocumentModal(deps: DocumentModalDeps) {
             deps.onDocLinkFailed?.(res.error.message)
             return
           }
-          const existing = deps.documentsFromApi.value.find((d) => d.fileId === res.data.fileId)
+          const existing = deps.documentsFromApi.value.find(d => d.fileId === res.data.fileId)
           if (!existing) deps.documentsFromApi.value = [...deps.documentsFromApi.value, res.data]
         }
         deps.setNodeScopedValue(ctx.propertyKey, fileId)
@@ -184,7 +190,7 @@ export function useDocumentModal(deps: DocumentModalDeps) {
           return
         }
       }
-      const node = deps.state.value.nodes.find((n) => n.id === target.id)
+      const node = deps.state.value.nodes.find(n => n.id === target.id)
       if (node && !node.parsedAttrs.documentFileId) {
         node.parsedAttrs.documentFileId = fileId
         deps.markNodeDirty(target.id)
@@ -201,7 +207,7 @@ export function useDocumentModal(deps: DocumentModalDeps) {
           return
         }
       }
-      const diagram = deps.state.value.diagrams.find((d) => d.id === target.id)
+      const diagram = deps.state.value.diagrams.find(d => d.id === target.id)
       if (diagram && !diagram.parsedAttrs.documentFileId) {
         diagram.parsedAttrs.documentFileId = fileId
         deps.markDiagramDirty(target.id)

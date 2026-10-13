@@ -67,10 +67,7 @@ function writeViewportNow(diagramId: string, currentRenderer: DiagramRenderer): 
   writeStoredDiagramViewports(viewports)
 }
 
-export function persistDiagramViewport(
-  diagramId: string,
-  currentRenderer: DiagramRenderer,
-): void {
+export function persistDiagramViewport(diagramId: string, currentRenderer: DiagramRenderer): void {
   const existing = pendingByDiagramId.get(diagramId)
   if (existing) clearTimeout(existing.timer)
   const timer = setTimeout(() => {
@@ -101,7 +98,7 @@ export function flushPersistDiagramViewport(diagramId?: string): void {
 
 export function restoreDiagramViewport(
   diagramId: string,
-  currentRenderer: DiagramRenderer,
+  currentRenderer: DiagramRenderer
 ): boolean {
   const viewports = readStoredDiagramViewports()
   const saved = viewports[diagramId]

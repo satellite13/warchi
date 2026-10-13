@@ -106,9 +106,7 @@ describe('diagram conflict semantic canvas rows', () => {
       nodeId: null,
       parsedAttrs: {
         instances: {
-          nodes: [
-            { id: 'i1', modelNodeId: nodeId, x: 1, y: 2, width: 10, height: 10 },
-          ],
+          nodes: [{ id: 'i1', modelNodeId: nodeId, x: 1, y: 2, width: 10, height: 10 }],
           edges: [],
         },
       },
@@ -129,9 +127,7 @@ describe('diagram conflict semantic canvas rows', () => {
       nodeId: null as string | null,
       attrs: JSON.stringify({
         instances: {
-          nodes: [
-            { id: 'i1', modelNodeId: nodeId, x: 9, y: 9, width: 10, height: 10 },
-          ],
+          nodes: [{ id: 'i1', modelNodeId: nodeId, x: 9, y: 9, width: 10, height: 10 }],
           edges: [],
         },
       }),
@@ -347,7 +343,9 @@ describe('computeMissingServerLinksOnCanvas', () => {
             { id: 'i1', modelNodeId: na, x: 0, y: 0, width: 10, height: 10 },
             { id: 'i2', modelNodeId: nb, x: 50, y: 0, width: 10, height: 10 },
           ],
-          edges: [{ id: 'e1', modelLinkId: linkId, sourceInstanceId: 'i1', targetInstanceId: 'i2' }],
+          edges: [
+            { id: 'e1', modelLinkId: linkId, sourceInstanceId: 'i1', targetInstanceId: 'i2' },
+          ],
         },
       },
     })
@@ -582,7 +580,9 @@ describe('computeMissingServerLinksOnCanvas', () => {
             { id: 'i1', modelNodeId: na, x: 0, y: 0, width: 10, height: 10 },
             { id: 'i2', modelNodeId: nb, x: 50, y: 0, width: 10, height: 10 },
           ],
-          edges: [{ id: 'e1', modelLinkId: linkId, sourceInstanceId: 'i1', targetInstanceId: 'i2' }],
+          edges: [
+            { id: 'e1', modelLinkId: linkId, sourceInstanceId: 'i1', targetInstanceId: 'i2' },
+          ],
         },
       },
     })

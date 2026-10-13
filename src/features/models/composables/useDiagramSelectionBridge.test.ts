@@ -67,12 +67,10 @@ describe('selectionIdsDiffer / selectionNeedsRepair', () => {
   })
 
   it('detects selected state repair needs', () => {
-    expect(
-      selectionNeedsRepair(['a'], id => (id === 'a' ? { state: 'normal' } : null))
-    ).toBe(true)
-    expect(
-      selectionNeedsRepair(['a'], id => (id === 'a' ? { state: 'selected' } : null))
-    ).toBe(false)
+    expect(selectionNeedsRepair(['a'], id => (id === 'a' ? { state: 'normal' } : null))).toBe(true)
+    expect(selectionNeedsRepair(['a'], id => (id === 'a' ? { state: 'selected' } : null))).toBe(
+      false
+    )
   })
 })
 

@@ -10,9 +10,7 @@ import { paginatedContent } from '@/utils/paginatedResponse'
 const shapeAttrsById = new Map<string, string | null>()
 let catalogLoadPromise: Promise<boolean> | null = null
 
-export function rememberNodeShapeAttrs(
-  shapes: Array<{ id: string; attrs?: string | null }>
-): void {
+export function rememberNodeShapeAttrs(shapes: Array<{ id: string; attrs?: string | null }>): void {
   for (const shape of shapes) {
     shapeAttrsById.set(shape.id, shape.attrs ?? null)
   }

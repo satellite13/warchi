@@ -6,7 +6,6 @@ import type { CompareSharedData } from '@/api/loadCompareSharedData'
 import { useResizablePropsPanel } from '@/composables/useResizablePropsPanel'
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
-import AppFooter from '@/components/layout/AppFooter.vue'
 import UiIcon from '@/components/ui/UiIcon.vue'
 import ModelDiagramCanvas from '@/features/models/components/ModelDiagramCanvas.vue'
 import type { NodeTypeResponse } from '@/types/api'
@@ -397,9 +396,6 @@ watch(
           </div>
         </div>
       </div>
-    </template>
-    <template #footer>
-      <AppFooter />
     </template>
   </MainLayout>
 </template>

@@ -7,11 +7,17 @@ vi.mock('@/api/apiClient', () => ({
 
 vi.mock('@/utils/userDisplay', () => ({
   getUserDisplayName: vi.fn(
-    (user: { firstName?: string | null; lastName?: string | null; email?: string | null } | null | undefined, fallback: string) => {
+    (
+      user:
+        | { firstName?: string | null; lastName?: string | null; email?: string | null }
+        | null
+        | undefined,
+      fallback: string
+    ) => {
       if (!user) return fallback
       const parts = [user.firstName, user.lastName].filter(Boolean)
       return parts.length > 0 ? parts.join(' ') : (user.email ?? fallback)
-    },
+    }
   ),
 }))
 
@@ -28,7 +34,10 @@ const mockedApiPost = vi.mocked(apiPost)
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockedApiPost.mockResolvedValue({ success: false, error: { status: 500, message: 'not available' } })
+  mockedApiPost.mockResolvedValue({
+    success: false,
+    error: { status: 500, message: 'not available' },
+  })
 })
 
 describe('resolveOwnerDisplayNames', () => {
@@ -152,13 +161,9 @@ describe('resolveOwnerDisplayNames', () => {
       '?'
     )
     expect(result.get('a1b2c3d4-e5f6-7890-abcd-ef1234567890')).toBe('Jane Doe')
-    expect(
-      getOwnerDisplayNameFromMap(
-        result,
-        'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
-        '?'
-      )
-    ).toBe('Jane Doe')
+    expect(getOwnerDisplayNameFromMap(result, 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890', '?')).toBe(
+      'Jane Doe'
+    )
     expect(normalizeOwnerId('  ABC  ')).toBe('abc')
   })
 

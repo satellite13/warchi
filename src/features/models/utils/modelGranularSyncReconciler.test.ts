@@ -10,10 +10,7 @@ import {
   type ModelGranularSyncFetchers,
 } from './modelGranularSyncReconciler'
 
-function node(
-  id: string,
-  overrides: Partial<NodeResponse> = {}
-): NodeResponse {
+function node(id: string, overrides: Partial<NodeResponse> = {}): NodeResponse {
   return {
     id,
     name: id,
@@ -26,10 +23,7 @@ function node(
   }
 }
 
-function link(
-  id: string,
-  overrides: Partial<LinkResponse> = {}
-): LinkResponse {
+function link(id: string, overrides: Partial<LinkResponse> = {}): LinkResponse {
   return {
     id,
     modelId: 'model-1',
@@ -42,10 +36,7 @@ function link(
   }
 }
 
-function diagram(
-  id: string,
-  overrides: Partial<DiagramResponse> = {}
-): DiagramResponse {
+function diagram(id: string, overrides: Partial<DiagramResponse> = {}): DiagramResponse {
   return {
     id,
     name: id,
@@ -85,11 +76,7 @@ function deferred<T>(): {
   return { promise, resolve }
 }
 
-function loadScope(
-  store: ModelPartialStore,
-  scope: TreeParentScope,
-  rows: NodeResponse[]
-): void {
+function loadScope(store: ModelPartialStore, scope: TreeParentScope, rows: NodeResponse[]): void {
   const guard = store.beginChildrenRequest(scope)
   store.mergeNodes(
     rows.map(toEditorNode),
@@ -105,16 +92,18 @@ function loadScope(
   )
 }
 
-function harness(options: {
-  nodes?: NodeResponse[]
-  links?: LinkResponse[]
-  diagrams?: EditorDiagram[]
-  fetchers?: Partial<ModelGranularSyncFetchers>
-  model?: ModelData
-  openDiagramId?: string | null
-  refreshVisibleChildrenScope?: (scope: TreeParentScope) => Promise<void>
-  acceptModelMetadata?: (remote: ModelData) => boolean
-} = {}) {
+function harness(
+  options: {
+    nodes?: NodeResponse[]
+    links?: LinkResponse[]
+    diagrams?: EditorDiagram[]
+    fetchers?: Partial<ModelGranularSyncFetchers>
+    model?: ModelData
+    openDiagramId?: string | null
+    refreshVisibleChildrenScope?: (scope: TreeParentScope) => Promise<void>
+    acceptModelMetadata?: (remote: ModelData) => boolean
+  } = {}
+) {
   const store = new ModelPartialStore()
   store.setRootParentNodeId(null)
   store.mergeNodes((options.nodes ?? []).map(toEditorNode), { kind: 'partial' })
@@ -192,14 +181,10 @@ describe('modelGranularSyncReconciler', () => {
       },
     })
 
-    h.reconciler.enqueue([
-      { type: 'model_updated', entity: 'model', id: 'model-1', revision: 2 },
-    ])
+    h.reconciler.enqueue([{ type: 'model_updated', entity: 'model', id: 'model-1', revision: 2 }])
     await h.reconciler.flush()
 
-    expect(acceptModelMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({ updatedAt: 'v1' })
-    )
+    expect(acceptModelMetadata).toHaveBeenCalledWith(expect.objectContaining({ updatedAt: 'v1' }))
     expect(h.currentModel().name).toBe('Model')
   })
 
@@ -275,7 +260,9 @@ describe('modelGranularSyncReconciler', () => {
         ownerId: 'owner-1',
         nodeTypeId: 'node-type-1',
         attrs: JSON.stringify({
-          customProperties: [{ id: 'status', name: 'status', type: 'string', defaultValue: 'draft' }],
+          customProperties: [
+            { id: 'status', name: 'status', type: 'string', defaultValue: 'draft' },
+          ],
         }),
       },
     ]
@@ -381,11 +368,11 @@ describe('modelGranularSyncReconciler', () => {
   })
 
   it('marks an exhausted link stale and recovers it through the local retry queue', async () => {
-    const fetchLink = vi.fn<
-      (id: string, signal: AbortSignal) => Promise<ApiResult<LinkResponse>>
-    >(async () => {
-      throw new Error('offline')
-    })
+    const fetchLink = vi.fn<(id: string, signal: AbortSignal) => Promise<ApiResult<LinkResponse>>>(
+      async () => {
+        throw new Error('offline')
+      }
+    )
     const h = harness({ links: [link('loaded')], fetchers: { fetchLink } })
 
     h.reconciler.enqueue([{ type: 'link_updated', entity: 'link', id: 'loaded' }])
@@ -414,11 +401,11 @@ describe('modelGranularSyncReconciler', () => {
     >(async () => {
       throw new Error('diagram offline')
     })
-    const fetchModel = vi.fn<
-      (id: string, signal: AbortSignal) => Promise<ApiResult<ModelData>>
-    >(async () => {
-      throw new Error('model offline')
-    })
+    const fetchModel = vi.fn<(id: string, signal: AbortSignal) => Promise<ApiResult<ModelData>>>(
+      async () => {
+        throw new Error('model offline')
+      }
+    )
     const h = harness({
       diagrams: [toEditorDiagram(diagram('diagram-1'), { attrsPending: false })],
       fetchers: { fetchDiagram, fetchModel },
@@ -536,20 +523,13 @@ describe('modelGranularSyncReconciler', () => {
         fetchNode: vi.fn(async id =>
           success(node(id, { name: 'remote node', parentNodeId: 'folder' }))
         ),
-        fetchLink: vi.fn(async id =>
-          success(link(id, { sourceId: 'remote-source' }))
-        ),
+        fetchLink: vi.fn(async id => success(link(id, { sourceId: 'remote-source' }))),
       },
     })
-    h.store.replaceMaterializedRows(
-      [...h.store.nodes, dirtyNode],
-      [...h.store.links, dirtyLink]
-    )
-    loadScope(
-      h.store,
-      { kind: 'node', nodeId: 'folder' },
-      [node('known-node', { name: 'local node', parentNodeId: 'folder' })]
-    )
+    h.store.replaceMaterializedRows([...h.store.nodes, dirtyNode], [...h.store.links, dirtyLink])
+    loadScope(h.store, { kind: 'node', nodeId: 'folder' }, [
+      node('known-node', { name: 'local node', parentNodeId: 'folder' }),
+    ])
 
     h.reconciler.enqueue([
       { type: 'node_created', entity: 'node', id: 'known-node' },
@@ -595,9 +575,7 @@ describe('modelGranularSyncReconciler', () => {
       ...toEditorLink(link('new-incident', { sourceId: 'deleted' })),
       _isNew: true,
     }
-    const unrelated = toEditorLink(
-      link('unrelated', { sourceId: 'other-1', targetId: 'other-2' })
-    )
+    const unrelated = toEditorLink(link('unrelated', { sourceId: 'other-1', targetId: 'other-2' }))
     const h = harness()
     h.store.replaceMaterializedRows(
       [toEditorNode(node('deleted'))],
@@ -643,9 +621,7 @@ describe('modelGranularSyncReconciler', () => {
       onModelRevisionApplied: revisionApplied,
     })
 
-    reconciler.enqueue([
-      { type: 'model_updated', entity: 'model', id: 'model-1', revision: 42 },
-    ])
+    reconciler.enqueue([{ type: 'model_updated', entity: 'model', id: 'model-1', revision: 42 }])
     await reconciler.flush()
 
     expect(h.fetchers.fetchModel).toHaveBeenCalledWith('model-1', expect.any(AbortSignal))
@@ -663,9 +639,7 @@ describe('modelGranularSyncReconciler', () => {
       },
     })
 
-    h.reconciler.enqueue([
-      { type: 'model_updated', entity: 'model', id: 'model-1', revision: 7 },
-    ])
+    h.reconciler.enqueue([{ type: 'model_updated', entity: 'model', id: 'model-1', revision: 7 }])
     await Promise.resolve()
     h.store.reset()
     response.resolve(success(model({ name: 'Late model', updatedAt: 'late' })))
@@ -838,9 +812,7 @@ describe('modelGranularSyncReconciler', () => {
   it('retains create intent when an update is enqueued before the same drain', async () => {
     const h = harness({
       fetchers: {
-        fetchNode: vi.fn(async id =>
-          success(node(id, { parentNodeId: 'folder', name: 'latest' }))
-        ),
+        fetchNode: vi.fn(async id => success(node(id, { parentNodeId: 'folder', name: 'latest' }))),
       },
     })
     loadScope(h.store, { kind: 'node', nodeId: 'folder' }, [])
@@ -905,13 +877,15 @@ describe('modelGranularSyncReconciler', () => {
     await Promise.resolve()
 
     expect(fetchNode).toHaveBeenCalledTimes(4)
-    requests.slice(0, 4).forEach((request, index) =>
-      request.resolve(success(node(`node-${index}`, { name: `done-${index}` })))
-    )
+    requests
+      .slice(0, 4)
+      .forEach((request, index) =>
+        request.resolve(success(node(`node-${index}`, { name: `done-${index}` })))
+      )
     await vi.waitFor(() => expect(fetchNode).toHaveBeenCalledTimes(6))
-    requests.slice(4).forEach((request, offset) =>
-      request.resolve(success(node(`node-${offset + 4}`)))
-    )
+    requests
+      .slice(4)
+      .forEach((request, offset) => request.resolve(success(node(`node-${offset + 4}`))))
     await h.reconciler.flush()
     expect(maxActive).toBe(4)
   })

@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import CollapsibleSection from './CollapsibleSection.vue'
 
-vi.mock('vue-i18n', async (importOriginal) => {
+vi.mock('vue-i18n', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
@@ -10,10 +10,7 @@ vi.mock('vue-i18n', async (importOriginal) => {
   }
 })
 
-function mountSection(
-  props: Record<string, unknown> = {},
-  slots: Record<string, string> = {},
-) {
+function mountSection(props: Record<string, unknown> = {}, slots: Record<string, string> = {}) {
   return mount(CollapsibleSection, {
     props: {
       title: 'Section',
@@ -63,7 +60,7 @@ describe('CollapsibleSection', () => {
       {
         'header-leading': '<span class="leading">L</span>',
         'header-extra': '<span class="extra">E</span>',
-      },
+      }
     )
     expect(wrapper.find('.leading').exists()).toBe(true)
     expect(wrapper.find('.extra').exists()).toBe(true)

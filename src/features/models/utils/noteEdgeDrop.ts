@@ -48,7 +48,10 @@ function distanceToPath(
       const t =
         lengthSq === 0
           ? 0
-          : Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq))
+          : Math.max(
+              0,
+              Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq)
+            )
       bestParam = total > 0 ? (acc + t * segLen) / total : 0.5
     }
     acc += segLen

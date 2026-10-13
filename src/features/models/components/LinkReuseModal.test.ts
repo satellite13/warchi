@@ -46,7 +46,9 @@ describe('LinkReuseModal', () => {
     expect(wrapper.text()).toContain('models.reuseLinkNoCustomProperties')
     expect(wrapper.text()).toContain('models.reuseLinkSelectHint')
     expect(wrapper.findAll('.link-reuse-modal__option')).toHaveLength(2)
-    expect(wrapper.find('.link-reuse-modal__action').text()).toContain('models.reuseLinkSelectAction')
+    expect(wrapper.find('.link-reuse-modal__action').text()).toContain(
+      'models.reuseLinkSelectAction'
+    )
   })
 
   it('emits the selected existing link', async () => {

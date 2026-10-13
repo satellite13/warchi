@@ -12,7 +12,7 @@ export function createModelChangedEventIdDeduper(capacity: number = DEFAULT_CAPA
 
   return {
     consume(eventId: unknown): boolean {
-      if (typeof eventId !== "string" || eventId.length === 0) {
+      if (typeof eventId !== 'string' || eventId.length === 0) {
         return true
       }
       if (set.has(eventId)) {

@@ -4,7 +4,6 @@ import { onBeforeRouteLeave, useRoute, useRouter, type RouteLocationRaw } from '
 import { useI18n } from 'vue-i18n'
 import { apiGet, uploadDiagramSvg } from '@/composables/useApi'
 import MainLayout from '@/layouts/MainLayout.vue'
-import AppFooter from '@/components/layout/AppFooter.vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
 import UnsavedChangesModal from '@/components/modals/UnsavedChangesModal.vue'
 import ShareAccessModal from '@/components/modals/ShareAccessModal.vue'
@@ -20,11 +19,15 @@ import OefImportReportModal from './components/modals/OefImportReportModal.vue'
 import DiagramImageShareModal from './components/DiagramImageShareModal.vue'
 import { SvgExporter, DiagramRenderer, InteractionManager } from '@ngroznykh/papirus'
 import {
+  createId,
   hasEligibleNotationComponent,
   resolveComponentByNodeType,
   resolveRelationByLinkType,
   type DiagramAttrs,
 } from './modelAttrs'
+import { isPasteableNodeType, uniquePasteName } from './composables/useNodeClipboard'
+import { createLocalNodeFor } from './composables/useModelTreeOperations'
+import { hiddenNodeTypeIds, isNodeHiddenInTree } from './utils/treeVisibility'
 import type {
   EditorGraphNeighbor,
   EditorLink,
@@ -60,10 +63,22 @@ import {
   withSelectedDiagramQuery,
 } from './utils/modelEditorDiagramLink'
 import { useModelEditorEntityDelete } from './composables/useModelEditorEntityDelete'
+import { collectNodeDiagramUsage } from './composables/useNodeDiagramUsage'
 import { useModelEditorScriptRun } from './composables/useModelEditorScriptRun'
 import { useModelEditorProperties } from './composables/useModelEditorProperties'
+import {
+  applySaveAuditFix,
+  runModelSaveAudit,
+  type SaveAuditFix,
+  type SaveAuditIssue,
+} from './utils/saveAudit'
+import {
+  createModelEditorDraftSnapshot,
+  saveModelEditorDraft,
+} from './composables/useModelEditorDraft'
 import { useModelEditorElementStyle } from './composables/useModelEditorElementStyle'
 import { useModelEditorToolbarActions } from './composables/useModelEditorToolbarActions'
+import { useNodeClipboard } from './composables/useNodeClipboard'
 import { syncLinkEndpointsFromDiagram } from './utils/syncLinkEndpointsFromDiagram'
 import {
   isContainerInstance,
@@ -78,6 +93,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { usePermissions } from '@/composables/usePermissions'
 import { useCanShare } from '@/composables/useCanShare'
+import { canEditByAccessPermission } from '@/utils/accessPermission'
 import ModelEditorHeader from './components/ModelEditorHeader.vue'
 import ModelMainPanelLayout from './layout/ModelMainPanelLayout.vue'
 import ModelTreePalettePanel from './components/ModelTreePalettePanel.vue'
@@ -103,6 +119,7 @@ import TabPanel from '@/components/layout/TabPanel.vue'
 import DocumentEditorModal from '@/components/modals/DocumentEditorModal.vue'
 import ModelVersionDiffModal from './components/ModelVersionDiffModal.vue'
 import BatchSaveConflictModal from './components/BatchSaveConflictModal.vue'
+import SaveAuditModal from './components/SaveAuditModal.vue'
 import SaveToast from '@/components/ui/SaveToast.vue'
 import { compareVersions } from '@/utils/version'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
@@ -179,6 +196,7 @@ const {
   applyModelDraft,
   rejectModelDraft,
   scheduleDraftSave,
+  persistModelDraft,
   partialStore,
 } = useModelEditor()
 
@@ -188,6 +206,10 @@ const detachedModelId = computed(() => state.value.modelId || null)
 const detachedSnapshotOptions = { defaultsCatalog: () => state.value }
 const oefDetachedSnapshot = useDetachedModelSnapshot(detachedModelId, detachedSnapshotOptions)
 const isPreparingValidation = ref(false)
+const saveAuditOpen = ref(false)
+const saveAuditIssues = ref<SaveAuditIssue[]>([])
+const saveAuditBlocked = ref(false)
+const saveAuditNodeNames = ref<Record<string, string>>({})
 /** Let Vue paint the saving toast before sync/CPU-heavy pre-save work. */
 const yieldToUiPaint = (): Promise<void> =>
   new Promise(resolve => {
@@ -237,17 +259,14 @@ const modelLiveSyncEnabled = computed(
   () => !!model.value && !isLoading.value && !errorMessage.value
 )
 
-const { currentUser } = useAuth()
+const { currentUser, isAdmin } = useAuth()
 const { hasGrant } = useFeatureGrants()
 const { checkPermission } = usePermissions()
 const { t, locale } = useI18n()
 
 const { list: wikiDocumentsList, fetchList: fetchWikiDocuments } = useWikiDocuments()
 /** Правка содержимого модели (диаграмма, узлы, документы), не только просмотр по шаре VIEW */
-const canInspectDiagramJson = computed(() => {
-  const permission = model.value?.accessPermission ?? null
-  return permission === 'ADMIN' || permission === 'OWNER' || permission === 'EDIT'
-})
+const canInspectDiagramJson = computed(() => canEditByAccessPermission(model.value))
 
 /** Документация на уровне модели (attrs.documentFileId), для кнопки wiki в шапке при доступе VIEW */
 const modelRootDocumentFileId = computed((): string | null => {
@@ -324,6 +343,15 @@ const scopedReload = useModelScopedReload({
   refreshTreeScopes: async scopes => {
     await Promise.all(scopes.map(scope => partialStore.refreshChildrenScope(scope)))
   },
+  captureUnsavedDraft: () => {
+    if (!model.value || !hasUnsavedChanges.value) return null
+    const snapshot = createModelEditorDraftSnapshot(state.value, model.value)
+    saveModelEditorDraft(model.value.id, snapshot)
+    return snapshot
+  },
+  presentUnsavedDraft: snapshot => {
+    pendingModelDraft.value = snapshot
+  },
   t: key => t(key),
 })
 assignScopedReload({
@@ -395,7 +423,9 @@ const compareModalState = computed(() => ({
 const diagramRenderer = shallowRef<DiagramRenderer | null>(null)
 const diagramInteractionManager = shallowRef<InteractionManager | null>(null)
 const activeRightTab = ref('properties')
-const { canShare: canShareModel } = useCanShare(model)
+const { canShare: canShareModel } = useCanShare(model, {
+  requiredGrant: () => hasGrant('model.shareAccess'),
+})
 const diagramCanvasRef = ref<InstanceType<typeof ModelDiagramCanvas> | null>(null)
 const treePanelRef = ref<InstanceType<typeof ModelTreePalettePanel> | null>(null)
 const showDiagramCopyWizard = ref(false)
@@ -612,6 +642,23 @@ function onCommentBadgeClick(payload: { targetType: 'node' | 'edge'; instanceId:
   activeRightTab.value = 'comments'
 }
 
+/** Несохранённые правки именно открытой диаграммы (canvas + участвующие узлы/связи). */
+const hasUnsavedDiagramChanges = computed(() => {
+  const diagram = activeDiagram.value
+  if (!diagram) return false
+  if (diagram._isDirty || diagram._isNew) return true
+  const nodeIds = new Set(diagram.parsedAttrs.instances.nodes.map(item => item.modelNodeId))
+  const linkIds = new Set(diagram.parsedAttrs.instances.edges.map(item => item.modelLinkId))
+  return (
+    state.value.nodes.some(
+      node => (node._isDirty || node._isNew || node._isDeleted) && nodeIds.has(node.id)
+    ) ||
+    state.value.links.some(
+      link => (link._isDirty || link._isNew || link._isDeleted) && linkIds.has(link.id)
+    )
+  )
+})
+
 const {
   diagramLocksForTree,
   diagramLockBlockedByOther,
@@ -652,6 +699,7 @@ const {
   canEditModel: canInspectDiagramJson,
   canInspectDiagramJson,
   isSelectedDiagramPersistedOnServer,
+  hasUnsavedDiagramChanges,
   currentUserId: computed(() => currentUser.value?.id ?? null),
   getDiagramRenderer: () => diagramRenderer.value,
   onDiagramCommentEvent: msg => {
@@ -832,6 +880,19 @@ const {
   setUiError,
 })
 
+/** Условия показа чипа миграции в шапке — те же, что были у баннера на канве. */
+const headerNewerNotationVersion = computed(() => {
+  if (
+    newerNotationVersions.value.length === 0 ||
+    !activeDiagram.value ||
+    !diagramScopeReady.value ||
+    isDiagramReadOnly.value
+  ) {
+    return ''
+  }
+  return newerNotationVersions.value[0]?.version ?? ''
+})
+
 const {
   showMigrateModal,
   migrateTarget,
@@ -929,8 +990,32 @@ const resolveTraceabilityDiagramReferences = (
   selectedNodeId: string
 ): DiagramReferenceResponse[] =>
   resolveLocalDiagramReferences(remoteRows, toRaw(state.value).diagrams, selectedNodeId)
+const treeHiddenTypeIds = computed(() => hiddenNodeTypeIds(state.value.nodeTypes))
+const treeHiddenNodeIds = computed(
+  () =>
+    new Set(
+      state.value.nodes
+        .filter(node => isNodeHiddenInTree(node, treeHiddenTypeIds.value))
+        .map(node => node.id)
+    )
+)
 const treeVisibleNodes = computed(() =>
-  state.value.nodes.filter(node => !node._isDeleted && !isUntypedNodeTypeId(node.nodeTypeId))
+  state.value.nodes.filter(
+    node =>
+      !node._isDeleted &&
+      !isUntypedNodeTypeId(node.nodeTypeId) &&
+      // Автоскрываемые типы (attrs.hideInTree / system.hideInTree, напр. Junctions):
+      // видно только админам.
+      (isAdmin.value || !isNodeHiddenInTree(node, treeHiddenTypeIds.value))
+  )
+)
+/** Hidden tree root locked by the sync → root-level create buttons are hidden (MCP/admin only). */
+const treeRootLocked = computed(() =>
+  state.value.nodes.some(
+    node =>
+      node.parsedAttrs.system?.hiddenTreeRoot === true &&
+      node.parsedAttrs.typeProperties?.locked === true
+  )
 )
 const canShowTraceabilityTab = computed(() => !!selectedNode.value && !isSelectedNodeUntyped.value)
 const canEditSelectedElementStyle = computed(() => {
@@ -1046,7 +1131,9 @@ const {
   createNodeModalTitle,
   nonDirectoryNodeTypes,
   treeRootNodeId,
+  modelSyncConfig,
   treeScopeForParent,
+  resolveTreeParentId,
   ensureCompleteSiblingScope,
   canCreateNodeFromModal,
   getNextTreeOrderForParent,
@@ -1059,6 +1146,8 @@ const {
   createDiagramWithBumpedVersion,
   createDiagramReplacingDeleted,
   isDirectoryNode,
+  isNodeLocked,
+  isSyncManagedRootParent,
   handleMoveNode,
   handleMoveDiagram,
   handleRenameNode,
@@ -1083,6 +1172,88 @@ const {
   ensureChildrenScopeComplete: partialStore.ensureChildrenScopeComplete,
   reconcileMaterializedRows: partialStore.reconcileMaterializedRows,
 })
+
+const { copied: clipboardNode, copyNode: copyNodeToClipboard, clear: clearNodeClipboard } =
+  useNodeClipboard()
+
+/** Обработчики копирования/вставки узлов дерева (только сама нода, без поддерева). */
+const handleCopyNode = (nodeId: string): void => {
+  const node = state.value.nodes.find(item => item.id === nodeId && !item._isDeleted)
+  if (!node) return
+  copyNodeToClipboard({
+    nodeTypeId: node.nodeTypeId,
+    name: node.name,
+    attrs: clonePlainDeep(node.parsedAttrs as unknown as Record<string, unknown>),
+  })
+}
+
+const handlePasteNode = async (parentNodeId: string): Promise<void> => {
+  const payload = clipboardNode.value
+  if (!payload) return
+  if (!canInspectDiagramJson.value) return
+  // Тип скопированной ноды должен существовать в этой модели: буфер переживает
+  // смену модели, а applyDefaultsToEditorNode молча пропустит неизвестный тип.
+  if (!isPasteableNodeType(payload, state.value.nodeTypes)) {
+    clearNodeClipboard()
+    setUiError(t('models.pasteNodeUnknownType'))
+    return
+  }
+  // Гранты/запреты sync-моделей повторяют openCreateRegularNode.
+  if (parentNodeId == null && !hasGrant('model.tree.createRootNode')) return
+  if (parentNodeId != null && !hasGrant('model.tree.createNode')) return
+  if (isSyncManagedRootParent(parentNodeId)) {
+    setUiError(t('models.syncRootForbidden'))
+    return
+  }
+  if (modelSyncConfig.value.autoManaged) {
+    setUiError(t('models.syncNodesForbidden'))
+    return
+  }
+  if (isNodeLocked(parentNodeId)) {
+    setUiError(t('models.folderLocked'))
+    return
+  }
+  if (!(await ensureCompleteSiblingScope(parentNodeId))) return
+
+  const parentNodeIdForCreate = resolveTreeParentId(parentNodeId)
+  const existingSiblingNames = state.value.nodes
+    .filter(
+      item =>
+        !item._isDeleted && (item.parentNodeId ?? null) === (parentNodeIdForCreate ?? null)
+    )
+    .map(item => item.name)
+  const newNodeId = createId()
+  const treeOrder = getNextTreeOrderForParent(parentNodeIdForCreate)
+  const node = createLocalNodeFor(state, {
+    id: newNodeId,
+    name: uniquePasteName(payload.name, existingSiblingNames),
+    nodeTypeId: payload.nodeTypeId,
+    parentNodeId: parentNodeIdForCreate,
+    treeOrder,
+  })
+  if (payload.attrs) {
+    // Санитизация выполнена при копировании (dpc/oef сняты); восстанавливаем
+    // вычисляемый treeOrder поверх клонированных attrs источника.
+    // clonePlainDeep, а не structuredClone: буфер живёт в reactive ref,
+    // payload.attrs приходит как Proxy, и structuredClone бросает DataCloneError.
+    node.parsedAttrs = {
+      ...(clonePlainDeep(payload.attrs) as typeof node.parsedAttrs),
+      treeOrder,
+    }
+  }
+  state.value.nodes.push(node)
+  const parent = state.value.nodes.find(
+    item => item.id === (parentNodeIdForCreate ?? '') && !item._isDeleted
+  )
+  if (parent) parent.hasChildren = true
+  markNodeDirty(newNodeId)
+  partialStore.reconcileMaterializedRows([
+    treeScopeForParent(parentNodeIdForCreate),
+  ])
+  void nextTick().then(() => {
+    treePanelRef.value?.focusNode?.(newNodeId)
+  })
+}
 const lazyTreeSearchQuery = ref('')
 const lazyTreeSearch = useLazyTreeSearch({
   modelId: computed(() => state.value.modelId),
@@ -1121,6 +1292,32 @@ const applyLazyTreeSelection = async (
 }
 
 let lastTreeSearchHit: ModelSearchHit | null = null
+
+/**
+ * Синхронизация «элемент на канве / Найти в дереве» → дерево.
+ * Узел может быть ещё не загружен (ленивое дерево), поэтому сначала
+ * материализуем ветку через /ancestors, затем подгружаем детей каждой
+ * папки пути (иначе раскрываются только уже загруженные уровни), раскрываем
+ * путь сверху вниз и фокусируемся на самом элементе.
+ */
+const focusModelNodeInTree = async (
+  modelNodeId: string,
+  isCurrent: () => boolean = () => true
+): Promise<void> => {
+  if (!modelNodeId) return
+  const path = await lazyTreeSearch.materializeNodePathById(modelNodeId, isCurrent)
+  if (!isCurrent()) return
+  if (path.nodePath.length === 0) return
+  const ancestors = path.nodePath.slice(0, -1)
+  for (const ancestorId of ancestors) {
+    await partialStore.loadChildren({ kind: 'node', nodeId: ancestorId })
+    if (!isCurrent()) return
+  }
+  treePanelRef.value?.expandPath?.(ancestors)
+  await nextTick()
+  if (!isCurrent()) return
+  await treePanelRef.value?.focusNode?.(modelNodeId, isCurrent)
+}
 
 const handleTreeSearchHit = async (hit: ModelSearchHit): Promise<void> => {
   lastTreeSearchHit = hit
@@ -1758,6 +1955,21 @@ const saveWithValidation = async (): Promise<boolean> => {
       setUiError(prepared.error)
       return false
     }
+
+    const audit = runModelSaveAudit(state.value)
+    if (audit.blocked) {
+      saveAuditBlocked.value = true
+      saveAuditIssues.value = audit.issues
+      saveAuditNodeNames.value = Object.fromEntries(
+        state.value.nodes.filter(n => !n._isDeleted).map(n => [n.id, n.name])
+      )
+      saveAuditOpen.value = true
+      // Let the dialog render and the toast state settle before returning.
+      isPreparingValidation.value = false
+      return false
+    }
+    saveAuditBlocked.value = false
+
     isPreparingValidation.value = false
     saveProgress.value = t('common.saving')
     // Проверить, что лок ещё наш, до начала сохранения
@@ -1783,6 +1995,38 @@ const saveWithValidation = async (): Promise<boolean> => {
     isPreparingValidation.value = false
     if (isSaving.value) finishSave()
   }
+}
+
+const rerunAudit = (): void => {
+  const audit = runModelSaveAudit(state.value)
+  saveAuditIssues.value = audit.issues
+  saveAuditBlocked.value = audit.blocked
+  saveAuditNodeNames.value = Object.fromEntries(
+    state.value.nodes.filter(n => !n._isDeleted).map(n => [n.id, n.name])
+  )
+}
+
+const handleSaveAuditApplyFix = (fix: SaveAuditFix): void => {
+  applySaveAuditFix(state.value, fix)
+  rerunAudit()
+  if (!saveAuditBlocked.value) {
+    saveAuditOpen.value = false
+    void saveWithValidation()
+  }
+}
+
+const handleSaveAuditSave = (): void => {
+  saveAuditOpen.value = false
+  void saveWithValidation()
+}
+
+const handleSaveAuditClose = (): void => {
+  saveAuditOpen.value = false
+}
+
+const handleSaveAuditFindInTree = (nodeId: string): void => {
+  saveAuditOpen.value = false
+  void focusModelNodeInTree(nodeId)
 }
 
 watch(
@@ -1903,9 +2147,10 @@ const handleReconnectEdge = (
   })
 }
 
-const handleFindInTree = (modelNodeId: string) => {
+const handleFindInTree = async (modelNodeId: string) => {
   selectedNodeId.value = modelNodeId
-  treePanelRef.value?.focusNode?.(modelNodeId)
+  await nextTick()
+  await focusModelNodeInTree(modelNodeId)
 }
 
 const handleTraceabilityFocusNode = (modelNodeId: string) => {
@@ -1958,7 +2203,7 @@ const handleCanvasSelectNodes = (modelNodeIds: string[]) => {
     return
   }
   selectedNodeId.value = modelNodeId
-  treePanelRef.value?.focusNode?.(modelNodeId)
+  void focusModelNodeInTree(modelNodeId)
 }
 
 const toggleSelectionSync = () => {
@@ -1968,7 +2213,7 @@ const toggleSelectionSync = () => {
   if (selectedModelNodeIds.value.length === 1) {
     const modelNodeId = selectedModelNodeIds.value[0]!
     selectedNodeId.value = modelNodeId
-    treePanelRef.value?.focusNode?.(modelNodeId)
+    void focusModelNodeInTree(modelNodeId)
     return
   }
 
@@ -1987,6 +2232,14 @@ const handleNodeLabelChange = (modelNodeId: string, newLabel: string) => {
   const nextName = newLabel.trim()
   if (!node || !nextName || node.name === nextName) return
   node.name = nextName
+  markNodeDirty(node.id)
+}
+
+const handleNodePropertyChange = (modelNodeId: string, key: string, value: unknown) => {
+  const node = state.value.nodes.find(item => item.id === modelNodeId)
+  if (!node) return
+  if (Object.is(node.parsedAttrs.typeProperties[key], value)) return
+  node.parsedAttrs.typeProperties[key] = value
   markNodeDirty(node.id)
 }
 
@@ -2184,6 +2437,28 @@ const {
   copySelectedNotesToClipboard,
   pasteCopiedNotes,
 })
+
+const nodeDeleteWarning = ref<string | null>(null)
+
+const deleteNodeFromTree = (nodeId: string) => {
+  const node = state.value.nodes.find(n => n.id === nodeId)
+  if (
+    node?.parsedAttrs.dpc?.autoCreated === true ||
+    node?.parsedAttrs.typeProperties?.autoCreated === true
+  ) {
+    return // авто-созданные не удаляются из дерева (пункт меню уже скрыт — страховка)
+  }
+  const usage = collectNodeDiagramUsage(state.value.diagrams, [nodeId])
+  const usedOn = usage.get(nodeId)?.length ?? 0
+  // Решение 2026-09-27: предупреждение при использовании хотя бы на одной диаграмме
+  // (удаление из дерева делается вне контекста конкретной диаграммы — любая схема «другая»).
+  if (usedOn > 0) {
+    nodeDeleteWarning.value = t('models.nodeUsedOnDiagrams', { count: usedOn })
+  } else {
+    nodeDeleteWarning.value = null
+  }
+  openNodeDeleteDialog([nodeId], 'tree')
+}
 
 const saveAndSwitchDiagram = async () => {
   const action = pendingDiagramAction.value
@@ -2459,6 +2734,9 @@ const { handleToolbarAction } = useModelEditorToolbarActions({
   modelRootDocumentFileId,
   handleOpenModelDoc,
   handleOpenDiagramDoc,
+  focusDiagramInTree: async diagramId => {
+    await treePanelRef.value?.focusDiagram?.(diagramId)
+  },
 })
 
 const routeModelId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''))
@@ -2626,7 +2904,16 @@ const onHistoryShortcutCapture = (event: KeyboardEvent) => {
 
 const onBeforeUnload = (event: BeforeUnloadEvent) => {
   if (hasUnsavedChanges.value) {
+    // Синхронный флаш черновика: debounce 800 мс не должен успеть «пропустить» закрытие.
+    persistModelDraft()
     event.preventDefault()
+  }
+}
+
+const onPageHide = (): void => {
+  // pagehide — более надёжный момент на мобильных (iOS Safari), где beforeunload может не прийти.
+  if (hasUnsavedChanges.value) {
+    persistModelDraft()
   }
 }
 
@@ -2637,11 +2924,13 @@ onMounted(async () => {
   // Wiki catalog is not needed for the tree/canvas — load after heavy payloads settle.
   void whenBackgroundReady().then(() => fetchWikiDocuments())
   window.addEventListener('beforeunload', onBeforeUnload)
+  window.addEventListener('pagehide', onPageHide)
   window.addEventListener('keydown', onDeleteKeydown)
   window.addEventListener('keydown', onHistoryShortcutCapture, true)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
+  window.removeEventListener('pagehide', onPageHide)
   window.removeEventListener('keydown', onDeleteKeydown)
   window.removeEventListener('keydown', onHistoryShortcutCapture, true)
   if (documentsFetchTimer) {
@@ -2657,6 +2946,8 @@ onBeforeUnmount(() => {
     clearTimeout(diagramCopySuccessTimer)
     diagramCopySuccessTimer = null
   }
+  // Буфер копирования не должен переживать редактор: типы нод другой модели не совпадают.
+  clearNodeClipboard()
 })
 </script>
 
@@ -2687,6 +2978,8 @@ onBeforeUnmount(() => {
         :notation-version="activeDiagram ? activeDiagramNotationVersion : ''"
         :notation-owner-info="activeDiagram ? activeDiagramNotationOwnerLabel : ''"
         :can-open-notation="canOpenActiveDiagramNotation && hasGrant('notation.nav')"
+        :newer-notation-version="headerNewerNotationVersion"
+        @migrate-notation="openMigrateModal()"
         :diagram-versions="diagramVersionsForCurrentName"
         :selected-diagram-id="selectedDiagramId"
         :is-diagram-read-only="isDiagramReadOnly"
@@ -2737,6 +3030,11 @@ onBeforeUnmount(() => {
             :diagrams="state.diagrams"
             :node-types="state.nodeTypes"
             :tree-root-node-id="treeRootNodeId"
+            :root-locked="treeRootLocked"
+            :model-sync-managed="modelSyncConfig.autoManaged"
+            :views-folder-id="modelSyncConfig.defaultDiagramNodeId"
+            :is-admin-user="isAdmin"
+            :hidden-node-ids="treeHiddenNodeIds"
             :selected-node-id="selectedNodeId"
             :selected-diagram-id="selectedDiagramId"
             :diagram-locks="diagramLocksForTree"
@@ -2755,6 +3053,7 @@ onBeforeUnmount(() => {
             :search-error="lazyTreeSearch.error.value || lazyTreeSearch.selectionError.value"
             :tree-focus-loading="routeTreeFocusLoading"
             :tree-focus-error="routeTreeFocusError"
+            :clipboard-available="!!clipboardNode"
             @select-node="handleTreeSelectNode"
             @search-query-change="lazyTreeSearchQuery = $event"
             @select-search-hit="handleTreeSearchHit"
@@ -2770,7 +3069,7 @@ onBeforeUnmount(() => {
             @open-diagram="selectDiagram"
             @create-folder="openCreateFolder"
             @create-node="openCreateRegularNode"
-            @delete-node="openNodeDeleteDialog([$event], 'tree')"
+            @delete-node="deleteNodeFromTree"
             @create-diagram="openCreateDiagram"
             @delete-diagram="openDiagramDeleteDialog"
             @move-diagram="handleMoveDiagram"
@@ -2778,47 +3077,12 @@ onBeforeUnmount(() => {
             @rename-node="handleRenameNode"
             @rename-diagram="handleRenameDiagram"
             @copy-diagram-to-model="openDiagramCopyWizard"
+            @copy-node="handleCopyNode"
+            @paste-node="handlePasteNode"
           />
         </template>
 
-        <div
-          class="model-canvas-area"
-          :class="{
-            'model-canvas-area--has-newer-banner':
-              newerNotationVersions.length > 0 &&
-              !!activeDiagram &&
-              diagramScopeReady &&
-              !isDiagramReadOnly,
-          }"
-        >
-          <div
-            v-if="
-              newerNotationVersions.length > 0 &&
-              activeDiagram &&
-              diagramScopeReady &&
-              !isDiagramReadOnly
-            "
-            class="model-canvas-area__newer-notation-banner"
-          >
-            <span class="material-symbols-outlined model-canvas-area__newer-notation-icon"
-              >info</span
-            >
-            <span class="model-canvas-area__newer-notation-text">
-              {{
-                t('diagram.newerNotationVersionsBanner', {
-                  name: newerNotationVersions[0]?.name ?? '',
-                  version: newerNotationVersions[0]?.version ?? '',
-                })
-              }}
-            </span>
-            <button
-              type="button"
-              class="btn btn--primary btn--sm model-canvas-area__newer-notation-action"
-              @click="openMigrateModal()"
-            >
-              {{ t('diagram.migrateNotationAction') }}
-            </button>
-          </div>
+        <div class="model-canvas-area">
           <ModelDiagramCanvas
             v-if="!activeDiagram || diagramScopeReady"
             :key="activeDiagram?.id ?? 'none'"
@@ -2886,6 +3150,7 @@ onBeforeUnmount(() => {
             @reconnect-edge-to-host="reconnectEdgeToHost"
             @find-in-tree="handleFindInTree"
             @node-label-change="handleNodeLabelChange"
+            @node-property-change="handleNodePropertyChange"
             @request-delete-node-from-diagram="handleRequestDeleteNodeFromDiagram"
             @request-edit-note="openNoteEditor"
             @request-delete-link="handleRequestDeleteLink"
@@ -3035,9 +3300,6 @@ onBeforeUnmount(() => {
         </template>
       </ModelMainPanelLayout>
     </template>
-    <template #footer>
-      <AppFooter />
-    </template>
   </MainLayout>
 
   <SaveToast
@@ -3096,6 +3358,17 @@ onBeforeUnmount(() => {
     @close="dismissDiagramNameVersionConflict"
     @bump="resolveDiagramTrashBump"
     @replace="resolveDiagramTrashReplace"
+  />
+
+  <SaveAuditModal
+    v-if="saveAuditOpen"
+    :issues="saveAuditIssues"
+    :node-names="saveAuditNodeNames"
+    :blocked="saveAuditBlocked"
+    @close="handleSaveAuditClose"
+    @apply-fix="handleSaveAuditApplyFix"
+    @save="handleSaveAuditSave"
+    @find-in-tree="handleSaveAuditFindInTree"
   />
 
   <LayoutPreviewModal
@@ -3221,7 +3494,13 @@ onBeforeUnmount(() => {
     danger
     @close="cancelNodeDelete"
     @confirm="confirmNodeDelete"
-  />
+  >
+    <template #warning>
+      <div v-if="nodeDeleteWarning" class="node-delete-warning" role="alert">
+        {{ nodeDeleteWarning }}
+      </div>
+    </template>
+  </ConfirmModal>
 
   <ConfirmModal
     v-if="showDiagramDeleteModal"
@@ -3365,6 +3644,18 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.node-delete-warning {
+  margin-top: 12px;
+  padding: 10px 14px;
+  color: var(--base-text);
+  font-size: 13px;
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--surface));
+  border-left: 4px solid var(--warning);
+  border-radius: 8px;
+}
+
 .selection-scope-status {
   display: flex;
   flex-direction: column;
@@ -3459,44 +3750,5 @@ onBeforeUnmount(() => {
   color: var(--primary);
 }
 
-.model-canvas-area__newer-notation-banner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  font-size: 13px;
-  color: var(--primary);
-  background: var(--accent-soft);
-  border-bottom: 1px solid var(--border);
-}
-
-.model-canvas-area__newer-notation-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.model-canvas-area__newer-notation-action {
-  flex-shrink: 0;
-  pointer-events: auto;
-}
-
-.model-canvas-area__newer-notation-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.model-canvas-area--has-newer-banner :deep(.canvas-palette-toggle),
-.model-canvas-area--has-newer-banner :deep(.canvas-palette) {
-  top: 50px;
-}
-
-.model-canvas-area--has-newer-banner .relation-rules-loading-badge {
-  top: 96px;
-}
 
 </style>

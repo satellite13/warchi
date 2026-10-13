@@ -75,9 +75,9 @@ describe('chunkLiveEnvelope', () => {
       800
     )
     expect(chunks.length).toBeGreaterThan(1)
-    expect(chunks.every((c) => utf8ByteLength(JSON.stringify(c)) <= 800)).toBe(true)
-    expect(chunks.every((c) => c.chunkCount === chunks.length)).toBe(true)
-    expect(chunks.map((c) => c.chunkIndex)).toEqual(chunks.map((_, i) => i))
-    expect(chunks.flatMap((c) => c.upsertNodes ?? [])).toHaveLength(40)
+    expect(chunks.every(c => utf8ByteLength(JSON.stringify(c)) <= 800)).toBe(true)
+    expect(chunks.every(c => c.chunkCount === chunks.length)).toBe(true)
+    expect(chunks.map(c => c.chunkIndex)).toEqual(chunks.map((_, i) => i))
+    expect(chunks.flatMap(c => c.upsertNodes ?? [])).toHaveLength(40)
   })
 })

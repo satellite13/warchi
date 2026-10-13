@@ -15,7 +15,7 @@ export type PaletteIconAttrs = {
  */
 export function resolvePaletteIconName(
   attrs: PaletteIconAttrs | null | undefined,
-  fallback = 'widgets',
+  fallback = 'widgets'
 ): string {
   const override = attrs?.paletteMaterialIcon?.trim()
   if (override) return override

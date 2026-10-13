@@ -46,7 +46,10 @@ function tokenOverlapScore(a: string, b: string): number {
   return matches / Math.max(aTokens.size, bTokens.size)
 }
 
-function scoreCandidate(sourceType: string, candidateTexts: string[]): { score: number; reason: MappingSuggestion['reason'] } {
+function scoreCandidate(
+  sourceType: string,
+  candidateTexts: string[]
+): { score: number; reason: MappingSuggestion['reason'] } {
   const sourceNorm = normalize(sourceType)
   const candidateNorms = candidateTexts.map(normalize)
   if (candidateNorms.some(item => item === sourceNorm)) {
@@ -58,7 +61,9 @@ function scoreCandidate(sourceType: string, candidateTexts: string[]): { score: 
   if (maxToken >= 0.99) return { score: 0.9, reason: 'token-overlap' }
   if (maxToken >= 0.5) return { score: 0.6 + maxToken * 0.25, reason: 'token-overlap' }
 
-  const partial = candidateNorms.some(item => item.includes(sourceNorm) || sourceNorm.includes(item))
+  const partial = candidateNorms.some(
+    item => item.includes(sourceNorm) || sourceNorm.includes(item)
+  )
   if (partial) return { score: 0.55, reason: 'partial' }
   return { score: 0, reason: 'partial' }
 }

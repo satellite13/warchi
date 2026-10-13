@@ -22,7 +22,6 @@ import ValidationMergeWizard from '@/features/models-validation/components/Valid
 import ValidationUnusedElements from '@/features/models-validation/components/ValidationUnusedElements.vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
-import AppFooter from '@/components/layout/AppFooter.vue'
 
 type PendingMerge = {
   keepId: string
@@ -42,6 +41,8 @@ const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 const pendingMerge = ref<PendingMerge | null>(null)
 const { isAdmin, currentUser } = useAuth()
+
+let loadSeq = 0
 
 const autoMergeLock = ref<AutoMergeLock | null>(null)
 const lockHeldByOther = computed(
@@ -78,13 +79,23 @@ const unusedTotal = computed(
     (report.value?.unusedLinksTotal ?? unusedLinks.value.length)
 )
 
-type ValidationTab = 'nodes' | 'links' | 'diagrams' | 'unused'
+const manualNodeGroups = computed(() => report.value?.duplicateNodes ?? [])
+const manualLinkGroups = computed(() => report.value?.duplicateLinks ?? [])
+const autoNodeGroups = computed(() => report.value?.autoDuplicateNodes ?? [])
+const autoLinkGroups = computed(() => report.value?.autoDuplicateLinks ?? [])
+
+const pageSize = 50
+const nodesLoadingMore = ref(false)
+const linksLoadingMore = ref(false)
+
+type ValidationTab = 'nodes' | 'links' | 'auto' | 'diagrams' | 'unused'
 
 const activeTab = ref<ValidationTab>('nodes')
 
 const tabDesc: Record<ValidationTab, string> = {
   nodes: 'models.validationTabDescNodes',
   links: 'models.validationTabDescLinks',
+  auto: 'models.validationTabDescAuto',
   diagrams: 'models.validationTabDescDiagrams',
   unused: 'models.validationTabDescUnused',
 }
@@ -95,14 +106,20 @@ const tabs = computed(() => {
     {
       key: 'nodes' as const,
       label: t('models.validationReportNodes'),
-      shown: current?.duplicateNodes.length ?? 0,
+      shown: manualNodeGroups.value.length,
       total: current?.duplicateNodesTotal,
     },
     {
       key: 'links' as const,
       label: t('models.validationReportLinks'),
-      shown: current?.duplicateLinks.length ?? 0,
+      shown: manualLinkGroups.value.length,
       total: current?.duplicateLinksTotal,
+    },
+    {
+      key: 'auto' as const,
+      label: t('models.validationReportAutoCreated'),
+      shown: autoNodeGroups.value.length + autoLinkGroups.value.length,
+      total: (current?.autoDuplicateNodesTotal ?? 0) + (current?.autoDuplicateLinksTotal ?? 0),
     },
     {
       key: 'diagrams' as const,
@@ -124,7 +141,12 @@ const activeTabCapped = computed(() => {
   const tab = activeTabItem.value
   return tab != null && tab.total != null && tab.total > tab.shown
 })
-const isDuplicatesTab = computed(() => activeTab.value === 'nodes' || activeTab.value === 'links')
+const isDuplicatesTab = computed(
+  () =>
+    activeTab.value === 'nodes' ||
+    activeTab.value === 'links' ||
+    activeTab.value === 'auto'
+)
 
 const autoMerging = ref(false)
 const autoMergeProgress = ref<string | null>(null)
@@ -136,7 +158,10 @@ const autoMergeLive = ref<{ label: string | null; merged: number; skipped: numbe
 const autoMergeStopRequested = ref(false)
 const hasDuplicates = computed(
   () =>
-    (report.value?.duplicateNodes.length ?? 0) > 0 || (report.value?.duplicateLinks.length ?? 0) > 0
+    (report.value?.duplicateNodes.length ?? 0) > 0 ||
+    (report.value?.duplicateLinks.length ?? 0) > 0 ||
+    (report.value?.autoDuplicateNodes?.length ?? 0) > 0 ||
+    (report.value?.autoDuplicateLinks?.length ?? 0) > 0
 )
 
 const isEmpty = computed(() => {
@@ -145,6 +170,8 @@ const isEmpty = computed(() => {
   return (
     current.duplicateNodes.length === 0 &&
     current.duplicateLinks.length === 0 &&
+    (current.autoDuplicateNodes?.length ?? 0) === 0 &&
+    (current.autoDuplicateLinks?.length ?? 0) === 0 &&
     diagramIssues.value.length === 0 &&
     unusedNodes.value.length === 0 &&
     unusedLinks.value.length === 0
@@ -197,12 +224,15 @@ async function onAutoMergeConfirmed(options: AutoMergeOptions): Promise<void> {
       }
       const current = report.value
       if (!current) break
-      const linkGroups = options.includeLinks ? current.duplicateLinks : []
-      if (current.duplicateNodes.length === 0 && linkGroups.length === 0) break
+      const nodeGroups = [...current.duplicateNodes, ...(current.autoDuplicateNodes ?? [])]
+      const linkGroups = options.includeLinks
+        ? [...current.duplicateLinks, ...(current.autoDuplicateLinks ?? [])]
+        : []
+      if (nodeGroups.length === 0 && linkGroups.length === 0) break
 
       const result = await autoMergeDuplicates({
         modelId: modelId.value,
-        nodeGroups: current.duplicateNodes,
+        nodeGroups,
         linkGroups,
         options,
         shouldStop: () => autoMergeStopRequested.value,
@@ -279,8 +309,9 @@ function groupCountLabel(shown: number, total?: number): string {
 }
 
 function pickDefaultTab(): void {
-  if ((report.value?.duplicateNodes.length ?? 0) > 0) activeTab.value = 'nodes'
-  else if ((report.value?.duplicateLinks.length ?? 0) > 0) activeTab.value = 'links'
+  if (manualNodeGroups.value.length > 0) activeTab.value = 'nodes'
+  else if (manualLinkGroups.value.length > 0) activeTab.value = 'links'
+  else if (autoNodeGroups.value.length + autoLinkGroups.value.length > 0) activeTab.value = 'auto'
   else if (diagramIssues.value.length > 0) activeTab.value = 'diagrams'
   else if (unusedNodes.value.length > 0 || unusedLinks.value.length > 0) activeTab.value = 'unused'
   else activeTab.value = 'nodes'
@@ -290,14 +321,17 @@ async function load(): Promise<void> {
   const id = modelId.value
   if (!id) return
 
+  const seq = ++loadSeq
   loading.value = true
   error.value = null
   report.value = null
 
   const [modelResult, reportResult] = await Promise.all([
     apiGet<ModelData>(`/models/${encodeURIComponent(id)}`),
-    fetchValidationReport(id),
+    fetchValidationReport(id, { offset: 0, limit: pageSize }),
   ])
+
+  if (seq !== loadSeq) return
 
   model.value = modelResult.success
     ? { name: modelResult.data.name, version: modelResult.data.version }
@@ -316,9 +350,69 @@ async function load(): Promise<void> {
   loading.value = false
 }
 
+async function loadMoreNodes(): Promise<void> {
+  const current = report.value
+  if (!current || nodesLoadingMore.value) return
+  if (current.duplicateNodes.length >= (current.duplicateNodesTotal ?? 0)) return
+  const seq = loadSeq
+  nodesLoadingMore.value = true
+  const result = await fetchValidationReport(modelId.value, {
+    offset: current.duplicateNodes.length,
+    limit: pageSize,
+  })
+  nodesLoadingMore.value = false
+  if (seq !== loadSeq) return
+  if (!result.success || !report.value) return
+
+  const fresh = result.data
+  report.value = {
+    ...report.value,
+    duplicateNodes: [...report.value.duplicateNodes, ...fresh.duplicateNodes],
+    duplicateNodesTotal: fresh.duplicateNodesTotal,
+    autoDuplicateNodes: fresh.autoDuplicateNodes,
+    autoDuplicateNodesTotal: fresh.autoDuplicateNodesTotal,
+    autoDuplicateLinks: fresh.autoDuplicateLinks,
+    autoDuplicateLinksTotal: fresh.autoDuplicateLinksTotal,
+  }
+}
+
+async function loadMoreLinks(): Promise<void> {
+  const current = report.value
+  if (!current || linksLoadingMore.value) return
+  if (current.duplicateLinks.length >= (current.duplicateLinksTotal ?? 0)) return
+  const seq = loadSeq
+  linksLoadingMore.value = true
+  const result = await fetchValidationReport(modelId.value, {
+    offset: current.duplicateLinks.length,
+    limit: pageSize,
+  })
+  linksLoadingMore.value = false
+  if (seq !== loadSeq) return
+  if (!result.success || !report.value) return
+
+  const fresh = result.data
+  report.value = {
+    ...report.value,
+    duplicateLinks: [...report.value.duplicateLinks, ...fresh.duplicateLinks],
+    duplicateLinksTotal: fresh.duplicateLinksTotal,
+    autoDuplicateNodes: fresh.autoDuplicateNodes,
+    autoDuplicateNodesTotal: fresh.autoDuplicateNodesTotal,
+    autoDuplicateLinks: fresh.autoDuplicateLinks,
+    autoDuplicateLinksTotal: fresh.autoDuplicateLinksTotal,
+  }
+}
+
 watch(
   () => modelId.value,
   value => {
+    pendingMerge.value = null
+    success.value = null
+    error.value = null
+    showAutoMergeDialog.value = false
+    autoMergeResult.value = null
+    autoMergeLive.value = null
+    autoMergePhase.value = 'setup'
+    autoMergeStopRequested.value = false
     if (value) {
       void load()
       void refreshAutoMergeLock()
@@ -422,7 +516,7 @@ async function onWizardRefresh(): Promise<void> {
               @click="activeTab = tab.key"
             >
               {{ tab.label }}
-              <span class="model-validation__tab-count">{{ tab.shown }}</span>
+              <span class="model-validation__tab-count">{{ tab.total ?? tab.shown }}</span>
             </button>
           </div>
 
@@ -435,9 +529,9 @@ async function onWizardRefresh(): Promise<void> {
             </div>
 
             <template v-if="activeTab === 'nodes'">
-              <div v-if="report.duplicateNodes.length > 0" class="model-validation__groups">
+              <div v-if="manualNodeGroups.length > 0" class="model-validation__groups">
                 <ValidationDuplicateGroup
-                  v-for="group in report.duplicateNodes"
+                  v-for="group in manualNodeGroups"
                   :key="`${group.nodeTypeId}:${group.name}`"
                   kind="node"
                   :model-id="modelId"
@@ -448,13 +542,64 @@ async function onWizardRefresh(): Promise<void> {
                 />
               </div>
               <p v-else class="model-validation__tabempty">{{ t('models.validationTabEmpty') }}</p>
+              <button
+                v-if="manualNodeGroups.length < (report?.duplicateNodesTotal ?? 0)"
+                type="button"
+                class="model-validation__loadmore"
+                :disabled="nodesLoadingMore"
+                @click="loadMoreNodes"
+              >
+                {{ nodesLoadingMore
+                  ? t('common.loading')
+                  : t('models.validationLoadMore', { count: (report?.duplicateNodesTotal ?? 0) - manualNodeGroups.length }) }}
+              </button>
             </template>
 
             <template v-else-if="activeTab === 'links'">
-              <div v-if="report.duplicateLinks.length > 0" class="model-validation__groups">
+              <div v-if="manualLinkGroups.length > 0" class="model-validation__groups">
                 <ValidationDuplicateGroup
-                  v-for="group in report.duplicateLinks"
+                  v-for="group in manualLinkGroups"
                   :key="`${group.sourceId}:${group.targetId}:${group.linkTypeId}`"
+                  kind="link"
+                  :model-id="modelId"
+                  :title="`${group.sourceName} → ${group.targetName} · ${group.linkTypeName}`"
+                  :count="group.count"
+                  :link-members="group.links"
+                  @merge="onMerge"
+                />
+              </div>
+              <p v-else class="model-validation__tabempty">{{ t('models.validationTabEmpty') }}</p>
+              <button
+                v-if="manualLinkGroups.length < (report?.duplicateLinksTotal ?? 0)"
+                type="button"
+                class="model-validation__loadmore"
+                :disabled="linksLoadingMore"
+                @click="loadMoreLinks"
+              >
+                {{ linksLoadingMore
+                  ? t('common.loading')
+                  : t('models.validationLoadMore', { count: (report?.duplicateLinksTotal ?? 0) - manualLinkGroups.length }) }}
+              </button>
+            </template>
+
+            <template v-else-if="activeTab === 'auto'">
+              <div
+                v-if="autoNodeGroups.length + autoLinkGroups.length > 0"
+                class="model-validation__groups"
+              >
+                <ValidationDuplicateGroup
+                  v-for="group in autoNodeGroups"
+                  :key="`auto-node-${group.nodeTypeId}:${group.name}`"
+                  kind="node"
+                  :model-id="modelId"
+                  :title="`${group.nodeTypeName} · ${group.name}`"
+                  :count="group.count"
+                  :node-members="group.nodes"
+                  @merge="onMerge"
+                />
+                <ValidationDuplicateGroup
+                  v-for="group in autoLinkGroups"
+                  :key="`auto-link-${group.sourceId}:${group.targetId}:${group.linkTypeId}`"
                   kind="link"
                   :model-id="modelId"
                   :title="`${group.sourceName} → ${group.targetName} · ${group.linkTypeName}`"
@@ -493,8 +638,8 @@ async function onWizardRefresh(): Promise<void> {
 
         <ValidationAutoMergeDialog
           v-if="showAutoMergeDialog && report"
-          :node-groups="report.duplicateNodes.length"
-          :link-groups="report.duplicateLinks.length"
+          :node-groups="report.duplicateNodes.length + (report.autoDuplicateNodes?.length ?? 0)"
+          :link-groups="report.duplicateLinks.length + (report.autoDuplicateLinks?.length ?? 0)"
           :initial-options="autoMergeOptions"
           :phase="autoMergePhase"
           :live="autoMergeLive"
@@ -515,9 +660,6 @@ async function onWizardRefresh(): Promise<void> {
           @refresh="onWizardRefresh"
         />
       </div>
-    </template>
-    <template #footer>
-      <AppFooter />
     </template>
   </MainLayout>
 </template>
@@ -718,6 +860,28 @@ async function onWizardRefresh(): Promise<void> {
   padding: 10px 2px;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.model-validation__loadmore {
+  display: block;
+  margin: 12px auto 0;
+  padding: 6px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.model-validation__loadmore:hover:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+}
+
+.model-validation__loadmore:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .model-validation__groups {

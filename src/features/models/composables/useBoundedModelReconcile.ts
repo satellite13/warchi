@@ -2,23 +2,15 @@ import { PAGE_SIZE_MODEL_DIAGRAMS, pagedListParams } from '@/api/queryHelpers'
 import { apiFetch, type ApiResult } from '@/composables/useApi'
 import type { DiagramResponse } from '@/types/api'
 import type { ModelData, PaginatedResponse } from '@/types/entities'
-import {
-  paginatedContent,
-  paginatedIsLastPage,
-} from '@/utils/paginatedResponse'
+import { paginatedContent, paginatedIsLastPage } from '@/utils/paginatedResponse'
 import type { EditorDiagram, TreeParentScope } from '../types'
-import {
-  mergeEntityListFromRemote,
-} from '../utils/modelEntityMerge'
+import { mergeEntityListFromRemote } from '../utils/modelEntityMerge'
 import type { ModelLiveSyncPullReason } from '../utils/modelLiveSyncTelemetry'
 import { toEditorDiagramPreservingLocalAttrs } from './modelEditorMappers'
 
 export type BoundedModelReconcileFetchers = {
   fetchModel: (modelId: string, signal: AbortSignal) => Promise<ApiResult<ModelData>>
-  fetchSlimDiagrams: (
-    modelId: string,
-    signal: AbortSignal
-  ) => Promise<ApiResult<DiagramResponse[]>>
+  fetchSlimDiagrams: (modelId: string, signal: AbortSignal) => Promise<ApiResult<DiagramResponse[]>>
 }
 
 export type BoundedModelReconcile = {
@@ -50,11 +42,7 @@ type BoundedModelReconcileOptions = {
   reloadOpenDiagramScope?: (diagramId: string, signal: AbortSignal) => Promise<void>
   fetchers?: BoundedModelReconcileFetchers
   onDetachedSnapshotInvalidated?: () => void
-  onError?: (
-    reason: ModelLiveSyncPullReason,
-    error: unknown,
-    retry: () => void
-  ) => void
+  onError?: (reason: ModelLiveSyncPullReason, error: unknown, retry: () => void) => void
   onRecovered?: (reason: ModelLiveSyncPullReason) => void
   onModelUnavailable?: (status: number) => void
   acceptedRevision?: () => string | null
@@ -176,15 +164,10 @@ export function createBoundedModelReconcile(
     })
   }
 
-  const mergeSlimDiagrams = (
-    remoteRows: DiagramResponse[],
-    openDiagramId: string | null
-  ): void => {
+  const mergeSlimDiagrams = (remoteRows: DiagramResponse[], openDiagramId: string | null): void => {
     const previous = options.diagrams()
-    const merged = mergeEntityListFromRemote(
-      previous,
-      remoteRows,
-      row => toEditorDiagramPreservingLocalAttrs(row, previous)
+    const merged = mergeEntityListFromRemote(previous, remoteRows, row =>
+      toEditorDiagramPreservingLocalAttrs(row, previous)
     ).items
     options.replaceDiagrams(
       merged.map(row =>
@@ -297,7 +280,8 @@ export function createBoundedModelReconcile(
       if (preparedScopes.some(prepared => !prepared.isCurrent())) {
         return true
       }
-      if (options.acceptModelMetadata && !options.acceptModelMetadata(modelResult.data)) return false
+      if (options.acceptModelMetadata && !options.acceptModelMetadata(modelResult.data))
+        return false
 
       mergeSlimDiagrams(diagramsResult.data, openDiagramId)
       preparedScopes.forEach(prepared => prepared.commit())

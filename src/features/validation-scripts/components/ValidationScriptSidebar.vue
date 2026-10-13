@@ -78,7 +78,7 @@ const totalCount = computed(() => props.scripts.length)
         :subtitle="script.description || ''"
         icon="terminal"
         :active="selectedScriptId === script.id"
-        :locked="!canEditByAccessPermission(script.accessPermission)"
+        :locked="!canEditByAccessPermission(script)"
         :lock-title="t('validationScripts.noEditRights')"
         :animation-index="idx"
         @click="emit('selectScript', script.id)"

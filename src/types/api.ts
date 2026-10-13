@@ -52,6 +52,7 @@ export interface OwnedTypeResponse extends BaseEntityResponse {
   ownerEmail?: string | null
   ownerDisplayName?: string | null
   accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
+  canEdit?: boolean | null
 }
 
 // ── Users ──
@@ -78,6 +79,8 @@ export interface DiagramResponse extends BaseEntityResponse {
   name: string
   version: string
   ownerId: string
+  /** id пользователя, последним изменившего диаграмму (заполняется автоматически на бэкенде) */
+  updatedBy?: string | null
   modelId: string
   nodeId?: string | null
   notationId: string
@@ -309,6 +312,7 @@ export interface NodeShapeResponse extends BaseEntityResponse {
   outline: string | null
   contentArea?: string | null
   accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
+  canEdit?: boolean | null
 }
 
 export interface NodeShapeRequest {
@@ -333,6 +337,7 @@ export interface ValidationScriptResponse extends BaseEntityResponse {
   source: string
   ownerId: string
   accessPermission?: 'OWNER' | 'EDIT' | 'VIEW' | 'ADMIN' | null
+  canEdit?: boolean | null
 }
 
 export interface ValidationScriptRequest {
@@ -416,7 +421,8 @@ export interface PermissionCheckResponse {
 
 // ── Access shares ──
 
-export type ShareResourceType = 'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE' | 'NODE_SHAPE' | 'VALIDATION_SCRIPT'
+export type ShareResourceType =
+  'MODEL' | 'NOTATION' | 'NODE_TYPE' | 'LINK_TYPE' | 'NODE_SHAPE' | 'VALIDATION_SCRIPT'
 export type SharePermission = 'VIEW' | 'EDIT'
 
 export interface AccessShareRequest {

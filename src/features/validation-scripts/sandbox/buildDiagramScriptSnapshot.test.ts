@@ -6,9 +6,7 @@ import {
 } from './editorStateContract'
 import { buildDiagramScriptSnapshot } from './buildDiagramScriptSnapshot'
 
-function node(
-  partial: Pick<ScriptEditorNode, 'id' | 'name' | 'nodeTypeId'>
-): ScriptEditorNode {
+function node(partial: Pick<ScriptEditorNode, 'id' | 'name' | 'nodeTypeId'>): ScriptEditorNode {
   return {
     id: partial.id,
     name: partial.name,
@@ -98,8 +96,8 @@ describe('buildDiagramScriptSnapshot', () => {
     })
 
     expect(openDiagramId).toBe('d1')
-    expect(snapshot.model.nodes.map((n) => n.id)).toEqual(['on-canvas'])
-    expect(snapshot.model.links.map((l) => l.id)).toEqual(['on-canvas-link'])
+    expect(snapshot.model.nodes.map(n => n.id)).toEqual(['on-canvas'])
+    expect(snapshot.model.links.map(l => l.id)).toEqual(['on-canvas-link'])
     expect(snapshot.model.folders).toEqual([])
     expect(snapshot.model.diagrams).toHaveLength(1)
     expect(snapshot.model.diagrams[0]?.instances).toHaveLength(1)
@@ -110,7 +108,7 @@ describe('buildDiagramScriptSnapshot', () => {
       y: 20,
     })
     expect(snapshot.model.diagrams[0]?.edges).toHaveLength(1)
-    expect(snapshot.notations.map((n) => n.id)).toEqual(['not1'])
-    expect(snapshot.types.nodeTypes.map((t) => t.id)).toEqual(['nt1'])
+    expect(snapshot.notations.map(n => n.id)).toEqual(['not1'])
+    expect(snapshot.types.nodeTypes.map(t => t.id)).toEqual(['nt1'])
   })
 })

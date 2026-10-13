@@ -1,4 +1,4 @@
-import { ref, computed, watch, onMounted, type Ref } from 'vue'
+import { getCurrentInstance, ref, computed, watch, onMounted, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useValidationScripts } from '@/composables/useValidationScripts'
 import type { ValidationScriptResponse } from '@/types/api'
@@ -7,10 +7,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useDirtySelectionGuard } from '@/composables/useDirtySelectionGuard'
 import { useSaveErrorToast } from '@/composables/useSaveErrorToast'
 import { canEditByAccessPermission } from '@/utils/accessPermission'
-import {
-  resolveOwnerDisplayNames,
-  resolveOwnerLabel,
-} from '@/utils/resolveOwnerNames'
+import { resolveOwnerDisplayNames, resolveOwnerLabel } from '@/utils/resolveOwnerNames'
 
 export const DEFAULT_VALIDATION_SCRIPT_SOURCE = '// Script\n'
 
@@ -33,13 +30,7 @@ export function useValidationScriptEditor() {
   const canShareSelected = ref(false)
   const ownerDisplayNames: Ref<Map<string, string>> = ref(new Map())
 
-  const canEditSelected = computed(() => {
-    const detail = selectedDetail.value
-    if (!detail) return false
-    if (canEditByAccessPermission(detail.accessPermission)) return true
-    const userId = currentUser.value?.id
-    return !!userId && detail.ownerId === userId
-  })
+  const canEditSelected = computed(() => canEditByAccessPermission(selectedDetail.value))
 
   async function loadOwnerDisplayNames(ownerIds: string[]): Promise<void> {
     ownerDisplayNames.value = await resolveOwnerDisplayNames(
@@ -54,12 +45,7 @@ export function useValidationScriptEditor() {
     const detail = selectedDetail.value
     const fallback = t('common.unknownUser')
     if (!detail?.ownerId) return fallback
-    return resolveOwnerLabel(
-      ownerDisplayNames.value,
-      detail.ownerId,
-      currentUser.value,
-      fallback
-    )
+    return resolveOwnerLabel(ownerDisplayNames.value, detail.ownerId, currentUser.value, fallback)
   })
 
   const isDirty = computed(() => {
@@ -87,17 +73,21 @@ export function useValidationScriptEditor() {
     localSource.value = detail.source || DEFAULT_VALIDATION_SCRIPT_SOURCE
   }
 
-  onMounted(() => {
-    fetchList({ size: 200 }).then(async (ok) => {
-      if (!ok) {
-        saveError.value = t('validationScripts.errorLoad')
-        return
-      }
-      await loadOwnerDisplayNames(list.value.map((script) => script.ownerId))
+  // Начальная загрузка списка — только при монтировании в компонент
+  // (в unit-тестах композабл вызывается внутри effectScope без instance).
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      fetchList({ size: 200 }).then(async ok => {
+        if (!ok) {
+          saveError.value = t('validationScripts.errorLoad')
+          return
+        }
+        await loadOwnerDisplayNames(list.value.map(script => script.ownerId))
+      })
     })
-  })
+  }
 
-  watch(selectedScriptId, async (id) => {
+  watch(selectedScriptId, async id => {
     selectedDetail.value = null
     localName.value = ''
     localDescription.value = ''
@@ -117,13 +107,8 @@ export function useValidationScriptEditor() {
     }
   })
 
-  const {
-    showUnsavedDialog,
-    requestSelect,
-    requestAdd,
-    discardAndContinue,
-    cancelSwitch,
-  } = useDirtySelectionGuard({ isDirty })
+  const { showUnsavedDialog, requestSelect, requestAdd, discardAndContinue, cancelSwitch } =
+    useDirtySelectionGuard({ isDirty })
 
   function applySelect(id: string) {
     selectedScriptId.value = id
@@ -138,7 +123,7 @@ export function useValidationScriptEditor() {
     })
     if (created) {
       await fetchList({ size: 200 })
-      await loadOwnerDisplayNames(list.value.map((script) => script.ownerId))
+      await loadOwnerDisplayNames(list.value.map(script => script.ownerId))
       selectedScriptId.value = created.id
       selectedDetail.value = created
       applyDetailToLocal(created)
@@ -185,7 +170,7 @@ export function useValidationScriptEditor() {
     if (updated) {
       selectedDetail.value = updated
       applyDetailToLocal(updated)
-      const idx = list.value.findIndex((s) => s.id === updated.id)
+      const idx = list.value.findIndex(s => s.id === updated.id)
       if (idx >= 0) {
         list.value = [...list.value.slice(0, idx), updated, ...list.value.slice(idx + 1)]
       }

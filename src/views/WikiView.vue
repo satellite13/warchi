@@ -3,7 +3,6 @@ import { ref, computed, onMounted } from "vue"
 import { useI18n } from "vue-i18n"
 import "@/config/mdEditor"
 import AppHeader from "../components/layout/AppHeader.vue"
-import AppFooter from "../components/layout/AppFooter.vue"
 import UiIcon from "../components/ui/UiIcon.vue"
 import SafeMarkdownPreview from "@/components/markdown/SafeMarkdownPreview.vue"
 import EmptyState from "@/components/list/EmptyState.vue"
@@ -176,9 +175,6 @@ onMounted(() => {
         </template>
       </div>
     </main>
-    <footer class="wiki-view__footer">
-      <AppFooter />
-    </footer>
   </div>
 </template>
 

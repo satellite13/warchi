@@ -48,10 +48,34 @@ import { createId } from '@/utils/createId'
 export { createId }
 
 export const DEFAULT_RECTANGLE_OUTLINE: OutlineSegment[] = [
-  { type: "line", points: [[0, 0], [1, 0]] },
-  { type: "line", points: [[1, 0], [1, 1]] },
-  { type: "line", points: [[1, 1], [0, 1]] },
-  { type: "line", points: [[0, 1], [0, 0]] }
+  {
+    type: 'line',
+    points: [
+      [0, 0],
+      [1, 0],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 0],
+      [1, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [1, 1],
+      [0, 1],
+    ],
+  },
+  {
+    type: 'line',
+    points: [
+      [0, 1],
+      [0, 0],
+    ],
+  },
 ]
 
 export type CustomShapeDef = {
@@ -112,8 +136,10 @@ export type StylePropertyBindingGroup = {
 }
 
 // Extension for notation-side serialization metadata.
-export interface CompositeSerializedCComponent
-  extends Omit<import('@ngroznykh/papirus').SerializedCComponent, 'children' | 'content'> {
+export interface CompositeSerializedCComponent extends Omit<
+  import('@ngroznykh/papirus').SerializedCComponent,
+  'children' | 'content'
+> {
   bindsNotationIcon?: boolean
   children?: CompositeSerializedCComponent[]
   content?: CompositeSerializedCComponent
@@ -207,7 +233,14 @@ export type DiagramStyle = {
   showLabel?: boolean
   // Composite-only fields
   compositeContent?: CompositeSerializedCComponent
-  compositeShapeType?: 'rectangle' | 'beveled-rectangle' | 'diamond' | 'circle' | 'trapezoid' | 'slanted-rectangle' | 'custom'
+  compositeShapeType?:
+    | 'rectangle'
+    | 'beveled-rectangle'
+    | 'diamond'
+    | 'circle'
+    | 'trapezoid'
+    | 'slanted-rectangle'
+    | 'custom'
   compositeAutoSize?: boolean
   compositeMinWidth?: number
   compositeMinHeight?: number
@@ -257,7 +290,9 @@ const normalizeCustomProperties = (value: unknown): CustomProperty[] => {
 
     const interactiveKindRaw = record.interactiveKind
     const interactiveKind: InteractiveKind | undefined =
-      interactiveKindRaw === 'url' || interactiveKindRaw === 'diagram' || interactiveKindRaw === 'document'
+      interactiveKindRaw === 'url' ||
+      interactiveKindRaw === 'diagram' ||
+      interactiveKindRaw === 'document'
         ? interactiveKindRaw
         : undefined
     const interactiveIconRaw = record.interactiveIcon
@@ -338,7 +373,9 @@ const normalizeStyleBindingWhen = (value: unknown): StyleBindingWhen | undefined
   }
 }
 
-const normalizeStylePropertyBindings = (value: unknown): StylePropertyBindingGroup[] | undefined => {
+const normalizeStylePropertyBindings = (
+  value: unknown
+): StylePropertyBindingGroup[] | undefined => {
   if (!Array.isArray(value)) return undefined
 
   const groups: StylePropertyBindingGroup[] = []
@@ -384,7 +421,11 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   if (typeof value.strokeOpacity === 'number') style.strokeOpacity = value.strokeOpacity
   if (typeof value.strokeWidth === 'number') style.strokeWidth = value.strokeWidth
   if (typeof value.cornerRadius === 'number') style.cornerRadius = value.cornerRadius
-  if (typeof value.cornerCut === 'number' && Number.isFinite(value.cornerCut) && value.cornerCut >= 0) {
+  if (
+    typeof value.cornerCut === 'number' &&
+    Number.isFinite(value.cornerCut) &&
+    value.cornerCut >= 0
+  ) {
     style.cornerCut = value.cornerCut
   }
   if (typeof value.opacity === 'number') style.opacity = value.opacity
@@ -410,14 +451,19 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
   ) {
     style.labelPlacement = value.labelPlacement
   }
-  if (typeof value.labelGap === 'number' && Number.isFinite(value.labelGap) && value.labelGap >= 0) {
+  if (
+    typeof value.labelGap === 'number' &&
+    Number.isFinite(value.labelGap) &&
+    value.labelGap >= 0
+  ) {
     style.labelGap = value.labelGap
   }
   if (value.lockTransform === true) {
     style.lockTransform = true
   }
   if (typeof value.labelAlign === 'string') style.labelAlign = value.labelAlign
-  if (typeof value.labelVerticalAlign === 'string') style.labelVerticalAlign = value.labelVerticalAlign
+  if (typeof value.labelVerticalAlign === 'string')
+    style.labelVerticalAlign = value.labelVerticalAlign
   if (typeof value.contentInset === 'number') style.contentInset = value.contentInset
   else if (isInsetSides(value.contentInset))
     style.contentInset = normalizeInsetSides(value.contentInset)
@@ -432,7 +478,8 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
     style.labelBgBorderRadius = value.labelBgBorderRadius
   if (typeof value.edgeLabelOffset === 'number') style.edgeLabelOffset = value.edgeLabelOffset
   if (typeof value.edgeLabelPosition === 'number') style.edgeLabelPosition = value.edgeLabelPosition
-  if (typeof value.edgeLabelFollowPath === 'boolean') style.edgeLabelFollowPath = value.edgeLabelFollowPath
+  if (typeof value.edgeLabelFollowPath === 'boolean')
+    style.edgeLabelFollowPath = value.edgeLabelFollowPath
   if (typeof value.edgeLabelLineGap === 'boolean') style.edgeLabelLineGap = value.edgeLabelLineGap
   if (typeof value.startMarkerSize === 'number') style.startMarkerSize = value.startMarkerSize
   if (typeof value.startMarkerFillColor === 'string')
@@ -489,11 +536,15 @@ const normalizeDiagramStyle = (value: unknown): DiagramStyle | undefined => {
     typeof value.compositeShapeType === 'string' &&
     (allowedCompositeShapes as string[]).includes(value.compositeShapeType)
   ) {
-    style.compositeShapeType = value.compositeShapeType as NonNullable<DiagramStyle['compositeShapeType']>
+    style.compositeShapeType = value.compositeShapeType as NonNullable<
+      DiagramStyle['compositeShapeType']
+    >
   }
-  if (typeof value.compositeAutoSize === 'boolean') style.compositeAutoSize = value.compositeAutoSize
+  if (typeof value.compositeAutoSize === 'boolean')
+    style.compositeAutoSize = value.compositeAutoSize
   if (typeof value.compositeMinWidth === 'number') style.compositeMinWidth = value.compositeMinWidth
-  if (typeof value.compositeMinHeight === 'number') style.compositeMinHeight = value.compositeMinHeight
+  if (typeof value.compositeMinHeight === 'number')
+    style.compositeMinHeight = value.compositeMinHeight
   const styleBindings = normalizeStylePropertyBindings(value.stylePropertyBindings)
   if (styleBindings) style.stylePropertyBindings = styleBindings
   return Object.keys(style).length ? style : undefined
@@ -600,6 +651,11 @@ export type TypeAttrs = {
   icon?: string
   documentFileId?: string
   customProperties?: CustomProperty[]
+  /**
+   * Скрыть элементы этого типа в дереве модели для пользователей с ролью ниже админа;
+   * служит значением по умолчанию при OEF-импорте (узлы получают system.hideInTree)
+   */
+  hideInTree?: boolean
   /** System marker (e.g. Directory root type); preserved round-trip */
   system?: TypeSystemAttrs
   /** Legacy system Directory marker companion to `system: true` */
@@ -663,7 +719,10 @@ export const serializeEntityAttrs = (attrs: EntityAttrs): string => {
   ) {
     result.paletteGroup = attrs.paletteGroup
   }
-  if (typeof attrs.paletteMaterialIcon === 'string' && attrs.paletteMaterialIcon.trim().length > 0) {
+  if (
+    typeof attrs.paletteMaterialIcon === 'string' &&
+    attrs.paletteMaterialIcon.trim().length > 0
+  ) {
     result.paletteMaterialIcon = attrs.paletteMaterialIcon.trim()
   }
   if (typeof attrs.documentFileId === 'string' && attrs.documentFileId.trim().length > 0) {
@@ -703,6 +762,9 @@ export const parseTypeAttrs = (attrs: string | null): TypeAttrs => {
       if (normalizedPath.length > 0) {
         result.defaultDirectoryPath = normalizedPath
       }
+    }
+    if (record.hideInTree === true) {
+      result.hideInTree = true
     }
     if (typeof record.icon === 'string' && record.icon.trim().length > 0) {
       result.icon = record.icon.trim()
@@ -754,6 +816,9 @@ export const serializeTypeAttrs = (attrs: TypeAttrs): string => {
     attrs.defaultDirectoryPath.trim().length > 0
   ) {
     result.defaultDirectoryPath = attrs.defaultDirectoryPath.trim()
+  }
+  if (attrs.hideInTree === true) {
+    result.hideInTree = true
   }
   if (typeof attrs.icon === 'string' && attrs.icon.trim().length > 0) {
     result.icon = attrs.icon.trim()

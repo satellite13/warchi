@@ -25,4 +25,3 @@ describe('CompositeTreeEditor', () => {
     expect((nextTree.children ?? []).length).toBeGreaterThan(0)
   })
 })
-

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { applyStylePropertyBindings, injectCompositeNameAndIcon, BIND_TO_NAME } from '@/features/diagram-style/utils/compositeBindings'
+import {
+  applyStylePropertyBindings,
+  injectCompositeNameAndIcon,
+  BIND_TO_NAME,
+} from '@/features/diagram-style/utils/compositeBindings'
 import type { CompositeSerializedCComponent, DiagramStyle } from '@/domain/attrs/notationAttrs'
 
 describe('compositeBindings', () => {
@@ -28,7 +32,9 @@ describe('compositeBindings', () => {
     } satisfies DiagramStyle
 
     const result = applyStylePropertyBindings(style, content, {
-      componentProperties: [{ id: 'p1', name: 'status', type: 'enum', required: false, min: null, max: null }],
+      componentProperties: [
+        { id: 'p1', name: 'status', type: 'enum', required: false, min: null, max: null },
+      ],
       componentValues: { status: 'new' },
       nodeTypeProperties: [],
       nodeTypeValues: {},
@@ -59,7 +65,9 @@ describe('compositeBindings', () => {
     } satisfies DiagramStyle
 
     const result = applyStylePropertyBindings(style, content, {
-      componentProperties: [{ id: 'p1', name: 'flag', type: 'boolean', required: false, min: null, max: null }],
+      componentProperties: [
+        { id: 'p1', name: 'flag', type: 'boolean', required: false, min: null, max: null },
+      ],
       componentValues: {},
       nodeTypeProperties: [],
       nodeTypeValues: {},
@@ -84,6 +92,4 @@ describe('compositeBindings', () => {
     expect(patched.children?.[0]?.text).toBe('Service A')
     expect(patched.children?.[1]?.source).toBe('/icons/component.svg')
   })
-
 })
-

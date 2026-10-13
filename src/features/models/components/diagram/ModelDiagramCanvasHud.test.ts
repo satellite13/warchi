@@ -57,4 +57,30 @@ describe('ModelDiagramCanvasHud', () => {
     await wrapper.find('.canvas-palette__hide').trigger('click')
     expect(wrapper.emitted('paletteVisibleChange')?.[0]).toEqual([false])
   })
+
+  it('hides the notation palette in view-only mode', () => {
+    const wrapper = mount(ModelDiagramCanvasHud, {
+      props: {
+        hasActiveDiagram: true,
+        readOnly: true,
+        navigationOnlyMode: false,
+        paletteVisible: true,
+        activeNotationId: 'not-1',
+        components: [
+          {
+            id: 'cmp-1',
+            name: 'Application',
+            notationId: 'not-1',
+            nodeTypeId: 'nt-1',
+            version: '1.0.0',
+            ownerId: 'u1',
+          },
+        ],
+        remotePointerStyle: null,
+      },
+      global: { plugins: [i18n] },
+    })
+    expect(wrapper.find('.canvas-palette').exists()).toBe(false)
+    expect(wrapper.find('.canvas-palette-toggle').exists()).toBe(false)
+  })
 })

@@ -54,9 +54,7 @@ describe('useDiagramCopyWizard', () => {
 
   it('disables finish when preview.canCommit is false', async () => {
     const scope = effectScope()
-    const wizard = scope.run(() =>
-      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
-    )!
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
 
     wizard.targetModelId.value = 'target-model'
     wizard.targetNotationId.value = 'target-notation'
@@ -84,9 +82,7 @@ describe('useDiagramCopyWizard', () => {
 
   it('resets name and version suggestions when the target model changes', async () => {
     const scope = effectScope()
-    const wizard = scope.run(() =>
-      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
-    )!
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
 
     wizard.targetModelId.value = 'target-model-1'
     wizard.targetNotationId.value = 'target-notation'
@@ -110,9 +106,7 @@ describe('useDiagramCopyWizard', () => {
 
   it('does not replay match targets from the previous model preview', async () => {
     const scope = effectScope()
-    const wizard = scope.run(() =>
-      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
-    )!
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
 
     const firstPreview = createPreview({
       nodes: [
@@ -124,7 +118,9 @@ describe('useDiagramCopyWizard', () => {
           typeId: 'bpmn-start',
           autoMatchTargetId: 'old-model-node',
           autoMatchReason: 'NAME_AND_TYPE',
-          candidates: [{ id: 'old-model-node', label: 'Start Event', stableId: null, typeId: 'bpmn-start' }],
+          candidates: [
+            { id: 'old-model-node', label: 'Start Event', stableId: null, typeId: 'bpmn-start' },
+          ],
           effectiveAction: 'MATCH',
           effectiveTargetId: 'old-model-node',
           isEndpointOfEdge: false,
@@ -164,9 +160,7 @@ describe('useDiagramCopyWizard', () => {
 
   it('resets resolutions when target model changes', async () => {
     const scope = effectScope()
-    const wizard = scope.run(() =>
-      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
-    )!
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
 
     wizard.targetModelId.value = 'target-model-1'
     wizard.targetNotationId.value = 'target-notation'
@@ -187,9 +181,7 @@ describe('useDiagramCopyWizard', () => {
 
   it('maps commit success to navigation target', async () => {
     const scope = effectScope()
-    const wizard = scope.run(() =>
-      useDiagramCopyWizard({ sourceModelId: ref('source-model') })
-    )!
+    const wizard = scope.run(() => useDiagramCopyWizard({ sourceModelId: ref('source-model') }))!
     wizard.targetModelId.value = 'target-model'
     wizard.targetNotationId.value = 'target-notation'
     wizard.diagramName.value = 'Copied diagram'

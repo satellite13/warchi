@@ -2,13 +2,27 @@ import { describe, it, expect } from 'vitest'
 import { canEditByAccessPermission, toAccessLabel } from '@/utils/accessPermission'
 
 describe('canEditByAccessPermission', () => {
-  it('allows OWNER, EDIT and ADMIN', () => {
+  it('prefers explicit canEdit=false over OWNER label', () => {
+    expect(canEditByAccessPermission({ accessPermission: 'OWNER', canEdit: false })).toBe(false)
+  })
+
+  it('prefers explicit canEdit=true', () => {
+    expect(canEditByAccessPermission({ accessPermission: 'VIEW', canEdit: true })).toBe(true)
+  })
+
+  it('accepts canEdit as second argument with permission string', () => {
+    expect(canEditByAccessPermission('OWNER', false)).toBe(false)
+    expect(canEditByAccessPermission('VIEW', true)).toBe(true)
+  })
+
+  it('falls back to OWNER/EDIT/ADMIN when canEdit is absent', () => {
     expect(canEditByAccessPermission('OWNER')).toBe(true)
     expect(canEditByAccessPermission('EDIT')).toBe(true)
     expect(canEditByAccessPermission('ADMIN')).toBe(true)
+    expect(canEditByAccessPermission({ accessPermission: 'OWNER' })).toBe(true)
   })
 
-  it('denies VIEW and missing permission', () => {
+  it('denies VIEW and missing permission without canEdit', () => {
     expect(canEditByAccessPermission('VIEW')).toBe(false)
     expect(canEditByAccessPermission(null)).toBe(false)
     expect(canEditByAccessPermission(undefined)).toBe(false)

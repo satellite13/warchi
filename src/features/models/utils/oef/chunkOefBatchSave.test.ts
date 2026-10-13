@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BatchSaveRequest, BatchSaveResponse } from '@/features/models/composables/useModelBatchSave'
+import type {
+  BatchSaveRequest,
+  BatchSaveResponse,
+} from '@/features/models/composables/useModelBatchSave'
 import {
   applyOefBatchSaveChunks,
   planOefBatchSaveChunks,

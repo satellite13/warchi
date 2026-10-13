@@ -7,9 +7,7 @@ export type ConvertOefPropertyFailure = {
   reason: 'invalidNumber' | 'invalidBoolean' | 'invalidEnum'
 }
 export type ConvertOefPropertyResult =
-  | ConvertOefPropertySuccess
-  | ConvertOefPropertySkip
-  | ConvertOefPropertyFailure
+  ConvertOefPropertySuccess | ConvertOefPropertySkip | ConvertOefPropertyFailure
 
 export function convertOefPropertyValue(
   raw: string,

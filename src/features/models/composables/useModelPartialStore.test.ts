@@ -299,15 +299,7 @@ describe('useModelPartialStore', () => {
     const partial = scope.run(() => useModelPartialStore(state))!
     partial.resetPartialScopes('model-a', {
       scope: { kind: 'root' },
-      page: page(
-        [
-          { ...node('folder'), hasChildren: true },
-          node('root-page-1'),
-        ],
-        0,
-        3,
-        2
-      ),
+      page: page([{ ...node('folder'), hasChildren: true }, node('root-page-1')], 0, 3, 2),
     })
     await partial.loadChildren({ kind: 'node', nodeId: 'folder' })
     expect(partial.store.loadedChildrenFor.has('node:folder')).toBe(true)
@@ -388,7 +380,10 @@ describe('useModelPartialStore', () => {
     await refreshing
 
     expect(
-      vi.mocked(fetchNodeChildren).mock.calls.slice(-2).map(([, , options]) => options?.page)
+      vi
+        .mocked(fetchNodeChildren)
+        .mock.calls.slice(-2)
+        .map(([, , options]) => options?.page)
     ).toEqual([0, 1])
     expect(state.value.nodes.map(row => row.id)).toEqual(['new-page-0', 'new-page-1'])
     expect(partial.store.childrenPages.get('root')?.nextPage).toBe(2)
@@ -421,13 +416,12 @@ describe('useModelPartialStore', () => {
     await partial.refreshVisibleChildrenScope({ kind: 'root' })
 
     expect(
-      vi.mocked(fetchNodeChildren).mock.calls.slice(-3).map(([, , options]) => options?.page)
+      vi
+        .mocked(fetchNodeChildren)
+        .mock.calls.slice(-3)
+        .map(([, , options]) => options?.page)
     ).toEqual([0, 1, 2])
-    expect(state.value.nodes.map(row => row.id)).toEqual([
-      'new-page-0',
-      'new-page-1',
-      'new-page-2',
-    ])
+    expect(state.value.nodes.map(row => row.id)).toEqual(['new-page-0', 'new-page-1', 'new-page-2'])
     expect(partial.store.loadedChildrenFor.has('root')).toBe(true)
     scope.stop()
   })
@@ -545,7 +539,10 @@ describe('useModelPartialStore', () => {
     await partial.loadChildren({ kind: 'root' })
 
     expect(
-      vi.mocked(fetchNodeChildren).mock.calls.slice(-2).map(([, , options]) => options?.page)
+      vi
+        .mocked(fetchNodeChildren)
+        .mock.calls.slice(-2)
+        .map(([, , options]) => options?.page)
     ).toEqual([0, 1])
     expect(vi.mocked(fetchNodeChildren).mock.calls.at(-2)?.[2]?.signal).not.toBe(
       failedRefreshSignal

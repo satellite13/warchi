@@ -7,11 +7,7 @@ import {
   type LayoutNode,
 } from './diagramLayoutGraph'
 import { getElk } from './elkLoader'
-import {
-  defaultLayoutUiOptions,
-  toElkLayoutOptions,
-  type LayoutUiOptions,
-} from './layoutOptions'
+import { defaultLayoutUiOptions, toElkLayoutOptions, type LayoutUiOptions } from './layoutOptions'
 
 export type DiagramLayoutMode = 'layered' | 'overlap'
 export type LayoutDirection = 'RIGHT' | 'DOWN'

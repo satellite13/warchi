@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isSafeInternalRedirectPath,
   isSafeSiteReturnUrl,
-  allowedSiteReturnOrigins
+  allowedSiteReturnOrigins,
 } from './safeRedirect'
 
 describe('isSafeInternalRedirectPath', () => {
@@ -45,11 +45,11 @@ describe('isSafeSiteReturnUrl', () => {
     expect(
       allowedSiteReturnOrigins({
         VITE_SITE_RETURN_ORIGINS: 'http://a.test, http://b.test',
-        VITE_SITE_URL: 'http://ignored.test'
+        VITE_SITE_URL: 'http://ignored.test',
       })
     ).toEqual(['http://a.test', 'http://b.test'])
     expect(allowedSiteReturnOrigins({ VITE_SITE_URL: 'http://site.test' })).toEqual([
-      'http://site.test'
+      'http://site.test',
     ])
   })
 })

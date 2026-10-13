@@ -100,11 +100,15 @@ describe('modelScopedApi', () => {
       size: 40,
       signal: controller.signal,
     })
-    await fetchDiagramReferences('m', { nodeId: 'n1' }, {
-      page: 1,
-      size: 20,
-      signal: controller.signal,
-    })
+    await fetchDiagramReferences(
+      'm',
+      { nodeId: 'n1' },
+      {
+        page: 1,
+        size: 20,
+        signal: controller.signal,
+      }
+    )
 
     expect(apiFetch).toHaveBeenNthCalledWith(1, '/models/m/links:resolve', {
       method: 'POST',
@@ -140,10 +144,10 @@ describe('modelScopedApi', () => {
 
     await fetchDiagramReferences('m', { linkId: 'l1' }, { page: 1, size: 20 })
 
-    expect(apiFetch).toHaveBeenCalledWith(
-      '/models/m/diagram-references?linkId=l1&page=1&size=20',
-      { method: 'GET', signal: undefined }
-    )
+    expect(apiFetch).toHaveBeenCalledWith('/models/m/diagram-references?linkId=l1&page=1&size=20', {
+      method: 'GET',
+      signal: undefined,
+    })
     expect(String(vi.mocked(apiFetch).mock.calls[0]?.[0])).not.toContain('nodeId')
   })
 

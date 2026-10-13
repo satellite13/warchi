@@ -210,12 +210,16 @@ describe('useModelBatchSave', () => {
     expect(request.links.update).toEqual([])
     expect(request.diagrams.create).toEqual([])
     expect(request.diagrams.update).toEqual([])
-    expect([...request.nodes.create, ...request.nodes.update, ...request.nodes.delete]).not.toContain(
-      'unloaded-remote-node'
-    )
-    expect([...request.links.create, ...request.links.update, ...request.links.delete]).not.toContain(
-      'unloaded-remote-link'
-    )
+    expect([
+      ...request.nodes.create,
+      ...request.nodes.update,
+      ...request.nodes.delete,
+    ]).not.toContain('unloaded-remote-node')
+    expect([
+      ...request.links.create,
+      ...request.links.update,
+      ...request.links.delete,
+    ]).not.toContain('unloaded-remote-link')
   })
 
   it('sends only the one dirty materialized row', () => {
@@ -391,7 +395,9 @@ describe('useModelBatchSave', () => {
   })
 
   it('refreshes updatedAt after batch save so the next save does not false-409', async () => {
-    const nodes = [createNode({ id: 'node-1', updatedAt: '2026-01-01T00:00:00.000Z', _isDirty: true })]
+    const nodes = [
+      createNode({ id: 'node-1', updatedAt: '2026-01-01T00:00:00.000Z', _isDirty: true }),
+    ]
     const links = [
       createLink({ id: 'link-1', updatedAt: '2026-01-02T00:00:00.000Z', _isDirty: true }),
     ]
@@ -413,11 +419,11 @@ describe('useModelBatchSave', () => {
         data: { ...diagrams[0]!, updatedAt: '2026-01-03T01:00:00.000Z', attrs: null },
       })
 
-    await refreshBatchSavedEntityTimestamps(
-      { nodes, links, diagrams },
-      request,
-      { nodeIdMap: {}, linkIdMap: {}, diagramIdMap: {} }
-    )
+    await refreshBatchSavedEntityTimestamps({ nodes, links, diagrams }, request, {
+      nodeIdMap: {},
+      linkIdMap: {},
+      diagramIdMap: {},
+    })
 
     expect(apiGet).toHaveBeenCalledWith('/nodes/node-1')
     expect(apiGet).toHaveBeenCalledWith('/links/link-1')
@@ -425,5 +431,21 @@ describe('useModelBatchSave', () => {
     expect(nodes[0]?.updatedAt).toBe('2026-01-01T01:00:00.000Z')
     expect(links[0]?.updatedAt).toBe('2026-01-02T01:00:00.000Z')
     expect(diagrams[0]?.updatedAt).toBe('2026-01-03T01:00:00.000Z')
+  })
+
+  it('omits attrs on auto-created node updates so type properties stay sync-owned', () => {
+    const node = createNode({
+      id: 'auto-1',
+      _isDirty: true,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      parsedAttrs: parseNodeAttrs(
+        JSON.stringify({
+          dpc: { autoCreated: true },
+          typeProperties: { autoCreated: true, Owner: 'ACME' },
+        })
+      ),
+    })
+    const request = buildBatchSaveRequest([node], [], [])
+    expect(request.nodes.update).toEqual([expect.objectContaining({ id: 'auto-1', attrs: null })])
   })
 })

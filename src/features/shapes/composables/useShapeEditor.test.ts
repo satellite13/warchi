@@ -10,7 +10,7 @@ const { apiGet, apiPost, apiPut, apiDelete, checkPermission } = vi.hoisted(() =>
   checkPermission: vi.fn(),
 }))
 
-vi.mock('vue-i18n', async (importOriginal) => {
+vi.mock('vue-i18n', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,

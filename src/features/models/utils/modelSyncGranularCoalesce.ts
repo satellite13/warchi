@@ -10,15 +10,13 @@ function slotKey(e: GranularSyncEventPayload): string {
   return `${e.entity}:${e.id}`
 }
 
-type SemanticAction = "created" | "updated" | "deleted"
+type SemanticAction = 'created' | 'updated' | 'deleted'
 
 function semanticAction(event: GranularSyncEventPayload): SemanticAction | null {
   const prefix = `${event.entity}_`
   if (!event.type.startsWith(prefix)) return null
   const action = event.type.slice(prefix.length)
-  return action === "created" || action === "updated" || action === "deleted"
-    ? action
-    : null
+  return action === 'created' || action === 'updated' || action === 'deleted' ? action : null
 }
 
 export function reduceModelSyncGranularEvent(
@@ -30,10 +28,10 @@ export function reduceModelSyncGranularEvent(
   if (!previousAction || !nextAction) return next
 
   let intent = nextAction
-  if (previousAction === "deleted" && nextAction !== "created") {
-    intent = "deleted"
-  } else if (previousAction === "created" && nextAction === "updated") {
-    intent = "created"
+  if (previousAction === 'deleted' && nextAction !== 'created') {
+    intent = 'deleted'
+  } else if (previousAction === 'created' && nextAction === 'updated') {
+    intent = 'created'
   }
   return { ...next, type: `${next.entity}_${intent}` }
 }
@@ -55,30 +53,27 @@ export function coalesceModelSyncGranularEvents(
       map.set(k, reduceModelSyncGranularEvent(map.get(k)!, e))
     }
   }
-  return order.map((k) => map.get(k)!)
+  return order.map(k => map.get(k)!)
 }
 
-export function parseGranularSyncEventsFromPayload(
-  raw: unknown
-): GranularSyncEventPayload[] {
+export function parseGranularSyncEventsFromPayload(raw: unknown): GranularSyncEventPayload[] {
   if (!Array.isArray(raw)) {
     return []
   }
   const out: GranularSyncEventPayload[] = []
   for (const item of raw) {
-    if (item === null || typeof item !== "object") {
+    if (item === null || typeof item !== 'object') {
       continue
     }
     const o = item as Record<string, unknown>
     const type = o.type
     const entity = o.entity
     const id = o.id
-    if (typeof type !== "string" || typeof entity !== "string" || typeof id !== "string") {
+    if (typeof type !== 'string' || typeof entity !== 'string' || typeof id !== 'string') {
       continue
     }
     const rev = o.revision
-    const revision =
-      typeof rev === "number" && Number.isFinite(rev) ? Math.trunc(rev) : undefined
+    const revision = typeof rev === 'number' && Number.isFinite(rev) ? Math.trunc(rev) : undefined
     out.push({ type, entity, id, revision })
   }
   return out

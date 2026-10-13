@@ -1,5 +1,6 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { apiGet } from '@/composables/useApi'
+import { useAuth } from '@/composables/useAuth'
 import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { bumpMinor, compareVersions } from '@/utils/version'
 import { createId, parseNodeAttrs } from '../modelAttrs'
@@ -22,13 +23,12 @@ export function useModelTreeOperations(options: {
   ensureDiagramAttrsLoaded?: (diagramId: string) => void
   isChildrenScopeComplete?: (scope: TreeParentScope) => boolean
   ensureChildrenScopeComplete?: (scope: TreeParentScope) => Promise<void>
-  reconcileMaterializedRows?: (
-    affectedScopes?: readonly TreeParentScope[] | 'all'
-  ) => void
+  reconcileMaterializedRows?: (affectedScopes?: readonly TreeParentScope[] | 'all') => void
   /** Resource ACL EDIT/OWNER/ADMIN */
   canEdit?: Ref<boolean> | ComputedRef<boolean>
 }) {
   const { hasGrant } = useFeatureGrants()
+  const { currentUser, isAdmin } = useAuth()
   const canEditModel = () => options.canEdit?.value !== false
 
   const createNodeModal = ref<{ parentNodeId: string | null; kind: 'folder' | 'node' }>({
@@ -79,16 +79,21 @@ export function useModelTreeOperations(options: {
 
   const directoryNodeType = computed(
     () =>
-      options.state.value.nodeTypes.find(typeItem => typeItem.name.trim().toLowerCase() === 'directory') ??
-      null
+      options.state.value.nodeTypes.find(
+        typeItem => typeItem.name.trim().toLowerCase() === 'directory'
+      ) ?? null
   )
   const nonDirectoryNodeTypes = computed(() =>
-    options.state.value.nodeTypes.filter(typeItem => typeItem.name.trim().toLowerCase() !== 'directory')
+    options.state.value.nodeTypes.filter(
+      typeItem => typeItem.name.trim().toLowerCase() !== 'directory'
+    )
   )
   const nodeTypeDefaultDirectoryById = computed(() => {
     const map = new Map<string, string>()
     for (const nodeType of options.state.value.nodeTypes) {
-      const defaultDirectoryPath = parseTypeAttrs(nodeType.attrs ?? null).defaultDirectoryPath?.trim()
+      const defaultDirectoryPath = parseTypeAttrs(
+        nodeType.attrs ?? null
+      ).defaultDirectoryPath?.trim()
       if (defaultDirectoryPath) {
         map.set(nodeType.id, defaultDirectoryPath)
       }
@@ -124,6 +129,32 @@ export function useModelTreeOperations(options: {
     }
   })
 
+  /**
+   * Скоуп sync-флагов модели (`attrs.sync`, пишет org-tree-sync; меняют MCP/админ):
+   * `autoManaged` — модель управляется синхронизацией, `defaultDiagramNodeId` —
+   * Views-ветка (место по умолчанию для новых диаграмм и единственная зона их переносов).
+   */
+  const modelSyncConfig = computed<{ autoManaged: boolean; defaultDiagramNodeId: string | null }>(
+    () => {
+      const raw = options.model.value?.attrs
+      if (!raw) return { autoManaged: false, defaultDiagramNodeId: null }
+      try {
+        const sync = (JSON.parse(raw) as Record<string, unknown>).sync
+        if (!sync || typeof sync !== 'object' || Array.isArray(sync)) {
+          return { autoManaged: false, defaultDiagramNodeId: null }
+        }
+        const record = sync as Record<string, unknown>
+        const viewsId =
+          typeof record.defaultDiagramNodeId === 'string' && record.defaultDiagramNodeId.trim()
+            ? record.defaultDiagramNodeId
+            : null
+        return { autoManaged: record.autoManaged === true, defaultDiagramNodeId: viewsId }
+      } catch {
+        return { autoManaged: false, defaultDiagramNodeId: null }
+      }
+    }
+  )
+
   const resolveTreeParentId = (parentNodeId: string | null): string | null =>
     parentNodeId ?? treeRootNodeId.value ?? null
 
@@ -154,7 +185,9 @@ export function useModelTreeOperations(options: {
 
   const syncParentHasChildren = (parentNodeId: string | null): void => {
     if (!parentNodeId) return
-    const parent = options.state.value.nodes.find(node => node.id === parentNodeId && !node._isDeleted)
+    const parent = options.state.value.nodes.find(
+      node => node.id === parentNodeId && !node._isDeleted
+    )
     if (parent) {
       parent.hasChildren = options.state.value.nodes.some(
         node => !node._isDeleted && node.parentNodeId === parentNodeId
@@ -176,31 +209,17 @@ export function useModelTreeOperations(options: {
     return Math.max(...siblingOrders) + 1
   }
 
+  /**
+   * Фабрика локальной (_isNew) ноды дерева для модального создания —
+   * обёртка над модульной createLocalNode с state композабла.
+   */
   const createLocalNode = (input: {
     id: string
     name: string
     nodeTypeId: string
     parentNodeId: string | null
     treeOrder: number
-  }): EditorNode => {
-    const node: EditorNode = {
-      id: input.id,
-      name: input.name,
-      modelId: options.state.value.modelId,
-      ownerId: options.state.value.ownerId,
-      nodeTypeId: input.nodeTypeId,
-      parentNodeId: input.parentNodeId,
-      createdAt: null,
-      updatedAt: null,
-      parsedAttrs: {
-        ...parseNodeAttrs(null),
-        treeOrder: input.treeOrder,
-      },
-      _isNew: true,
-    }
-    applyDefaultsToEditorNode(node, options.state.value)
-    return node
-  }
+  }): EditorNode => createLocalNodeFor(options.state, input)
 
   const normalizeDirectoryPathSegments = (rawPath: string): string[] =>
     rawPath
@@ -284,6 +303,14 @@ export function useModelTreeOperations(options: {
       options.setUiError(options.t('models.directoryTypeNotFound'))
       return
     }
+    if (isSyncManagedRootParent(parentNodeId)) {
+      options.setUiError(options.t('models.syncRootForbidden'))
+      return
+    }
+    if (isNodeLocked(parentNodeId) && !isNodeInsideViewsBranch(parentNodeId)) {
+      options.setUiError(options.t('models.folderLocked'))
+      return
+    }
     const resolvedParentNodeId = resolveTreeParentId(parentNodeId)
     createNodeModal.value = { parentNodeId: resolvedParentNodeId, kind: 'folder' }
     newNodeName.value = ''
@@ -294,7 +321,20 @@ export function useModelTreeOperations(options: {
 
   const openCreateRegularNode = (parentNodeId: string | null) => {
     if (!canEditModel()) return
-    if (parentNodeId == null && !hasGrant('model.tree.createRoot')) return
+    if (parentNodeId == null && !hasGrant('model.tree.createRootNode')) return
+    if (parentNodeId != null && !hasGrant('model.tree.createNode')) return
+    if (isSyncManagedRootParent(parentNodeId)) {
+      options.setUiError(options.t('models.syncRootForbidden'))
+      return
+    }
+    if (modelSyncConfig.value.autoManaged) {
+      options.setUiError(options.t('models.syncNodesForbidden'))
+      return
+    }
+    if (isNodeLocked(parentNodeId)) {
+      options.setUiError(options.t('models.folderLocked'))
+      return
+    }
     if (nonDirectoryNodeTypes.value.length === 0) {
       options.setUiError(options.t('models.noAvailableNodeTypes'))
       return
@@ -341,7 +381,21 @@ export function useModelTreeOperations(options: {
 
   const openCreateDiagram = (nodeId: string | null) => {
     if (!canEditModel()) return
-    const targetNodeId = nodeId ?? treeRootNodeId.value ?? null
+    if (!hasGrant('model.diagram.create')) return
+    if (isNodeNoDiagrams(nodeId)) {
+      options.setUiError(options.t('models.folderNoDiagrams'))
+      return
+    }
+    const targetNodeId =
+      nodeId ?? modelSyncConfig.value.defaultDiagramNodeId ?? treeRootNodeId.value ?? null
+    if (modelSyncConfig.value.autoManaged) {
+      // В sync-моделях диаграммы создаются только в Views-ветке (defaultDiagramNodeId);
+      // без явной папки цель по умолчанию — Views.
+      if (nodeId != null && !isNodeInsideViewsBranch(nodeId)) {
+        options.setUiError(options.t('models.diagramViewsOnly'))
+        return
+      }
+    }
     if (nodeId == null && !hasGrant('model.tree.createRoot')) return
     createDiagramNodeId.value = targetNodeId
     newDiagramName.value = ''
@@ -464,6 +518,26 @@ export function useModelTreeOperations(options: {
     return (nodeType?.name ?? '').trim().toLowerCase() === 'directory'
   }
 
+  /** Флаги защищённой папки (typeProperties Directory-узла; значения — MCP/админ). */
+  const isNodeLocked = (nodeId: string | null | undefined): boolean =>
+    !!nodeId &&
+    options.state.value.nodes.find(item => item.id === nodeId)?.parsedAttrs.typeProperties
+      ?.locked === true
+
+  const isNodeNoDiagrams = (nodeId: string | null | undefined): boolean =>
+    !!nodeId &&
+    options.state.value.nodes.find(item => item.id === nodeId)?.parsedAttrs.typeProperties
+      ?.noDiagrams === true
+
+  const isNodeAutoCreated = (nodeId: string | null | undefined): boolean => {
+    if (!nodeId) return false
+    const node = options.state.value.nodes.find(item => item.id === nodeId)
+    return (
+      node?.parsedAttrs.dpc?.autoCreated === true ||
+      node?.parsedAttrs.typeProperties?.autoCreated === true
+    )
+  }
+
   const isDescendantNode = (nodeId: string, potentialParentId: string): boolean => {
     const children = options.state.value.nodes.filter(
       item => item.parentNodeId === potentialParentId && !item._isDeleted
@@ -474,6 +548,22 @@ export function useModelTreeOperations(options: {
     }
     return false
   }
+
+  /** Узел лежит в Views-ветке sync-модели (defaultDiagramNodeId) или является её корнем. */
+  const isNodeInsideViewsBranch = (nodeId: string | null | undefined): boolean => {
+    const viewsId = modelSyncConfig.value.defaultDiagramNodeId
+    if (!viewsId || !nodeId) return false
+    return nodeId === viewsId || isDescendantNode(nodeId, viewsId)
+  }
+
+  /**
+   * Корневой уровень sync-модели (без родителя или под скрытым корнем):
+   * папки и узлы там создаёт только синхронизация.
+   */
+  const isSyncManagedRootParent = (parentNodeId: string | null): boolean =>
+    modelSyncConfig.value.autoManaged &&
+    (parentNodeId == null ||
+      (treeRootNodeId.value != null && parentNodeId === treeRootNodeId.value))
 
   const moveOperationTokens = new Map<string, number>()
 
@@ -492,17 +582,37 @@ export function useModelTreeOperations(options: {
     let movingNode = nodes.find(item => item.id === nodeId)
     if (!movingNode) return
     if (isDirectoryNode(nodeId) && !hasGrant('model.tree.renameDeleteMoveFolder')) return
+    if (isNodeAutoCreated(nodeId)) {
+      options.setUiError(options.t('models.autoCreatedMoveForbidden'))
+      return
+    }
+    if (isNodeLocked(nodeId)) {
+      options.setUiError(options.t('models.folderLocked'))
+      return
+    }
     if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId))) return
 
     let targetNode = targetNodeId ? nodes.find(item => item.id === targetNodeId) : null
     if (targetNodeId && !targetNode) return
+    // В locked-папку кинуть «внутрь» нельзя; исключение — пользовательская папка,
+    // переносимая внутрь Views-ветки sync-модели. Элементы в Views-ветку не попадают вовсе.
+    if (position === 'inside' && targetNodeId) {
+      if (modelSyncConfig.value.autoManaged && isNodeInsideViewsBranch(targetNodeId)) {
+        if (!isDirectoryNode(nodeId)) {
+          options.setUiError(options.t('models.viewsNodesForbidden'))
+          return
+        }
+      } else if (isNodeLocked(targetNodeId)) {
+        options.setUiError(options.t('models.folderLocked'))
+        return
+      }
+    }
     let previousParentNodeId = movingNode.parentNodeId ?? null
-    let newParentNodeId =
-      !targetNode
-        ? (treeRootNodeId.value ?? null)
-        : position === 'inside' && isDirectoryNode(targetNode.id)
-          ? targetNode.id
-          : (targetNode.parentNodeId ?? null)
+    let newParentNodeId = !targetNode
+      ? (treeRootNodeId.value ?? null)
+      : position === 'inside' && isDirectoryNode(targetNode.id)
+        ? targetNode.id
+        : (targetNode.parentNodeId ?? null)
 
     while (true) {
       const missingParentIds = [...new Set([previousParentNodeId, newParentNodeId])].filter(
@@ -517,23 +627,39 @@ export function useModelTreeOperations(options: {
       nodes = options.state.value.nodes
       movingNode = nodes.find(item => item.id === nodeId)
       if (!movingNode) return
-      if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId))) return
+      if (targetNodeId && (targetNodeId === nodeId || isDescendantNode(targetNodeId, nodeId)))
+        return
       targetNode = targetNodeId ? nodes.find(item => item.id === targetNodeId) : null
       if (targetNodeId && !targetNode) return
 
       previousParentNodeId = movingNode.parentNodeId ?? null
-      newParentNodeId =
-        !targetNode
-          ? (treeRootNodeId.value ?? null)
-          : position === 'inside' && isDirectoryNode(targetNode.id)
-            ? targetNode.id
-            : (targetNode.parentNodeId ?? null)
-      if (
-        ensuredParentIds.has(previousParentNodeId) &&
-        ensuredParentIds.has(newParentNodeId)
-      ) {
+      newParentNodeId = !targetNode
+        ? (treeRootNodeId.value ?? null)
+        : position === 'inside' && isDirectoryNode(targetNode.id)
+          ? targetNode.id
+          : (targetNode.parentNodeId ?? null)
+      if (ensuredParentIds.has(previousParentNodeId) && ensuredParentIds.has(newParentNodeId)) {
         break
       }
+    }
+
+    // Корневой уровень sync-модели управляется синхронизацией — перенос туда запрещён;
+    // в Views-ветку элементы тоже не попадают (только пользовательские папки).
+    if (
+      modelSyncConfig.value.autoManaged &&
+      (newParentNodeId == null || newParentNodeId === treeRootNodeId.value)
+    ) {
+      options.setUiError(options.t('models.syncRootForbidden'))
+      return
+    }
+    if (
+      modelSyncConfig.value.autoManaged &&
+      !isDirectoryNode(nodeId) &&
+      newParentNodeId != null &&
+      isNodeInsideViewsBranch(newParentNodeId)
+    ) {
+      options.setUiError(options.t('models.viewsNodesForbidden'))
+      return
     }
 
     const fromIndex = nodes.indexOf(movingNode)
@@ -556,7 +682,8 @@ export function useModelTreeOperations(options: {
       const childIndices = nodes
         .map((item, index) => ({ item, index }))
         .filter(
-          ({ item }) => item.id !== nodeId && !item._isDeleted && item.parentNodeId === targetNode.id
+          ({ item }) =>
+            item.id !== nodeId && !item._isDeleted && item.parentNodeId === targetNode.id
         )
         .map(({ index }) => index)
       insertIndex =
@@ -592,10 +719,34 @@ export function useModelTreeOperations(options: {
   }
 
   const handleMoveDiagram = (diagramId: string, newNodeId: string | null) => {
-    const diagram = options.state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+    const diagram = options.state.value.diagrams.find(
+      item => item.id === diagramId && !item._isDeleted
+    )
     if (!diagram) return
     const resolvedNodeId = newNodeId ?? treeRootNodeId.value ?? null
     if (diagram.nodeId === resolvedNodeId) return
+    // Диаграммы запрещено кидать только в noDiagrams-папки: locked Views-папки их принимают.
+    if (isNodeNoDiagrams(resolvedNodeId)) return
+    const sync = modelSyncConfig.value
+    if (sync.autoManaged) {
+      // В sync-модели диаграмму двигает только автор или админ; автор — только внутри
+      // Views-ветки (defaultDiagramNodeId), админ — без ограничений (как MCP).
+      const admin = isAdmin.value
+      const authorOrAdmin =
+        admin ||
+        (!!currentUser.value?.id && !!diagram.ownerId && diagram.ownerId === currentUser.value.id)
+      if (!authorOrAdmin) return
+      if (!admin) {
+        const viewsId = sync.defaultDiagramNodeId
+        if (
+          !viewsId ||
+          !resolvedNodeId ||
+          (resolvedNodeId !== viewsId && !isDescendantNode(resolvedNodeId, viewsId))
+        ) {
+          return
+        }
+      }
+    }
     diagram.nodeId = resolvedNodeId
     options.markDiagramDirty(diagram.id)
     options.ensureDiagramAttrsLoaded?.(diagram.id)
@@ -604,6 +755,7 @@ export function useModelTreeOperations(options: {
   const handleRenameNode = (nodeId: string, newName: string) => {
     if (!canEditModel()) return
     if (isDirectoryNode(nodeId) && !hasGrant('model.tree.renameDeleteMoveFolder')) return
+    if (isNodeLocked(nodeId)) return
     const node = options.state.value.nodes.find(item => item.id === nodeId)
     const nextName = newName.trim()
     if (!node || !nextName || node.name === nextName) return
@@ -612,6 +764,7 @@ export function useModelTreeOperations(options: {
   }
 
   const handleRenameDiagram = (diagramId: string, newName: string) => {
+    if (!canEditModel()) return
     const diagram = options.state.value.diagrams.find(item => item.id === diagramId)
     const trimmedName = newName.trim()
     if (!diagram || !trimmedName) return
@@ -651,6 +804,7 @@ export function useModelTreeOperations(options: {
     filteredNodeTypes,
     selectedNodeTypeName,
     treeRootNodeId,
+    modelSyncConfig,
     treeScopeForParent,
     resolveTreeParentId,
     ensureCompleteSiblingScope,
@@ -666,9 +820,47 @@ export function useModelTreeOperations(options: {
     createDiagramWithBumpedVersion,
     createDiagramReplacingDeleted,
     isDirectoryNode,
+    isNodeInsideViewsBranch,
+    isSyncManagedRootParent,
     handleMoveNode,
     handleMoveDiagram,
     handleRenameNode,
     handleRenameDiagram,
+    isNodeLocked,
   }
+}
+
+/**
+ * Фабрика локальной (_isNew) ноды дерева: базовые attrs из parseNodeAttrs(null)
+ * плюс treeOrder, затем defaults каталога типов/компонентов. Общая для модального
+ * создания (useModelTreeOperations.createNode) и вставки скопированного узла
+ * (ModelEditor.handlePasteNode).
+ */
+export function createLocalNodeFor(
+  state: Ref<ModelEditorState>,
+  input: {
+    id: string
+    name: string
+    nodeTypeId: string
+    parentNodeId: string | null
+    treeOrder: number
+  }
+): EditorNode {
+  const node: EditorNode = {
+    id: input.id,
+    name: input.name,
+    modelId: state.value.modelId,
+    ownerId: state.value.ownerId,
+    nodeTypeId: input.nodeTypeId,
+    parentNodeId: input.parentNodeId,
+    createdAt: null,
+    updatedAt: null,
+    parsedAttrs: {
+      ...parseNodeAttrs(null),
+      treeOrder: input.treeOrder,
+    },
+    _isNew: true,
+  }
+  applyDefaultsToEditorNode(node, state.value)
+  return node
 }

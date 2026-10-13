@@ -13,7 +13,10 @@ export type ModelDeltaCollections<
   links: readonly TLink[]
 }
 
-function overlayEntities<T extends LocalDeltaEntity>(remote: readonly T[], local: readonly T[]): T[] {
+function overlayEntities<T extends LocalDeltaEntity>(
+  remote: readonly T[],
+  local: readonly T[]
+): T[] {
   const result = new Map<string, T>()
   for (const row of remote) {
     result.set(row.id, row)

@@ -11,7 +11,9 @@ describe('A5BindingsEditor', () => {
     const wrapper = mount(A5BindingsEditor, {
       props: {
         modelValue: [],
-        componentProperties: [{ id: '1', name: 'status', type: 'enum', required: false, min: null, max: null }],
+        componentProperties: [
+          { id: '1', name: 'status', type: 'enum', required: false, min: null, max: null },
+        ],
         nodeTypeProperties: [],
         targetOptions: [{ id: 'shape1', label: 'shape1' }],
       },
@@ -24,4 +26,3 @@ describe('A5BindingsEditor', () => {
     expect(lastPayload[0]?.propertyName).toBe('status')
   })
 })
-

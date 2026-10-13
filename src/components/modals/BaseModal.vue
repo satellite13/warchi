@@ -19,6 +19,10 @@ const props = withDefaults(
   {
     bodyPadding: true,
     hideHeader: false,
+    maxWidth: undefined,
+    height: undefined,
+    bodyClass: undefined,
+    panelClass: undefined,
   }
 )
 

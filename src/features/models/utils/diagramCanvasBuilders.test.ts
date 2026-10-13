@@ -17,9 +17,7 @@ import {
 } from './diagramCanvasBuilders'
 import type { CustomProperty } from '@/domain/attrs/notationAttrs'
 
-function prop(
-  overrides: Partial<CustomProperty> & { id: string; name: string }
-): CustomProperty {
+function prop(overrides: Partial<CustomProperty> & { id: string; name: string }): CustomProperty {
   return {
     type: 'string',
     required: false,
@@ -61,7 +59,12 @@ describe('diagramCanvasBuilders', () => {
   it('trims empty model edge labels and matches notation label style output', () => {
     expect(buildModelEdgeLabelConfig('  ')).toBeUndefined()
 
-    const ds: DiagramStyle = { labelColor: '#00f', labelOpacity: 0.7, labelFontSize: 13, labelInset: 4 }
+    const ds: DiagramStyle = {
+      labelColor: '#00f',
+      labelOpacity: 0.7,
+      labelFontSize: 13,
+      labelInset: 4,
+    }
     const modelLabel = expectTextLabelOptions(buildModelEdgeLabelConfig('  Rel  ', ds))
     const notationLabel = expectTextLabelOptions(buildNotationEdgeLabel('Rel', ds))
 

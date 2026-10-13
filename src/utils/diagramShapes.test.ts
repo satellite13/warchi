@@ -26,7 +26,7 @@ describe('diagramShapeFactories', () => {
     }
   })
 
-  describe.each(shapeIds)('%s', (shapeId) => {
+  describe.each(shapeIds)('%s', shapeId => {
     it('path returns a Path2D', () => {
       const factory = diagramShapeFactories[shapeId]
       const path = factory.path(200, 100)

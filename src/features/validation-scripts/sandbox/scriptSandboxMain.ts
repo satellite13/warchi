@@ -75,10 +75,7 @@ function queryRpc(
       : `q-${Date.now()}-${Math.random().toString(16).slice(2)}`
   return new Promise((resolve, reject) => {
     pendingQueries.set(queryId, { resolve, reject })
-    window.parent.postMessage(
-      { type: 'query', requestId, queryId, method, args },
-      '*'
-    )
+    window.parent.postMessage({ type: 'query', requestId, queryId, method, args }, '*')
   })
 }
 
@@ -109,12 +106,10 @@ window.addEventListener('message', (event: MessageEvent) => {
   void (async () => {
     let result: DoneMessage
     try {
-      const api = createValidationScriptApi(
-        event.data.snapshot,
-        event.data.openDiagramId,
-        issues,
-        { commands, query }
-      )
+      const api = createValidationScriptApi(event.data.snapshot, event.data.openDiagramId, issues, {
+        commands,
+        query,
+      })
       const { error } = await executeValidationScript(event.data.source, api)
       result = error
         ? { type: 'done', requestId, issues, commands: [], error }

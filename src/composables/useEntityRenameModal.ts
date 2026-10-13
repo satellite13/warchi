@@ -7,7 +7,7 @@ import type { EntityListConfig } from './useEntityList'
 export function useEntityRenameModal<T extends VersionedEntity>(
   config: EntityListConfig<T>,
   items: Ref<T[]>,
-  selectedVersionByName: Ref<Record<string, string>>,
+  selectedVersionByName: Ref<Record<string, string>>
 ) {
   const modal = useModalState<T>()
   const renameName = ref('')
@@ -35,10 +35,10 @@ export function useEntityRenameModal<T extends VersionedEntity>(
       return
     }
     const hasConflict = items.value.some(
-      (item) =>
+      item =>
         item.id !== current.id &&
         item.version === current.version &&
-        item.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+        item.name.trim().toLowerCase() === trimmedName.toLowerCase()
     )
     if (hasConflict) {
       modal.error.value = config.conflictMessage
@@ -58,7 +58,7 @@ export function useEntityRenameModal<T extends VersionedEntity>(
       }
 
       const previousName = current.name
-      items.value = items.value.map((item) => (item.id === current.id ? result.data : item))
+      items.value = items.value.map(item => (item.id === current.id ? result.data : item))
       if (selectedVersionByName.value[previousName] === current.version) {
         const nextSelection = { ...selectedVersionByName.value }
         delete nextSelection[previousName]
@@ -68,9 +68,7 @@ export function useEntityRenameModal<T extends VersionedEntity>(
       closeRenameModal()
     } catch (e) {
       modal.error.value =
-        e instanceof Error
-          ? e.message
-          : (config.renameFailedMessage ?? 'Не удалось переименовать')
+        e instanceof Error ? e.message : (config.renameFailedMessage ?? 'Не удалось переименовать')
     } finally {
       modal.isProcessing.value = false
     }

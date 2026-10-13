@@ -4,6 +4,8 @@ export type DuplicateNodeMember = {
   parentId: string | null
   parentName: string | null
   diagramCount?: number
+  autoCreated?: boolean
+  inArchive?: boolean
 }
 
 export type DuplicateNodeGroup = {
@@ -17,6 +19,7 @@ export type DuplicateNodeGroup = {
 export type DuplicateLinkMember = {
   id: string
   diagramCount?: number
+  autoCreated?: boolean
 }
 
 export type DuplicateLinkGroup = {
@@ -34,9 +37,13 @@ export type ValidationReport = {
   modelId: string
   generatedAt: string
   duplicateNodes: DuplicateNodeGroup[]
-  duplicateLinks: DuplicateLinkGroup[]
   duplicateNodesTotal?: number
+  duplicateLinks: DuplicateLinkGroup[]
   duplicateLinksTotal?: number
+  autoDuplicateNodes?: DuplicateNodeGroup[]
+  autoDuplicateNodesTotal?: number
+  autoDuplicateLinks?: DuplicateLinkGroup[]
+  autoDuplicateLinksTotal?: number
   diagramIssues?: DiagramIssueGroup[]
   diagramIssuesTotal?: number
   unusedNodes?: UnusedNode[]

@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Model work: reworked editor toolbar and header, diagram metadata in the version list, find-in-tree, and copy, paste, and delete for manual elements.
+- Role model v2: an admin can temporarily switch role, reader and viewer edits follow `canEdit`, share and rename stay behind grants, and Profile is shown only with `profile.nav`.
+- Node types can set `hideInTree`, which hides those nodes from the tree and search for non-admins.
+- Batch save rejects duplicate siblings and parallel links. Validation can suggest merging auto-created copies, and type properties are shown in a table.
+- Composite bound text can be edited inline. Diagram sessions show participant initials. OEF import draws connections as polylines.
+
+### Fixed
+- Pasting a copied tree node no longer fails with `DataCloneError`.
+- Unsaved editor changes are included in save.
+- Diagram-only notes, containers, and anchors are not treated as stale on save.
+
 ## [0.25.25] - 2026-10-13
 
 ### Fixed

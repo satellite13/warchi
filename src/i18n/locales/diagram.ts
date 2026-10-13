@@ -39,7 +39,8 @@ export const diagramMessages = {
       paletteGroup: 'Группа в палитре',
       paletteGroupHint: '0 = note, по умолчанию первая группа',
       paletteIcon: 'Иконка для палитры',
-      paletteIconHint: 'Если задана, в палитре показывается она, а не иконка фигуры. Пусто — как на фигуре.',
+      paletteIconHint:
+        'Если задана, в палитре показывается она, а не иконка фигуры. Пусто — как на фигуре.',
       tags: 'Теги',
       compositeLabel: 'Составная метка',
       resultLabel: 'Результат',
@@ -73,7 +74,8 @@ export const diagramMessages = {
       relationRulesMatrixCopyTitle: 'Скопировать выбранные связи (Ctrl/⌘+C)',
       relationRulesMatrixPasteTitle: 'Вставить связи из буфера (Ctrl/⌘+V)',
       relationRulesMatrixClipboardHint: 'В буфере: {count} связей',
-      relationRulesMatrixCellHint: 'Клик — выбрать, двойной клик / Enter — редактировать, Ctrl/⌘+C/V — копировать/вставить',
+      relationRulesMatrixCellHint:
+        'Клик — выбрать, двойной клик / Enter — редактировать, Ctrl/⌘+C/V — копировать/вставить',
       ruleTo: 'Кому',
       searchComponent: 'Поиск компонента...',
       links: 'Связи',
@@ -100,7 +102,18 @@ export const diagramMessages = {
       selectDiagramInTree: 'Выберите диаграмму в дереве слева',
       tagsPlaceholder: 'tag1, tag2',
       compositeLabelPlaceholder:
-        '$' + _i18nL + 'name' + _i18nR + ' · #' + _i18nL + 'code' + _i18nR + ' · $' + _i18nL + 'status' + _i18nR,
+        '$' +
+        _i18nL +
+        'name' +
+        _i18nR +
+        ' · #' +
+        _i18nL +
+        'code' +
+        _i18nR +
+        ' · $' +
+        _i18nL +
+        'status' +
+        _i18nR,
       compositeLabelSyntax:
         '$' +
         _i18nL +
@@ -341,7 +354,8 @@ export const diagramMessages = {
       paletteGroup: 'Palette group',
       paletteGroupHint: '0 = note, first group by default',
       paletteIcon: 'Palette icon',
-      paletteIconHint: 'When set, the palette uses this icon instead of the figure icon. Empty — same as the figure.',
+      paletteIconHint:
+        'When set, the palette uses this icon instead of the figure icon. Empty — same as the figure.',
       tags: 'Tags',
       compositeLabel: 'Composite label',
       resultLabel: 'Result',
@@ -375,7 +389,8 @@ export const diagramMessages = {
       relationRulesMatrixCopyTitle: 'Copy selected relations (Ctrl/⌘+C)',
       relationRulesMatrixPasteTitle: 'Paste relations from clipboard (Ctrl/⌘+V)',
       relationRulesMatrixClipboardHint: 'Clipboard: {count} relations',
-      relationRulesMatrixCellHint: 'Click to select, double-click / Enter to edit, Ctrl/⌘+C/V to copy/paste',
+      relationRulesMatrixCellHint:
+        'Click to select, double-click / Enter to edit, Ctrl/⌘+C/V to copy/paste',
       ruleTo: 'To',
       searchComponent: 'Search component...',
       links: 'Links',
@@ -402,7 +417,18 @@ export const diagramMessages = {
       selectDiagramInTree: 'Select a diagram in the tree on the left',
       tagsPlaceholder: 'tag1, tag2',
       compositeLabelPlaceholder:
-        '$' + _i18nL + 'name' + _i18nR + ' · #' + _i18nL + 'code' + _i18nR + ' · $' + _i18nL + 'status' + _i18nR,
+        '$' +
+        _i18nL +
+        'name' +
+        _i18nR +
+        ' · #' +
+        _i18nL +
+        'code' +
+        _i18nR +
+        ' · $' +
+        _i18nL +
+        'status' +
+        _i18nR,
       compositeLabelSyntax:
         '$' +
         _i18nL +

@@ -1,9 +1,5 @@
 export type ModelEditorLoadCollection = 'nodes' | 'diagrams' | 'links'
-export type ModelEditorLoadPhase =
-  | ModelEditorLoadCollection
-  | 'catalog'
-  | 'preparing'
-  | 'complete'
+export type ModelEditorLoadPhase = ModelEditorLoadCollection | 'catalog' | 'preparing' | 'complete'
 
 export type ModelEditorLoadProgressEvent =
   | {

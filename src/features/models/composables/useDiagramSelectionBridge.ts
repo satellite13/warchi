@@ -71,7 +71,10 @@ export function selectionNeedsRepair(
   })
 }
 
-export function selectionIdsDiffer(targetPapIds: string[], currentIds: ReadonlySet<string>): boolean {
+export function selectionIdsDiffer(
+  targetPapIds: string[],
+  currentIds: ReadonlySet<string>
+): boolean {
   return targetPapIds.length !== currentIds.size || targetPapIds.some(id => !currentIds.has(id))
 }
 

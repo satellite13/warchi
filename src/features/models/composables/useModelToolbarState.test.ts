@@ -142,11 +142,11 @@ describe('useModelToolbarState', () => {
       const state = useModelToolbarState(userId, hasActiveDiagram, canShowComments)
 
       expect(state.commentsVisible.value).toBe(false)
-      expect(state.canvasToggleButtons.value.some((b) => b.event === 'toggle-comments')).toBe(false)
+      expect(state.canvasToggleButtons.value.some(b => b.event === 'toggle-comments')).toBe(false)
 
       canShowComments.value = true
       await nextTick()
-      expect(state.canvasToggleButtons.value.some((b) => b.event === 'toggle-comments')).toBe(true)
+      expect(state.canvasToggleButtons.value.some(b => b.event === 'toggle-comments')).toBe(true)
     })
   })
 
@@ -156,7 +156,7 @@ describe('useModelToolbarState', () => {
       const options = state.defaultLinkTypeOptions.value
 
       expect(options).toHaveLength(4)
-      const values = options.map((o) => o.value)
+      const values = options.map(o => o.value)
       expect(values).toContain('straight')
       expect(values).toContain('polyline')
       expect(values).toContain('editable-polyline')

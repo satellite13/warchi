@@ -1,9 +1,5 @@
 import { usePagedResourceCrud } from './usePagedResourceCrud'
-import type {
-  NodeShapeResponse,
-  NodeShapeRequest,
-  NodeShapeUpdateRequest,
-} from '../types/api'
+import type { NodeShapeResponse, NodeShapeRequest, NodeShapeUpdateRequest } from '../types/api'
 import {
   invalidateNodeShapeScaleSliceCatalog,
   rememberNodeShapeAttrs,
@@ -20,7 +16,7 @@ export function useNodeShapes(options?: { beforeUpdate?: () => boolean }) {
   >({
     basePath: nodeShapesPath,
     beforeUpdate: options?.beforeUpdate,
-    onListLoaded: (items) => {
+    onListLoaded: items => {
       rememberNodeShapeAttrs(items)
     },
     afterMutation: (kind, item) => {

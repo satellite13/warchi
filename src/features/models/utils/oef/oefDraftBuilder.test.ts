@@ -18,7 +18,11 @@ describe('oefDraftBuilder', () => {
     expect(draft.diagrams).toHaveLength(1)
     expect(draft.diagrams[0]?.nodeInstances).toHaveLength(7)
     expect(draft.diagrams[0]?.connectionInstances).toHaveLength(6)
-    expect(draft.sourceElementTypes).toEqual(['BusinessEvent', 'BusinessProcess', 'BusinessService'])
+    expect(draft.sourceElementTypes).toEqual([
+      'BusinessEvent',
+      'BusinessProcess',
+      'BusinessService',
+    ])
     expect(draft.sourceRelationshipTypes).toEqual(['Serving', 'Triggering'])
 
     const noteInstance = draft.diagrams[0]?.nodeInstances.find(item => item.isNote)

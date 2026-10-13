@@ -9,23 +9,20 @@ export function copyRelationRulesFromComponent(
   sourceComponentId: string,
   targetComponentId: string,
   mode: CopyRelationRulesMode,
-  createId: () => string,
+  createId: () => string
 ): { changed: boolean } {
   if (sourceComponentId === targetComponentId) {
     return { changed: false }
   }
 
-  const sourceOutbound = rules.filter(
-    r => r.fromComponentId === sourceComponentId && !r._isDeleted,
-  )
+  const sourceOutbound = rules.filter(r => r.fromComponentId === sourceComponentId && !r._isDeleted)
   if (sourceOutbound.length === 0) {
     return { changed: false }
   }
 
   const candidatesByTo = new Map<string, string[]>()
   for (const src of sourceOutbound) {
-    const toId =
-      src.toComponentId === sourceComponentId ? targetComponentId : src.toComponentId
+    const toId = src.toComponentId === sourceComponentId ? targetComponentId : src.toComponentId
     const existing = candidatesByTo.get(toId) ?? []
     candidatesByTo.set(toId, uniqueIds([...existing, ...src.allowedRelationIds]))
   }
@@ -56,10 +53,7 @@ export function copyRelationRulesFromComponent(
   // merge
   for (const [toId, relationIds] of candidatesByTo) {
     const existing = rules.find(
-      r =>
-        r.fromComponentId === targetComponentId &&
-        r.toComponentId === toId &&
-        !r._isDeleted,
+      r => r.fromComponentId === targetComponentId && r.toComponentId === toId && !r._isDeleted
     )
     if (existing) {
       const merged = uniqueIds([...existing.allowedRelationIds, ...relationIds])

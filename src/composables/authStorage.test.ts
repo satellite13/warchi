@@ -30,13 +30,15 @@ describe('authStorage', () => {
     vi.stubGlobal('window', {
       localStorage: mockLocalStorage,
       dispatchEvent: vi.fn(),
-      CustomEvent: globalThis.CustomEvent ?? class CustomEvent extends Event {
-        detail: unknown
-        constructor(type: string, init?: { detail?: unknown }) {
-          super(type)
-          this.detail = init?.detail
-        }
-      },
+      CustomEvent:
+        globalThis.CustomEvent ??
+        class CustomEvent extends Event {
+          detail: unknown
+          constructor(type: string, init?: { detail?: unknown }) {
+            super(type)
+            this.detail = init?.detail
+          }
+        },
       Event: globalThis.Event,
     })
   })

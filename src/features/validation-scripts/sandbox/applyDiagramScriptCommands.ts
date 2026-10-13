@@ -35,15 +35,18 @@ function boundsFromInstances(nodes: ScriptDiagramNodeInstance[]): Record<string,
   return bounds
 }
 
-function firstInstanceId(nodes: ScriptDiagramNodeInstance[], modelNodeId: string): string | undefined {
-  return nodes.find((node) => node.modelNodeId === modelNodeId)?.id
+function firstInstanceId(
+  nodes: ScriptDiagramNodeInstance[],
+  modelNodeId: string
+): string | undefined {
+  return nodes.find(node => node.modelNodeId === modelNodeId)?.id
 }
 
 function applySetBounds(
   nodes: ScriptDiagramNodeInstance[],
   command: Extract<DiagramScriptCommand, { type: 'setBounds' }>
 ): void {
-  const instance = nodes.find((node) => node.id === command.instanceId)
+  const instance = nodes.find(node => node.id === command.instanceId)
   if (!instance) return
   instance.x = command.x
   instance.y = command.y
@@ -94,7 +97,7 @@ function mutateInstances(
         const sourceInstanceId = firstInstanceId(instances.nodes, ends.sourceId)
         const targetInstanceId = firstInstanceId(instances.nodes, ends.targetId)
         if (!sourceInstanceId || !targetInstanceId) break
-        if (instances.edges.some((edge) => edge.modelLinkId === command.linkId)) break
+        if (instances.edges.some(edge => edge.modelLinkId === command.linkId)) break
         instances.edges.push({
           id: input.createId(),
           modelLinkId: command.linkId,
@@ -104,16 +107,16 @@ function mutateInstances(
         break
       }
       case 'removeInstance': {
-        instances.nodes = instances.nodes.filter((node) => node.id !== command.instanceId)
+        instances.nodes = instances.nodes.filter(node => node.id !== command.instanceId)
         instances.edges = instances.edges.filter(
-          (edge) =>
+          edge =>
             edge.sourceInstanceId !== command.instanceId &&
             edge.targetInstanceId !== command.instanceId
         )
         break
       }
       case 'removeEdge': {
-        instances.edges = instances.edges.filter((edge) => edge.id !== command.edgeInstanceId)
+        instances.edges = instances.edges.filter(edge => edge.id !== command.edgeInstanceId)
         break
       }
       case 'setEdgeStyle': {
@@ -123,7 +126,9 @@ function mutateInstances(
           if (!byInstance && !byLink) continue
           const attrs = { ...(edge.attrs ?? {}) }
           const prevStyle =
-            attrs.diagramStyle && typeof attrs.diagramStyle === 'object' && !Array.isArray(attrs.diagramStyle)
+            attrs.diagramStyle &&
+            typeof attrs.diagramStyle === 'object' &&
+            !Array.isArray(attrs.diagramStyle)
               ? { ...attrs.diagramStyle }
               : {}
           attrs.diagramStyle = { ...prevStyle, strokeColor: command.strokeColor }

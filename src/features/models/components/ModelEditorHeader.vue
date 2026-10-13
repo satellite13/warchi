@@ -1,12 +1,21 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import UnsavedBadge from "@/components/UnsavedBadge.vue"
 import DiagramEditorHeaderShell from "@/components/layout/DiagramEditorHeaderShell.vue"
-import IconToolbar, { type ToolbarButton } from '@/components/layout/IconToolbar.vue'
+import IconToolbar, {
+  type ToolbarButton,
+  type ToolbarDropdownItem,
+} from '@/components/layout/IconToolbar.vue'
 import DiagramCanvasSettings from "./DiagramCanvasSettings.vue"
 import { useFavorites } from '@/composables/useFavorites'
+import { useAuth } from '@/composables/useAuth'
+import {
+  getOwnerDisplayNameFromMap,
+  resolveOwnerDisplayNames,
+} from '@/utils/resolveOwnerNames'
+import { formatDate } from '@/utils/formatDate'
 import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import type { EdgePathType } from "../composables/useModelToolbarState"
 
@@ -31,6 +40,8 @@ const props = withDefaults(
     notationVersion?: string
     notationOwnerInfo?: string
     canOpenNotation?: boolean
+    /** Доступная для миграции более новая версия нотации; чип показывается, когда задана. */
+    newerNotationVersion?: string
     diagramVersions?: EditorDiagram[]
     selectedDiagramId?: string | null
     isDiagramReadOnly?: boolean
@@ -81,6 +92,7 @@ const props = withDefaults(
     notationId: '',
     notationVersion: '',
     notationOwnerInfo: '',
+    newerNotationVersion: undefined,
     canOpenNotation: false,
     diagramVersions: () => [],
     selectedDiagramId: null,
@@ -108,17 +120,26 @@ const props = withDefaults(
 )
 
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { hasGrant } = useFeatureGrants()
-const { isFavorite, toggleFavorite } = useFavorites()
-const isDiagramFavorite = computed(() =>
-  props.selectedDiagramId ? isFavorite(props.selectedDiagramId) : false
+const { currentUser } = useAuth()
+// DGTW-4060: звезда избранного убрана из триггера версии (избранное — в дереве
+// диаграмм); isFavorite остался для маркеров в списке версий.
+const { isFavorite } = useFavorites()
+
+/** Элементы «для архитекторов»: авто-раскладка, wiki, JSON-инспектор и т.п. */
+const isArchitectOrAdmin = computed(
+  () => props.isAdmin || currentUser?.value?.role === 'architect'
 )
+
+/** Развитая группа: раскладка/вид/JSON — только архитектор и админ */
+const canUseAdvancedTools = isArchitectOrAdmin
 const emit = defineEmits<{
   action: [event: string]
   renameModel: [name: string]
   share: []
   openNotation: [notationId: string]
+  migrateNotation: []
   selectDiagramVersion: [diagramId: string]
   createBaseline: []
   compare: []
@@ -183,7 +204,6 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     active: props.navigationOnlyMode,
     disabled: !props.hasActiveDiagram || props.isDiagramReadOnly,
   },
-  { icon: 'separator', event: 'sep-nav', separator: true },
   {
     icon: 'undo',
     event: 'undo',
@@ -196,105 +216,45 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
     title: t('toolbar.redo'),
     disabled: !props.canRedo || !props.hasActiveDiagram || props.isDiagramReadOnly,
   },
-  { icon: 'separator', event: 'sep0', separator: true },
+  { icon: 'separator', event: 'sep-view', separator: true },
   {
     icon: 'zoom_in',
     event: 'zoom-in',
     title: t('toolbar.zoomIn'),
-    disabled: !props.hasActiveDiagram,
+    disabled: !props.hasActiveDiagram || props.isDiagramReadOnly,
   },
   {
     icon: 'zoom_out',
     event: 'zoom-out',
     title: t('toolbar.zoomOut'),
+    disabled: !props.hasActiveDiagram || props.isDiagramReadOnly,
+  },
+  {
+    icon: 'more_vert',
+    event: 'menu-view',
+    title: t('toolbar.viewMenu'),
     disabled: !props.hasActiveDiagram,
+    dropdown: [
+      { icon: 'fit_screen', label: t('toolbar.fitScreen'), event: 'fit-screen' },
+      { icon: 'center_focus_strong', label: t('toolbar.zoomSelection'), event: 'zoom-selection' },
+      { icon: 'restart_alt', label: t('toolbar.resetZoom'), event: 'reset-view' },
+      { icon: 'account_tree', label: t('toolbar.showDiagramInTree'), event: 'show-diagram-in-tree' },
+    ],
   },
-  {
-    icon: 'fit_screen',
-    event: 'fit-screen',
-    title: t('toolbar.fitScreen'),
-    disabled: !props.hasActiveDiagram,
-  },
-  {
-    icon: 'center_focus_strong',
-    event: 'zoom-selection',
-    title: t('toolbar.zoomSelection'),
-    disabled: !props.hasActiveDiagram,
-  },
-  {
-    icon: 'auto_awesome_mosaic',
-    event: 'auto-layout-nodes',
-    title: t('toolbar.autoLayoutNodes'),
-    disabled: !props.hasActiveDiagram || props.isDiagramReadOnly || props.layoutBusy,
-  },
-  {
-    icon: 'restart_alt',
-    event: 'reset-view',
-    title: t('toolbar.resetZoom'),
-    disabled: !props.hasActiveDiagram,
-  },
-  { icon: 'separator', event: 'sep2', separator: true },
-  ...(hasGrant('model.exportDiagramImage')
-    ? [
-        {
-          icon: 'image',
-          event: 'export-diagram-png',
-          title: t('toolbar.exportDiagramPng'),
-          disabled: !props.hasActiveDiagram,
-        },
-        {
-          icon: 'code',
-          event: 'export-diagram-svg',
-          title: t('toolbar.exportDiagramSvg'),
-          disabled: !props.hasActiveDiagram,
-        },
-        {
-          icon: 'ios_share',
-          event: 'share-diagram-image',
-          title: t('toolbar.shareDiagramImage'),
-          disabled: !props.hasActiveDiagram,
-        },
-      ]
-    : []),
-  {
-    icon: 'link',
-    event: 'copy-diagram-link',
-    title: t('models.copyDiagramLink'),
-    disabled: !props.hasActiveDiagram || !props.modelId,
-  },
-  ...(hasGrant('model.importOef')
-    ? [
-        {
-          icon: 'upload_file',
-          event: 'import-oef',
-          title: t('models.oefImportTitle'),
-          disabled: !props.canEditModel || props.toolbarLocked,
-        },
-      ]
-    : []),
-  ...(hasGrant('model.export')
-    ? [
-        {
-          icon: 'download',
-          event: 'export-model-package',
-          title: t('toolbar.exportModelPackage'),
-        },
-      ]
-    : []),
-  ...(hasGrant('model.runValidationScripts')
+  { icon: 'separator', event: 'sep-service', separator: true },
+  // DGTW-4060: сервисное меню развёрнуто в плоские кнопки (макет View Actions).
+  // auto-layout остался вне тулбара (перенос — отдельная задача).
+  ...(canUseAdvancedTools.value && hasGrant('model.runValidationScripts')
     ? [
         {
           icon: 'terminal',
           event: 'run-validation-script',
-          title: props.hasActiveDiagram
-            ? t('validationScripts.toolbarRun')
-            : t('validationScripts.runNeedsDiagram'),
+          title: t('validationScripts.toolbarRun'),
           disabled: !props.hasActiveDiagram || props.toolbarLocked,
         },
       ]
     : []),
-  { icon: 'separator', event: 'sep3', separator: true },
-  ...(props.isAdmin && hasGrant('model.inspectJson')
+  ...(canUseAdvancedTools.value && props.isAdmin && hasGrant('model.inspectJson')
     ? [
         {
           icon: 'data_object',
@@ -304,7 +264,7 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
         },
       ]
     : []),
-  ...(props.showDiagramWikiButton
+  ...(canUseAdvancedTools.value && props.showDiagramWikiButton
     ? [
         {
           icon: 'article',
@@ -314,13 +274,73 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
         },
       ]
     : []),
-  { icon: 'separator', event: 'sep5', separator: true },
+  ...(hasGrant('model.exportDiagramImage') || hasGrant('model.importOef') || hasGrant('model.export')
+    ? [
+        {
+          icon: 'ios_share',
+          event: 'menu-export',
+          title: t('toolbar.exportMenu'),
+          // The menu also holds model-level actions that do not need an active
+          // diagram (OEF import, model package export) — keep it clickable when
+          // any of those is available; items gate themselves.
+          disabled:
+            !props.hasActiveDiagram &&
+            (!(hasGrant('model.importOef') && props.canEditModel) || props.toolbarLocked) &&
+            !hasGrant('model.export'),
+          dropdown: [
+            ...(hasGrant('model.exportDiagramImage')
+              ? [
+                  {
+                    icon: 'image',
+                    label: t('toolbar.exportDiagramPng'),
+                    event: 'export-diagram-png',
+                    disabled: !props.hasActiveDiagram,
+                  },
+                  {
+                    icon: 'code',
+                    label: t('toolbar.exportDiagramSvg'),
+                    event: 'export-diagram-svg',
+                    disabled: !props.hasActiveDiagram,
+                  },
+                  {
+                    icon: 'add_photo_alternate',
+                    label: t('toolbar.shareDiagramImage'),
+                    event: 'share-diagram-image',
+                    disabled: !props.hasActiveDiagram,
+                  },
+                ]
+              : []),
+            ...(hasGrant('model.export')
+              ? [
+                  {
+                    icon: 'download',
+                    label: t('toolbar.exportModelPackage'),
+                    event: 'export-model-package',
+                  },
+                ]
+              : []),
+            ...(hasGrant('model.importOef')
+              ? [
+                  {
+                    icon: 'upload',
+                    label: t('models.oefImportTitle'),
+                    event: 'import-oef',
+                    disabled: !props.canEditModel || props.toolbarLocked,
+                  },
+                ]
+              : []),
+          ] as ToolbarDropdownItem[],
+        },
+      ]
+    : []),
+  { icon: 'separator', event: 'sep-close', separator: true },
   {
-    icon: 'close',
-    event: 'close-diagram',
-    title: t('toolbar.closeDiagram'),
-    disabled: !props.hasActiveDiagram,
+    icon: 'link',
+    event: 'copy-diagram-link',
+    title: t('models.copyDiagramLink'),
+    disabled: !props.hasActiveDiagram || !props.modelId,
   },
+  // DGTW-4060: кнопка close-diagram удалена по макету (закрытие диаграммы — из дерева).
   ...(!props.isDiagramReadOnly
     ? [
         {
@@ -334,6 +354,64 @@ const toolbarButtons = computed<ToolbarButton[]>(() => [
       ]
     : []),
 ])
+
+/** Версии для dropdown в info-слоте */
+const isVersionMenuOpen = ref(false)
+const versionMenuRef = ref<HTMLElement | null>(null)
+const selectedVersion = computed(
+  () => props.diagramVersions?.find(d => d.id === props.selectedDiagramId) ?? null
+)
+
+/** Имена авторов диаграмм (owner + updatedBy), резолвятся пачкой через /users/public/batch */
+const authorNames = ref<Map<string, string>>(new Map())
+watch(
+  () =>
+    (props.diagramVersions ?? [])
+      .map(d => [d.ownerId, d.updatedBy])
+      .flat()
+      .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  async ids => {
+    if (ids.length === 0) {
+      authorNames.value = new Map()
+      return
+    }
+    authorNames.value = await resolveOwnerDisplayNames(ids, authorNames.value, currentUser?.value ?? null, '—')
+  },
+  { immediate: true, deep: false }
+)
+
+function authorLabel(id?: string | null): string {
+  return getOwnerDisplayNameFromMap(authorNames.value, id, '—')
+}
+
+function formatDiagramDate(value?: string | null): string {
+  return formatDate(value, locale.value)
+}
+
+function selectVersion(id: string) {
+  isVersionMenuOpen.value = false
+  emit('selectDiagramVersion', id)
+}
+
+function onVersionMenuPointerDown(event: PointerEvent): void {
+  const root = versionMenuRef.value
+  if (!root || !(event.target instanceof Node) || root.contains(event.target)) return
+  isVersionMenuOpen.value = false
+}
+
+function onVersionMenuKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') isVersionMenuOpen.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onVersionMenuPointerDown)
+  document.addEventListener('keydown', onVersionMenuKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onVersionMenuPointerDown)
+  document.removeEventListener('keydown', onVersionMenuKeydown)
+})
 
 const canShowBaseline = computed(
   () =>
@@ -353,8 +431,24 @@ const canShowDiagramCompare = computed(
   () => hasGrant('model.compareVersions') && !!props.modelId
 )
 
+const canShowValidationReport = computed(
+  () => hasGrant('model.validationReport') && !!props.modelId
+)
+
+const SPECTATOR_AVATAR_COLORS = [
+  '#f24726', '#ff9eb1', '#7b68ee', '#00c3a5',
+  '#28a745', '#ffab00', '#2d7ff9', '#a25ddc',
+]
+
+/** Стабичный персональный цвет участника (как в Miro) по id/имени. */
+function avatarColor(id: string): string {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return SPECTATOR_AVATAR_COLORS[h % SPECTATOR_AVATAR_COLORS.length]
+}
+
 function spectatorInitials(name: string): string {
-  const parts = name.trim().split(/\s+/)
+  const parts = name.trim().split(/[\s.]+/).filter(Boolean)
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
   return name.slice(0, 2).toUpperCase()
 }
@@ -392,7 +486,7 @@ function spectatorInitials(name: string): string {
         v-for="(s, i) in diagramSpectators!.slice(0, 3)"
         :key="s.userId"
         class="model-header__spectator-avatar"
-        :style="{ zIndex: 3 - i }"
+        :style="{ zIndex: 3 - i, background: avatarColor(s.userId || s.displayName) }"
         :title="s.displayName"
       >{{ spectatorInitials(s.displayName) }}</span>
       <span
@@ -408,34 +502,30 @@ function spectatorInitials(name: string): string {
     >
       <span
         v-if="diagramLockBlockedByOther"
-        class="lock-chip"
+        class="model-header__spectator-avatar model-header__spectator-avatar--holder"
         :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
-      >
-        <span class="lock-chip__pulse"></span>
-        <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
-          <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
-          <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-        </svg>
-        <span class="lock-chip__name">{{ diagramLockHolderDisplay || '—' }}</span>
-      </span>
+      >{{ spectatorInitials(diagramLockHolderDisplay || '—') }}</span>
       <span
         v-else
-        class="lock-chip"
+        class="model-header__spectator-avatar model-header__spectator-avatar--holder model-header__spectator-avatar--warn"
         :title="t('models.diagramLockLost')"
       >
-        <span class="lock-chip__pulse"></span>
-        <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
-          <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
-          <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        <svg viewBox="0 0 16 16" fill="none" class="model-header__spectator-avatar__icon">
+          <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4" />
+          <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
         </svg>
-        <span class="lock-chip__name">{{ t('models.diagramLockLostChip') }}</span>
       </span>
       <button
         type="button"
-        class="lock-reload-btn"
+        class="lock-retry-btn"
+        :title="t('models.diagramLockRetryEdit')"
+        :aria-label="t('models.diagramLockRetryEdit')"
         @click="emit('diagramLockRetry')"
       >
-        {{ t('models.diagramLockRetryEdit') }}
+        <svg viewBox="0 0 16 16" fill="none" class="lock-retry-btn__icon">
+          <path d="M13.5 8a5.5 5.5 0 11-1.6-3.9L13.5 5.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M13.5 2.5v3.2h-3.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
       </button>
       <button
         v-if="diagramLockServerNewer"
@@ -484,17 +574,14 @@ function spectatorInitials(name: string): string {
       </div>
     </template>
     <template #left-extra>
-      <AppTooltip v-if="showCompareButton" :text="t('models.compareWithVersion')" placement="bottom">
-        <button type="button" class="deh-icon-btn" @click="emit('compare')">
-          <UiIcon name="compare_arrows" />
-        </button>
-      </AppTooltip>
+      <!-- DGTW-4060: standalone-кнопка compare_arrows удалена — сравнение в меню версии
+           (тот же грант model.compareVersions). -->
       <AppTooltip v-if="canShowRelationMatrix" :text="t('models.relationMatrixOpen')" placement="bottom">
         <button type="button" class="deh-icon-btn" @click="emit('openRelationMatrix')">
           <UiIcon name="grid_view" />
         </button>
       </AppTooltip>
-      <AppTooltip v-if="modelId" :text="t('models.validationReportOpen')" placement="bottom">
+      <AppTooltip v-if="canShowValidationReport" :text="t('models.validationReportOpen')" placement="bottom">
         <button type="button" class="deh-icon-btn" @click="emit('openValidation')">
           <UiIcon name="fact_check" />
         </button>
@@ -514,50 +601,95 @@ function spectatorInitials(name: string): string {
     <template #info>
       <template v-if="diagramName">
         <template v-if="diagramVersions && diagramVersions.length > 0">
-          <select
-            :value="selectedDiagramId ?? ''"
-            class="model-header__version-select"
-            :title="diagramName"
-            @change="emit('selectDiagramVersion', ($event.target as HTMLSelectElement).value)"
-          >
-            <option
-              v-for="d in diagramVersions"
-              :key="d.id"
-              :value="d.id"
+          <div ref="versionMenuRef" class="version-switch">
+            <button
+              type="button"
+              class="version-switch__trigger"
+              :title="diagramName"
+              :aria-expanded="isVersionMenuOpen"
+              aria-haspopup="true"
+              @click="isVersionMenuOpen = !isVersionMenuOpen"
             >
-              {{ d.version }}
-            </option>
-          </select>
-          <button
-            v-if="selectedDiagramId"
-            type="button"
-            class="model-header__baseline-btn"
-            :class="{ 'model-header__favorite-btn--active': isDiagramFavorite }"
-            :title="isDiagramFavorite ? t('common.removeFromFavorites') : t('common.addToFavorites')"
-            @click="toggleFavorite(selectedDiagramId)"
-          >
-            <UiIcon :name="isDiagramFavorite ? 'favorite' : 'favorite_border'" />
-          </button>
-          <button
-            v-if="canShowBaseline"
-            type="button"
-            class="model-header__baseline-btn"
-            :title="t('models.createBaseline')"
-            :disabled="!canCreateBaseline"
-            @click="emit('createBaseline')"
-          >
-            <UiIcon name="bookmark_add" />
-          </button>
-          <button
-            v-if="canShowDiagramCompare"
-            type="button"
-            class="model-header__baseline-btn"
-            :title="t('models.compareDiagramVersions')"
-            @click="goToDiagramCompare"
-          >
-            <UiIcon name="compare_arrows" />
-          </button>
-          <span v-if="baselineError" class="model-header__baseline-error" :title="baselineError">!</span>
+              <!-- DGTW-4060: звезда избранного удалена из триггера — избранное в дереве диаграмм. -->
+              <span class="version-switch__label">{{ selectedVersion?.version ?? diagramVersion }}</span>
+              <UiIcon name="arrow_drop_down" class="version-switch__caret" />
+            </button>
+            <div v-if="isVersionMenuOpen" class="version-switch__menu" role="menu">
+              <div class="version-switch__title">{{ t('models.version') }}</div>
+              <div class="version-switch__meta">
+                <div class="version-switch__meta-row">
+                  <UiIcon name="person" class="version-switch__meta-icon" />
+                  <span class="version-switch__meta-label">{{ t('models.author') }}</span>
+                  <span class="version-switch__meta-value">{{ authorLabel(selectedVersion?.ownerId) }}</span>
+                </div>
+                <div class="version-switch__meta-row">
+                  <UiIcon name="schedule" class="version-switch__meta-icon" />
+                  <span class="version-switch__meta-label">{{ t('models.createdAt') }}</span>
+                  <span class="version-switch__meta-value">{{ formatDiagramDate(selectedVersion?.createdAt) }}</span>
+                </div>
+                <div class="version-switch__meta-row">
+                  <UiIcon name="edit" class="version-switch__meta-icon" />
+                  <span class="version-switch__meta-label">{{ t('models.lastModified') }}</span>
+                  <span class="version-switch__meta-value">
+                    {{ formatDiagramDate(selectedVersion?.updatedAt) }}<template v-if="selectedVersion?.updatedBy"> · {{ authorLabel(selectedVersion.updatedBy) }}</template>
+                  </span>
+                </div>
+              </div>
+              <div class="version-switch__sep" />
+              <!-- DGTW-4060: список версий скроллится сам; действия снизу закреплены и
+                   всегда доступны без прокрутки. -->
+              <div class="version-switch__list">
+                <button
+                  v-for="d in diagramVersions"
+                  :key="d.id"
+                  type="button"
+                  class="version-switch__item"
+                  :class="{ 'version-switch__item--active': d.id === selectedDiagramId }"
+                  role="menuitem"
+                  @click="selectVersion(d.id)"
+                >
+                  <UiIcon
+                    v-if="d.id === selectedDiagramId"
+                    name="check"
+                    class="version-switch__item-check"
+                  />
+                  <UiIcon
+                    v-else-if="isFavorite(d.id)"
+                    name="favorite"
+                    class="version-switch__item-fav"
+                  />
+                  <span>{{ d.version }}</span>
+                </button>
+              </div>
+              <div class="version-switch__sep" />
+              <button
+                v-if="canShowDiagramCompare"
+                type="button"
+                class="version-switch__item"
+                role="menuitem"
+                @click="isVersionMenuOpen = false; goToDiagramCompare()"
+              >
+                <UiIcon name="compare_arrows" />
+                <span>{{ t('models.compareDiagramVersions') }}</span>
+              </button>
+              <button
+                v-if="canShowBaseline"
+                type="button"
+                class="version-switch__item"
+                :disabled="!canCreateBaseline"
+                role="menuitem"
+                @click="isVersionMenuOpen = false; emit('createBaseline')"
+              >
+                <UiIcon name="bookmark_add" />
+                <span>{{ t('models.createBaseline') }}</span>
+              </button>
+            </div>
+            <span
+              v-if="baselineError"
+              class="model-header__baseline-error"
+              :title="baselineError"
+            >!</span>
+          </div>
         </template>
         <template v-else-if="diagramVersion">
           <span class="model-header__version" :title="diagramName">{{ diagramVersion }}</span>
@@ -579,6 +711,16 @@ function spectatorInitials(name: string): string {
           <span class="model-header__info-value">{{ notationName }}</span>
           <span v-if="notationVersion" class="model-header__version">{{ notationVersion }}</span>
         </template>
+        <button
+          v-if="newerNotationVersion"
+          type="button"
+          class="model-header__notation-upgrade"
+          :title="t('diagram.migrateNotationTitle')"
+          @click="emit('migrateNotation')"
+        >
+          <UiIcon name="upgrade" class="model-header__notation-upgrade-icon" />
+          <span>{{ newerNotationVersion }}</span>
+        </button>
       </template>
       <span v-if="notationOwnerInfo" class="model-header__info-owner">{{ notationOwnerInfo }}</span>
       <span v-if="!diagramName" class="model-header__info-muted">{{ t('models.noDiagramSelected') }}</span>
@@ -592,7 +734,7 @@ function spectatorInitials(name: string): string {
           v-for="(s, i) in diagramSpectators!.slice(0, 3)"
           :key="s.userId"
           class="model-header__spectator-avatar"
-          :style="{ zIndex: 3 - i }"
+          :style="{ zIndex: 3 - i, background: avatarColor(s.userId || s.displayName) }"
           :title="s.displayName"
         >{{ spectatorInitials(s.displayName) }}</span>
         <span
@@ -608,34 +750,30 @@ function spectatorInitials(name: string): string {
       >
         <span
           v-if="diagramLockBlockedByOther"
-          class="lock-chip"
+          class="model-header__spectator-avatar model-header__spectator-avatar--holder"
           :title="t('models.diagramLockHeldBy', { name: diagramLockHolderDisplay || '—' })"
-        >
-          <span class="lock-chip__pulse"></span>
-          <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
-            <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
-            <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-          </svg>
-          <span class="lock-chip__name">{{ diagramLockHolderDisplay || '—' }}</span>
-        </span>
+        >{{ spectatorInitials(diagramLockHolderDisplay || '—') }}</span>
         <span
           v-else
-          class="lock-chip"
+          class="model-header__spectator-avatar model-header__spectator-avatar--holder model-header__spectator-avatar--warn"
           :title="t('models.diagramLockLost')"
         >
-          <span class="lock-chip__pulse"></span>
-          <svg class="lock-chip__icon" viewBox="0 0 16 16" fill="none">
-            <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" />
-            <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+          <svg viewBox="0 0 16 16" fill="none" class="model-header__spectator-avatar__icon">
+            <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4" />
+            <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
           </svg>
-          <span class="lock-chip__name">{{ t('models.diagramLockLostChip') }}</span>
         </span>
         <button
           type="button"
-          class="lock-reload-btn"
+          class="lock-retry-btn"
+          :title="t('models.diagramLockRetryEdit')"
+          :aria-label="t('models.diagramLockRetryEdit')"
           @click="emit('diagramLockRetry')"
         >
-          {{ t('models.diagramLockRetryEdit') }}
+          <svg viewBox="0 0 16 16" fill="none" class="lock-retry-btn__icon">
+            <path d="M13.5 8a5.5 5.5 0 11-1.6-3.9L13.5 5.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M13.5 2.5v3.2h-3.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </button>
         <button
           v-if="diagramLockServerNewer"
@@ -674,20 +812,23 @@ function spectatorInitials(name: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: 2px solid var(--surface);
   background: var(--primary);
   color: #fff;
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1;
   position: relative;
-  margin-left: -6px;
+  margin-left: -8px;
   cursor: default;
   transition: transform 0.15s ease;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .model-header__spectator-avatar:first-child {
@@ -703,6 +844,48 @@ function spectatorInitials(name: string): string {
   color: var(--text-muted);
   font-size: 9px;
   font-weight: 700;
+}
+
+/* Кружок держателя lock (редактирующий) — с белым кольцом, как выделенный в Miro */
+.model-header__spectator-avatar--holder {
+  margin-left: 0;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning) 60%, transparent);
+}
+
+.model-header__spectator-avatar--warn {
+  background: var(--warning);
+}
+
+.model-header__spectator-avatar__icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* Иконка-кнопка «Попробовать редактировать» */
+.lock-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  background: var(--surface);
+  color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.lock-retry-btn:hover {
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+.lock-retry-btn__icon {
+  width: 14px;
+  height: 14px;
 }
 
 .model-header__diagram-lock-group {
@@ -748,6 +931,169 @@ function spectatorInitials(name: string): string {
 }
 
 /* Diagram version & baseline in main header info */
+.version-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.version-switch__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  margin: 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--base-text);
+  font-size: 12px;
+  cursor: pointer;
+  max-width: 10em;
+}
+
+.version-switch__trigger:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.version-switch__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-switch__caret {
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+}
+
+.version-switch__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 210px;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* DGTW-4060: список версий скроллится внутри себя — действия (сравнение/baseline)
+   остаются закреплены внизу меню и доступны без прокрутки. */
+.version-switch__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.version-switch__title {
+  padding: 2px 8px 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.version-switch__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px 4px;
+}
+
+.version-switch__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.version-switch__meta-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.version-switch__meta-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.version-switch__meta-value {
+  color: var(--base-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-switch__meta-value .version-switch__meta-author {
+  color: var(--text-muted);
+}
+
+.version-switch__item {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--base-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.version-switch__item:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.version-switch__item--active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.version-switch__item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.version-switch__item :deep(.ui-icon) {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.version-switch__item-fav {
+  color: var(--primary);
+}
+
+.version-switch__item-check {
+  color: var(--primary);
+}
+
+.version-switch__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* Legacy fallbacks (используются при отсутствии версий) */
 .model-header__version-select {
   font-size: 12px;
   padding: 2px 6px;
@@ -935,54 +1281,6 @@ function spectatorInitials(name: string): string {
   letter-spacing: 0.01em;
 }
 
-/* ─── Lock chip (blocked by another user) ──────── */
-.lock-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 32px;
-  padding: 0 12px 0 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--warning);
-  border-radius: 16px;
-  background: var(--warning-soft);
-  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
-  max-width: min(100%, 360px);
-  position: relative;
-  overflow: hidden;
-}
-
-.lock-chip__pulse {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--warning) 8%, transparent);
-  animation: lock-chip-pulse 2.5s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes lock-chip-pulse {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
-}
-
-.lock-chip__icon {
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  position: relative;
-}
-
-.lock-chip__name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  letter-spacing: 0.01em;
-  position: relative;
-}
-
 /* ─── Reload button ────────────────────────────── */
 .lock-reload-btn {
   display: inline-flex;
@@ -1019,6 +1317,31 @@ function spectatorInitials(name: string): string {
   background: var(--surface-strong);
   padding: 2px 8px;
   border-radius: 6px;
+}
+
+.model-header__notation-upgrade {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.model-header__notation-upgrade:hover {
+  background: var(--accent-soft);
+  border-color: var(--primary);
+}
+
+.model-header__notation-upgrade-icon {
+  width: 13px;
+  height: 13px;
 }
 
 </style>

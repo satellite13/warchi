@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 import { useI18n } from "vue-i18n"
-import AppFooter from "../components/layout/AppFooter.vue"
 import AppHeader from "../components/layout/AppHeader.vue"
 import UserAvatar from "../components/layout/UserAvatar.vue"
 import ApiKeysSection from "@/components/profile/ApiKeysSection.vue"
@@ -255,9 +254,6 @@ onMounted(async () => {
         </div>
       </div>
     </main>
-    <footer class="profile-page__footer">
-      <AppFooter />
-    </footer>
   </div>
 </template>
 

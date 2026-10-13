@@ -3,7 +3,12 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ComponentResponse, RelationResponse } from '@/types/api'
 import type { EditorLink, EditorNode } from '../types'
-import { parseEntityAttrs, type CustomProperty } from '@/domain/attrs/notationAttrs'
+import {
+  parseEntityAttrs,
+  type CustomProperty,
+  type CustomPropertyType,
+} from '@/domain/attrs/notationAttrs'
+import { isHiddenSystemProperty } from '@/domain/attrs/hiddenSystemProperties'
 import type { DocumentWikiItem } from '@/composables/useWikiDocuments'
 import { regexTestProperty } from '@/utils/propertyUtils'
 import SearchableSelect from '@/components/forms/SearchableSelect.vue'
@@ -68,6 +73,17 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
+const propertyTypeLabels: Record<CustomPropertyType, string> = {
+  string: t('types.propertyTypeString'),
+  number: t('types.propertyTypeNumber'),
+  boolean: t('types.propertyTypeBoolean'),
+  enum: t('types.propertyTypeEnum'),
+}
+
+function typeLabel(type: CustomPropertyType): string {
+  return propertyTypeLabels[type] ?? type
+}
+
 const selectedComponent = computed(
   () =>
     props.availableComponents.find(component => component.id === props.nodeBindingComponentId) ??
@@ -97,6 +113,20 @@ const currentMode = computed<'node' | 'link' | 'empty'>(() => {
   if (props.selectedLink) return 'link'
   return 'empty'
 })
+
+/** Автосозданный синком узел — свойства типа read-only, ими управляет воркер. */
+const nodeLocked = computed(
+  () =>
+    props.selectedNode?.parsedAttrs.dpc?.autoCreated === true ||
+    props.selectedNode?.parsedAttrs.typeProperties?.autoCreated === true
+)
+const nodeReadOnly = computed(() => props.readOnly || nodeLocked.value)
+
+/** Type-скоуп auto-created узлов и system-свойства — read-only; notation на диаграмме — нет. */
+function propertyReadOnly(sectionKey: NodePropSectionKey, system: boolean | undefined): boolean {
+  if (props.readOnly || system === true) return true
+  return sectionKey === 'node-type' && nodeLocked.value
+}
 
 const regexTest = regexTestProperty
 
@@ -140,7 +170,9 @@ const nodePropertyDisplaySections = computed(() => {
     values: Record<string, unknown>
     docScope: 'nodeType' | 'notationComponent'
   }> = []
-  const typeProps = props.nodeTypeCustomProperties ?? []
+  const typeProps = (props.nodeTypeCustomProperties ?? []).filter(
+    property => !isHiddenSystemProperty(property.name)
+  )
   if (typeProps.length > 0) {
     sections.push({
       key: 'node-type',
@@ -184,12 +216,6 @@ function emitCreateDocForNodeProperty(sectionKey: NodePropSectionKey, propertyNa
     propertyName,
     sectionKey === 'node-type' ? 'nodeType' : 'notationComponent'
   )
-}
-
-/** Плейсхолдер для составной подписи на диаграмме */
-function nodePropertyDiagramToken(sectionKey: NodePropSectionKey, propName: string): string {
-  if (sectionKey === 'node-type') return '#' + '{' + propName + '}'
-  return '$' + '{' + propName + '}'
 }
 
 type PropertiesSectionBlock = {
@@ -282,6 +308,10 @@ const nodeEditorBlocks = computed(
 
       <!-- Scrollable content -->
       <div class="mp-body">
+        <div v-if="currentMode === 'node' && nodeLocked" class="mp-hint">
+          <span class="mp-hint__lead">{{ t('models.autoCreatedNodeLockedLead') }}</span
+          >{{ t('models.autoCreatedNodeLocked') }}
+        </div>
         <!-- NODE binding -->
         <template v-if="currentMode === 'node' && selectedNode">
           <template v-for="(block, blockIndex) in nodeEditorBlocks" :key="blockIndex">
@@ -296,7 +326,7 @@ const nodeEditorBlocks = computed(
                 :placeholder="t('diagram.selectComponent')"
                 :search-placeholder="t('common.search')"
                 :empty-text="t('common.nothingFound')"
-                :disabled="readOnly || !activeNotationId || availableComponents.length === 0"
+                :disabled="nodeReadOnly || !activeNotationId || availableComponents.length === 0"
                 class="mp-search-select"
                 @update:model-value="emit('bindNodeComponent', $event)"
               />
@@ -307,105 +337,131 @@ const nodeEditorBlocks = computed(
               class="mp-section"
             >
               <span class="mp-section__title">{{ t(block.section.titleKey) }}</span>
-              <div class="mp-fields">
-                <div
-                  v-for="property in block.section.properties"
-                  :key="`${block.section.key}-${property.id}`"
-                  class="mp-field"
-                >
-                  <label class="mp-field__label mp-field__label--stacked">
-                    <span class="mp-field__label-row">
-                      <span class="mp-field__name">{{ property.name }}</span>
-                      <span
-                        class="mp-field__source-badge"
-                        :class="
-                          block.section.key === 'node-type'
-                            ? 'mp-field__source-badge--type'
-                            : 'mp-field__source-badge--component'
-                        "
+              <div class="mp-table-wrap">
+                <table class="mp-table">
+                  <thead>
+                    <tr>
+                      <th class="mp-table__cell mp-table__cell--name">
+                        {{ t('models.comparePropName') }}
+                      </th>
+                      <th class="mp-table__cell mp-table__cell--type">
+                        {{ t('types.typeShort') }}
+                      </th>
+                      <th class="mp-table__cell mp-table__cell--value">
+                        {{ t('models.propertyTableValue') }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="property in block.section.properties"
+                      :key="`${block.section.key}-${property.id}`"
+                      class="mp-table__row"
+                    >
+                      <td class="mp-table__cell mp-table__cell--name">
+                        <div class="mp-table__name-wrap">
+                          <span class="mp-field__name">{{ property.name }}</span>
+                          <span
+                            v-if="property.system || property.required"
+                            class="mp-table__meta-row"
+                          >
+                            <span
+                              v-if="property.system"
+                              class="mp-table__system-badge"
+                              :title="t('types.systemShort')"
+                            >
+                              {{ t('types.systemShort') }}
+                            </span>
+                            <span
+                              v-if="property.required"
+                              class="mp-table__required-row"
+                              :title="t('types.requiredShort')"
+                            >
+                              <span class="mp-table__required-dot"></span>
+                              {{ t('types.requiredShort') }}
+                            </span>
+                          </span>
+                        </div>
+                      </td>
+                      <td
+                        class="mp-table__cell mp-table__cell--type"
+                        :title="typeLabel(property.type)"
                       >
-                        {{
-                          block.section.key === 'node-type'
-                            ? t('models.propertySourceBadgeType')
-                            : t('models.propertySourceBadgeComponent')
-                        }}
-                      </span>
-                    </span>
-                    <span
-                      class="mp-field__diagram-token"
-                      :title="t('models.propertyDiagramLabelTokenHint')"
-                    >
-                      {{ nodePropertyDiagramToken(block.section.key, property.name) }}
-                    </span>
-                  </label>
-                  <SearchableSelect
-                    v-if="
-                      property.interactive &&
-                      property.interactiveKind === 'diagram' &&
-                      property.type === 'string' &&
-                      diagrams.length > 0
-                    "
-                    :model-value="String(block.section.values[property.name] ?? '')"
-                    :options="diagramSelectOptions"
-                    :placeholder="t('diagram.selectDiagram')"
-                    :search-placeholder="t('common.search')"
-                    :empty-text="t('common.nothingFound')"
-                    :disabled="readOnly"
-                    allow-empty
-                    :empty-label="t('diagram.selectDiagram')"
-                    class="mp-search-select"
-                    @update:model-value="
-                      !readOnly && emitNodePropertyChange(block.section.key, property.name, $event)
-                    "
-                  />
-                  <div
-                    v-else-if="
-                      property.interactive &&
-                      property.interactiveKind === 'document' &&
-                      property.type === 'string'
-                    "
-                    class="mp-doc-pick"
-                  >
-                    <SearchableSelect
-                      :model-value="String(block.section.values[property.name] ?? '')"
-                      :options="documentSelectOptions"
-                      :placeholder="t('diagram.selectDocument')"
-                      :search-placeholder="t('common.search')"
-                      :empty-text="t('wiki.empty')"
-                      :disabled="readOnly"
-                      allow-empty
-                      :empty-label="t('diagram.selectDocument')"
-                      class="mp-doc-pick__select"
-                      @update:model-value="
-                        !readOnly &&
-                          emitNodePropertyChange(block.section.key, property.name, $event)
-                      "
-                    />
-                    <button
-                      type="button"
-                      class="mp-btn mp-btn--small mp-doc-pick__btn"
-                      :disabled="readOnly"
-                      @click="emitCreateDocForNodeProperty(block.section.key, property.name)"
-                    >
-                      {{ t('diagram.newDocument') }}
-                    </button>
-                  </div>
-                  <PropertyValueField
-                    v-else
-                    :property="property"
-                    :model-value="block.section.values[property.name]"
-                    :disabled="readOnly"
-                    :invalid="
-                      property.type === 'string' &&
-                      regexTest(property, String(block.section.values[property.name] ?? '')) ===
-                        false
-                    "
-                    :error-text="t('types.regexNoMatch')"
-                    @update:model-value="
-                      emitNodePropertyChange(block.section.key, property.name, $event)
-                    "
-                  />
-                </div>
+                        {{ typeLabel(property.type) }}
+                      </td>
+                      <td class="mp-table__cell mp-table__cell--value">
+                        <SearchableSelect
+                          v-if="
+                            property.interactive &&
+                            property.interactiveKind === 'diagram' &&
+                            property.type === 'string' &&
+                            diagrams.length > 0
+                          "
+                          :model-value="String(block.section.values[property.name] ?? '')"
+                          :options="diagramSelectOptions"
+                          :placeholder="t('diagram.selectDiagram')"
+                          :search-placeholder="t('common.search')"
+                          :empty-text="t('common.nothingFound')"
+                          :disabled="propertyReadOnly(block.section.key, property.system)"
+                          allow-empty
+                          :empty-label="t('diagram.selectDiagram')"
+                          class="mp-search-select"
+                          @update:model-value="
+                            !propertyReadOnly(block.section.key, property.system) &&
+                              emitNodePropertyChange(block.section.key, property.name, $event)
+                          "
+                        />
+                        <div
+                          v-else-if="
+                            property.interactive &&
+                            property.interactiveKind === 'document' &&
+                            property.type === 'string'
+                          "
+                          class="mp-doc-pick"
+                        >
+                          <SearchableSelect
+                            :model-value="String(block.section.values[property.name] ?? '')"
+                            :options="documentSelectOptions"
+                            :placeholder="t('diagram.selectDocument')"
+                            :search-placeholder="t('common.search')"
+                            :empty-text="t('wiki.empty')"
+                            :disabled="propertyReadOnly(block.section.key, property.system)"
+                            allow-empty
+                            :empty-label="t('diagram.selectDocument')"
+                            class="mp-doc-pick__select"
+                            @update:model-value="
+                              !propertyReadOnly(block.section.key, property.system) &&
+                                emitNodePropertyChange(block.section.key, property.name, $event)
+                            "
+                          />
+                          <button
+                            type="button"
+                            class="mp-btn mp-btn--small mp-doc-pick__btn"
+                            :disabled="propertyReadOnly(block.section.key, property.system)"
+                            @click="emitCreateDocForNodeProperty(block.section.key, property.name)"
+                          >
+                            {{ t('diagram.newDocument') }}
+                          </button>
+                        </div>
+                        <PropertyValueField
+                          v-else
+                          :property="property"
+                          :model-value="block.section.values[property.name]"
+                          :disabled="propertyReadOnly(block.section.key, property.system)"
+                          :invalid="
+                            property.type === 'string' &&
+                            regexTest(property, String(block.section.values[property.name] ?? '')) ===
+                              false
+                          "
+                          :error-text="t('types.regexNoMatch')"
+                          @update:model-value="
+                            emitNodePropertyChange(block.section.key, property.name, $event)
+                          "
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </section>
           </template>
@@ -665,6 +721,109 @@ const nodeEditorBlocks = computed(
   user-select: all;
 }
 
+/* ---- Properties table ---- */
+.mp-table-wrap {
+  min-width: 0;
+}
+
+.mp-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.mp-table__cell {
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--base-text);
+  vertical-align: middle;
+}
+
+.mp-table thead .mp-table__cell {
+  padding: 0 6px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.mp-table tbody .mp-table__cell {
+  border-bottom: 1px solid var(--border);
+}
+
+.mp-table tbody tr:last-child .mp-table__cell {
+  border-bottom: none;
+}
+
+.mp-table__cell--name {
+  width: 38%;
+}
+
+.mp-table__cell--type {
+  width: 22%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.mp-table__cell--value {
+  width: 40%;
+}
+
+.mp-table__name-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mp-table__name-wrap .mp-field__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-table__meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mp-table__system-badge {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 1px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+
+.mp-table__required-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-subtle);
+}
+
+.mp-table__required-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex-shrink: 0;
+}
+
 .mp-doc-pick {
   display: flex;
   gap: 6px;
@@ -713,6 +872,11 @@ const nodeEditorBlocks = computed(
   padding: 14px var(--mp-pad);
   font-size: 11px;
   color: var(--text-subtle);
+}
+
+.mp-hint__lead {
+  color: #800020;
+  font-weight: 600;
 }
 
 /* ---- Documentation button ---- */

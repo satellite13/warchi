@@ -25,16 +25,9 @@ export type NotationBoundEntityManagementOptions<T extends NotationBoundEntityLi
  * Domain-specific create logic stays in useComponentManagement / useRelationManagement.
  */
 export function useNotationBoundEntityManagement<T extends NotationBoundEntityLike>(
-  options: NotationBoundEntityManagementOptions<T>,
+  options: NotationBoundEntityManagementOptions<T>
 ) {
-  const {
-    kind,
-    getList,
-    setList,
-    selectedEntity,
-    availableTags,
-    getDefaultStylePreset,
-  } = options
+  const { kind, getList, setList, selectedEntity, availableTags, getDefaultStylePreset } = options
 
   const showModal = ref(false)
   const name = ref('')

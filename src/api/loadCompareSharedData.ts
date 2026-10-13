@@ -19,9 +19,9 @@ export async function loadCompareSharedData(): Promise<CompareSharedData> {
     apiGet<PaginatedResponse<RelationRuleResponse>>(`/relation-rules?${listQuery.toString()}`),
   ])
   return {
-    notations: notationsRes.success ? notationsRes.data.content ?? [] : [],
-    components: componentsRes.success ? componentsRes.data.content ?? [] : [],
-    relations: relationsRes.success ? relationsRes.data.content ?? [] : [],
-    relationRules: relationRulesRes.success ? relationRulesRes.data.content ?? [] : [],
+    notations: notationsRes.success ? (notationsRes.data.content ?? []) : [],
+    components: componentsRes.success ? (componentsRes.data.content ?? []) : [],
+    relations: relationsRes.success ? (relationsRes.data.content ?? []) : [],
+    relationRules: relationRulesRes.success ? (relationRulesRes.data.content ?? []) : [],
   }
 }

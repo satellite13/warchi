@@ -17,7 +17,7 @@ describe('analyzeImportIconGaps', () => {
     const remap = new Map([['acme-app', 'widgets']])
     const next = remapIconNamesInValue(
       { diagramStyle: { iconName: 'acme-app' }, source: '/icons/acme-app.svg' },
-      remap,
+      remap
     ) as { diagramStyle: { iconName: string }; source: string }
     expect(next.diagramStyle.iconName).toBe('widgets')
     expect(next.source).toBe('/icons/widgets.svg')

@@ -37,7 +37,9 @@ export function useModelEditorElementStyle(options: {
     instanceId: string,
     snapshot: NodeInstanceStyleSnapshot
   ): void => {
-    const diagram = options.state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+    const diagram = options.state.value.diagrams.find(
+      item => item.id === diagramId && !item._isDeleted
+    )
     const instance = diagram?.parsedAttrs.instances.nodes.find(item => item.id === instanceId)
     if (!diagram || !instance) return
     instance.width = snapshot.width
@@ -51,7 +53,9 @@ export function useModelEditorElementStyle(options: {
     edgeId: string,
     attrs: Record<string, unknown> | undefined
   ): void => {
-    const diagram = options.state.value.diagrams.find(item => item.id === diagramId && !item._isDeleted)
+    const diagram = options.state.value.diagrams.find(
+      item => item.id === diagramId && !item._isDeleted
+    )
     const edge = diagram?.parsedAttrs.instances.edges.find(item => item.id === edgeId)
     if (!diagram || !edge) return
     edge.attrs = attrs ? clonePlainDeep(attrs) : undefined
@@ -76,7 +80,11 @@ export function useModelEditorElementStyle(options: {
         diagram.parsedAttrs.instances.edges.find(item => item.id === edgeId) ?? null
     }
 
-    if (!targetNodeInstance && !targetEdgeInstance && options.selectedModelNodeIds.value.length === 1) {
+    if (
+      !targetNodeInstance &&
+      !targetEdgeInstance &&
+      options.selectedModelNodeIds.value.length === 1
+    ) {
       const modelNodeId = options.selectedModelNodeIds.value[0]
       targetNodeInstance =
         diagram.parsedAttrs.instances.nodes.find(item => item.modelNodeId === modelNodeId) ?? null
@@ -118,7 +126,9 @@ export function useModelEditorElementStyle(options: {
       if (!targetEdgeInstance.attrs) targetEdgeInstance.attrs = {}
       let bound: DiagramStyle | undefined
       if (targetEdgeInstance.modelLinkId) {
-        const modelLink = options.state.value.links.find(item => item.id === targetEdgeInstance.modelLinkId)
+        const modelLink = options.state.value.links.find(
+          item => item.id === targetEdgeInstance.modelLinkId
+        )
         const notationId = options.activeNotationId.value
         if (modelLink && notationId) {
           const relationId = modelLink.parsedAttrs.notationRelations[notationId]?.relationId
@@ -183,7 +193,10 @@ export function useModelEditorElementStyle(options: {
       if (!componentId) return withInstanceDimensions(undefined, instance)
       const component = options.state.value.components.find(item => item.id === componentId)
       if (!component) return withInstanceDimensions(undefined, instance)
-      return withInstanceDimensions(parseEntityAttrs(component.attrs ?? null).diagramStyle, instance)
+      return withInstanceDimensions(
+        parseEntityAttrs(component.attrs ?? null).diagramStyle,
+        instance
+      )
     }
 
     if (selectedElementId.startsWith('edge-')) {

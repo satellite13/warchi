@@ -3,6 +3,7 @@ import i18n from '@/i18n'
 import type { ModelData } from '@/types/entities'
 import type { ModelEditorState, ModelPartialRequestGuard, TreeParentScope } from '../types'
 import { discardUnsavedModelChanges } from './discardUnsavedModelChanges'
+import type { ModelEditorDraftSnapshot } from './useModelEditorDraft'
 import { loadModelEditorShell } from './modelEditorLoadModel'
 import type { useModelPartialStore } from './useModelPartialStore'
 
@@ -11,8 +12,7 @@ export type ScopedReloadMode = 'standard' | 'lock'
 export type ScopedReloadFailedPhase = 'shell' | 'diagram' | 'tree'
 
 export type ScopedReloadResult =
-  | { ok: true }
-  | { ok: false; error?: string; failedPhase?: ScopedReloadFailedPhase }
+  { ok: true } | { ok: false; error?: string; failedPhase?: ScopedReloadFailedPhase }
 
 const SCOPED_RELOAD_REQUEST = 'scoped-reload'
 
@@ -38,6 +38,13 @@ export function useModelScopedReload(options: {
   partialStore: ReturnType<typeof useModelPartialStore>
   reopenDiagramScope: (diagramId: string) => Promise<void>
   refreshTreeScopes?: (scopes: TreeParentScope[]) => Promise<void>
+  /**
+   * Снимает черновик несохранённых правок прямо перед заменой state
+   * (null, если правок нет). Вызывающий сам persist'ит его в localStorage.
+   */
+  captureUnsavedDraft?: () => ModelEditorDraftSnapshot | null
+  /** После успешного reload показывает диалог восстановления снятого черновика. */
+  presentUnsavedDraft?: (snapshot: ModelEditorDraftSnapshot) => void
   t?: (key: string) => string
 }) {
   let reloadGeneration = 0
@@ -71,11 +78,28 @@ export function useModelScopedReload(options: {
 
     const mode = reloadOptions.mode ?? 'standard'
     const openDiagramId = options.selectedDiagramId.value
-    const affectedScopes =
-      mode === 'lock' ? options.partialStore.materializedChildrenScopes() : []
+    const affectedScopes = mode === 'lock' ? options.partialStore.materializedChildrenScopes() : []
     const generation = ++reloadGeneration
     options.partialStore.abortInFlightScopes()
     const guard = options.partialStore.store.beginRequest(SCOPED_RELOAD_REQUEST)
+
+    // Снимок состояния до замены: если reload упадёт ПОСЛЕ замены state,
+    // восстанавливаем редактор как было, чтобы несохранённые правки не сгорели.
+    const preReload = {
+      model: options.model.value,
+      modelDirty: options.modelDirty.value,
+      modelInitialName: options.modelInitialName.value,
+      state: options.state.value,
+    }
+    let stateReplaced = false
+    const restorePreReload = (): void => {
+      options.model.value = preReload.model
+      options.modelDirty.value = preReload.modelDirty
+      options.modelInitialName.value = preReload.modelInitialName
+      options.partialStore.resetPartialScopes(requestedModelId)
+      options.state.value = { ...preReload.state, modelId: requestedModelId }
+      options.partialStore.reconcileMaterializedRows()
+    }
 
     try {
       const shell = await loadModelEditorShell(requestedModelId, {
@@ -83,6 +107,7 @@ export function useModelScopedReload(options: {
       })
       if (!isCurrent(generation, requestedModelId, guard)) return fail('shell')
 
+      const capturedDraft = options.captureUnsavedDraft?.() ?? null
       const catalog = {
         notations: options.state.value.notations,
         nodeTypes: options.state.value.nodeTypes,
@@ -103,6 +128,7 @@ export function useModelScopedReload(options: {
         page: shell.rootChildrenPage,
         rootParentNodeId: treeRootNodeId(shell.model.attrs),
       })
+      stateReplaced = true
       const applyGuard = options.partialStore.store.beginRequest(SCOPED_RELOAD_REQUEST)
 
       if (openDiagramId) {
@@ -111,6 +137,7 @@ export function useModelScopedReload(options: {
           await options.reopenDiagramScope(openDiagramId)
         } catch (error) {
           if (!isCurrent(generation, requestedModelId, applyGuard)) return fail('diagram')
+          if (stateReplaced) restorePreReload()
           return fail('diagram', errorMessage(error, t))
         }
         if (!isCurrent(generation, requestedModelId, applyGuard)) return fail('diagram')
@@ -120,13 +147,16 @@ export function useModelScopedReload(options: {
           await options.refreshTreeScopes?.(affectedScopes)
         } catch (error) {
           if (!isCurrent(generation, requestedModelId, applyGuard)) return fail('tree')
+          if (stateReplaced) restorePreReload()
           return fail('tree', errorMessage(error, t))
         }
         if (!isCurrent(generation, requestedModelId, applyGuard)) return fail('tree')
       }
+      if (capturedDraft) options.presentUnsavedDraft?.(capturedDraft)
       return { ok: true }
     } catch (error) {
       if (!isCurrent(generation, requestedModelId, guard)) return fail('shell')
+      if (stateReplaced) restorePreReload()
       return fail('shell', errorMessage(error, t))
     }
   }

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-10-13
+
+### Changed
+- The app uses papirus 0.9.17, so PNG export keeps arrowheads.
+
 ## [0.26.0] - 2026-10-13
 
 ### Added

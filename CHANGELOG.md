@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-13
+
 ### Added
 - Model work: reworked editor toolbar and header, diagram metadata in the version list, find-in-tree, and copy, paste, and delete for manual elements.
 - Role model v2: an admin can temporarily switch role, reader and viewer edits follow `canEdit`, share and rename stay behind grants, and Profile is shown only with `profile.nav`.
@@ -15,6 +17,9 @@ All notable changes to this project are documented in this file.
 - Pasting a copied tree node no longer fails with `DataCloneError`.
 - Unsaved editor changes are included in save.
 - Diagram-only notes, containers, and anchors are not treated as stale on save.
+- Copying a diagram link and a diagram image link works on plain HTTP.
+- The script editor API help panel is shown again.
+- Diagram PNG export keeps arrowheads (papirus 0.9.17).
 
 ## [0.25.25] - 2026-10-13
 

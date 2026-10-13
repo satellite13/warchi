@@ -9,13 +9,11 @@ function copyWithExecCommand(text: string): boolean {
   document.body.appendChild(area)
   area.focus()
   area.select()
-  let ok = false
   try {
-    ok = document.execCommand('copy')
+    return document.execCommand('copy')
   } finally {
     document.body.removeChild(area)
   }
-  return ok
 }
 
 /** Copies text in a click handler. Falls back when Clipboard API is missing (plain HTTP). */

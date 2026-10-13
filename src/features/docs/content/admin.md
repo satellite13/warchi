@@ -34,6 +34,8 @@ Feature grants **не заменяют** ACL ресурсов (владение,
 
 Отдельный грант `ui.languageSwitch` включает переключатель RU/EN в шапке. Без него интерфейс остаётся на **русском** (по умолчанию у `reader` / `viewer` и гостей; у `architect` / `editor` грант есть в seed).
 
+Другие ключи той же матрицы прячут действия редактора: `model.diagram.create` и `model.tree.createNode` / `model.tree.createRootNode` — создание диаграммы и узлов, `model.validationReport` — отчёт о дубликатах, `model.shareAccess` — шаринг, `profile.nav` — раздел профиля.
+
 Администратор может:
 
 - менять матрицу грантов для `architect` / `editor` / `reader` / `viewer`;

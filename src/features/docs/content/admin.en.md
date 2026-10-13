@@ -34,6 +34,8 @@ Product roles:
 
 The `ui.languageSwitch` grant enables the RU/EN switcher in the header. Without it the UI stays in **Russian** (default for `reader` / `viewer` and guests; seeded for `architect` / `editor`).
 
+Other keys in the same matrix hide editor actions: `model.diagram.create` and `model.tree.createNode` / `model.tree.createRootNode` hide creating a diagram or tree nodes, `model.validationReport` hides the duplicate report, `model.shareAccess` hides sharing, and `profile.nav` hides the profile section.
+
 An administrator can:
 
 - edit the grant matrix for `architect` / `editor` / `reader` / `viewer`;

@@ -4,6 +4,7 @@ import DiagramImageShareModal from './DiagramImageShareModal.vue'
 
 const createDiagramShareLink = vi.hoisted(() => vi.fn())
 const waitForPublicShareUrl = vi.hoisted(() => vi.fn())
+const copyText = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
@@ -15,6 +16,10 @@ vi.mock('@/composables/useApi', () => ({
 
 vi.mock('../utils/waitForPublicShareUrl', () => ({
   waitForPublicShareUrl,
+}))
+
+vi.mock('@/utils/copyText', () => ({
+  copyText,
 }))
 
 const modalStub = {
@@ -163,11 +168,7 @@ describe('DiagramImageShareModal', () => {
   })
 
   it('exposes share url as a real link and keeps modal open after copy', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText },
-    })
+    copyText.mockResolvedValue(undefined)
 
     const wrapper = mountModal()
     await wrapper.find('.diagram-share-modal__btn--primary').trigger('click')
@@ -181,7 +182,7 @@ describe('DiagramImageShareModal', () => {
     await wrapper.find('.diagram-share-modal__btn--secondary').trigger('click')
     await flushPromises()
 
-    expect(writeText).toHaveBeenCalledWith(ABSOLUTE_SHARE_URL)
+    expect(copyText).toHaveBeenCalledWith(ABSOLUTE_SHARE_URL)
     expect(wrapper.emitted('close')).toBeUndefined()
     expect(wrapper.find('.diagram-share-modal__btn--secondary').text()).toBe('diagramShare.copied')
   })

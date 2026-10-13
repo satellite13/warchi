@@ -52,6 +52,14 @@ In the model editor header: **Relation matrix** and **Import Open Exchange (XML)
 
 Export a model ZIP from the card or editor header and import it from the model list (creates a **new** model; a notation with the same name and version may be reused). Copying a diagram into the same or another model is an editor action; wiki and files are not copied in v1. See [Models](/docs/models) and [Diagrams](/docs/diagrams).
 
+### Why is an element missing from the tree?
+
+A node type can be marked **Hide in tree**. Roles below admin then do not see it in the tree or in search. An admin still sees those nodes, with a marker. See [Types](/docs/types) and [Models](/docs/models).
+
+### Why can I not save a second identical node or link?
+
+A folder cannot hold a second node of the same type and name, and the model cannot hold a second identical directed link. Duplicates that already exist appear in the **Validation** report and are merged by hand. See [Models → Validation](/docs/models).
+
 ### How do I connect an agent (MCP)?
 
 In [Profile](/docs/profile) create an API key (all accessible models or selected ones), store the `warchi_ak_…` secret, and put it in your MCP client. Revoking the key immediately cuts access.

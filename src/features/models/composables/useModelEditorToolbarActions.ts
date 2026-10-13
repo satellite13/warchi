@@ -5,6 +5,7 @@ import { useFeatureGrants } from '@/composables/useFeatureGrants'
 import { isSaveLockedToolbarEvent } from '../utils/modelEditorToolbarLock'
 import { clonePlainDeep } from '@/utils/clonePlainDeep'
 import { sanitizeFileName } from '@/utils/sanitizeFileName'
+import { copyText } from '@/utils/copyText'
 import { modelEditorDiagramHref } from '../utils/modelEditorDiagramLink'
 import type { DiagramAttrs } from '../modelAttrs'
 import type { EditorDiagram, ModelEditorState } from '../types'
@@ -208,7 +209,7 @@ export function useModelEditorToolbarActions(options: {
           diagramId
         )
         try {
-          await navigator.clipboard.writeText(href)
+          await copyText(href)
         } catch {
           options.setUiError(options.t('models.copyDiagramLinkFailed'))
         }

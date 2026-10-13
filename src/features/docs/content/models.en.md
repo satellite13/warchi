@@ -93,7 +93,13 @@ next branch page; an error in one branch does not close the editor and can be
 retried. Opening a diagram loads only its instances and the required nodes and
 links.
 
-Use **search** above the tree: the list narrows to matches and their ancestor path, and non-matching ancestors are muted. Clearing search keeps the selected node in view.
+Use **search** above the tree: the list narrows to matches and their ancestor path, and non-matching ancestors are muted. Clearing search keeps the selected node in view. A long name is truncated in the row; the full name is in the tooltip.
+
+**Find in tree** expands the path to the element selected on the diagram and scrolls to that row. From the diagram the same action is **Show diagram in tree**.
+
+A manual element can be copied and pasted into another folder. Deleting a manual element warns you when it is used on diagrams. An auto-created element is not copied that way: its type properties are read-only, while notation properties on the diagram stay editable.
+
+A node type marked **Hide in tree** is omitted from the tree and from search for roles below admin. An admin still sees those nodes, with a marker. The marker can be cleared on a single node.
 
 Actions are toolbar buttons and per-row mini-buttons (there is no context menu):
 
@@ -128,7 +134,7 @@ Recommended workflow: evolve the base composite structure in the notation editor
 
 For a **node** in the model, two separate blocks of fields are shown (when defined in the type catalog and in the notation):
 
-1. **Node type properties** — schema is defined in [Types](/docs/types) for the corresponding node type. Values are **shared for that node across the whole model** (all diagrams). Each field shows a **node type** source badge and a **diagram label placeholder** hint: `#{propertyName}`.
+1. **Node type properties** — schema is defined in [Types](/docs/types) for the corresponding node type. Values are **shared for that node across the whole model** (all diagrams). Each field shows a **node type** source badge and a **diagram label placeholder** hint: `#{propertyName}`. On an auto-created node these fields are read-only.
 2. **Notation component properties** — schema is defined in the [notation editor](/docs/notations) for the component. Values are **diagram-scoped** (the same model node can have different values on different diagrams). Label placeholder: `${propertyName}`. UI badge: **component**.
 
 The node’s display name on the shape is controlled separately in the composite label template: **`${name}`** is reserved and is **not** a component custom property.
@@ -193,6 +199,8 @@ The server runs two checks:
 - **Instances** — nodes of the same type whose names match after trim, case-insensitive. The Directory type is excluded.
 - **Links** — two or more directed edges with the same endpoints and type. `A→B` and `B→A` of the same type are not duplicates.
 
+Saving the model does not create a second node of the same type and name in one folder, and does not create a second identical directed link. Duplicates that already exist stay in the report and are merged by hand.
+
 The server returns at most 200 groups of each kind; if there are more, the heading shows “200 of N”.
 Expand a member to see diagrams that contain it. A chip opens that diagram and focuses the entity; clicking a node name selects it in the tree without opening a canvas.
 
@@ -207,7 +215,7 @@ The editor header also offers the **Import Open Exchange (XML)** wizard to load 
 1. **Analyze** — pick a target notation and XML file; the file is uploaded to the server for parsing (up to ~100 MB), and the client receives compact JSON plus validation issues.
 2. **Mapping** — map file element/relationship types to notation components/relations (filter unmapped types and bulk-apply mappings).
 3. **Preview** — review import volume (nodes, links, diagrams) and warnings. Also configure **reuse**: always create nodes/links or match existing ones in the model (node: name + type; link: endpoints + type, optionally diagram edge label). On match — reuse id only or update properties from OEF. Diagrams and organization folders are always created anew.
-4. Click **Import** — entities are created/updated in the current model via **chunked** batch-save; progress appears in the wizard footer. On a failed chunk, import stops (already created entities are not rolled back automatically).
+4. Click **Import** — entities are created/updated in the current model via **chunked** batch-save; progress appears in the wizard footer. On a failed chunk, import stops (already created entities are not rolled back automatically). Connections that have bends in the file land on the diagram as polylines.
 
 After import a **report** may open: unmatched or unconverted properties, relation-rule notes, and required fields still empty. Fill required properties in the properties panel before the next save.
 

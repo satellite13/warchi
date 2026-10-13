@@ -17,6 +17,7 @@ A node type defines the **component semantics** (what the entity is), while visu
 | Name | Unique type name |
 | Icon (`icon`) | SVG icon of the type. Used in palette/lists for faster visual identification |
 | Default directory path (`defaultDirectoryPath`) | Default folder path suggested for placing/structuring component instances of this type |
+| Hide in tree (`hideInTree`) | Elements of this type are omitted from the model tree and from search for roles below admin. An admin still sees them, with a marker. The marker can be cleared on a single node |
 
 ### Creating a Node Type
 

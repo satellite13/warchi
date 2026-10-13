@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/modals/BaseModal.vue'
 import { resolvePublicResourceUrl } from '@/api/resolvePublicResourceUrl'
 import { createDiagramShareLink } from '@/composables/useApi'
+import { copyText } from '@/utils/copyText'
 import { waitForPublicShareUrl } from '../utils/waitForPublicShareUrl'
 
 const props = defineProps<{
@@ -80,8 +81,8 @@ const getShareLink = async () => {
 const copyToClipboard = async () => {
   if (!shareUrl.value) return
   try {
-    await navigator.clipboard.writeText(shareUrl.value)
-    // Keep the modal open: closing immediately after clipboard.writeText can drop the
+    await copyText(shareUrl.value)
+    // Keep the modal open: closing immediately after copy can drop the
     // clipboard contents in some browsers (focus/gesture lost on unmount).
     copied.value = true
     if (copiedResetTimer != null) clearTimeout(copiedResetTimer)

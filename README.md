@@ -14,6 +14,7 @@ Frontend SPA for architectural modeling workflows: managing models, notations, v
 - Versioned models and notations
 - Built-in documentation section (`/docs`) with guides, hotkeys, FAQ, and changelog
 - Wiki section (`/wiki`) for entity-linked documentation pages
+- Roles and feature grants: temporary admin role switch, hide node types in the model tree, duplicate report and merge
 - Blue/green deployment support via Helm and `deploy.sh`
 
 ## Tech Stack

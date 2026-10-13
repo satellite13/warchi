@@ -126,6 +126,8 @@ src/
 └── views/            # Top-level page components
 ```
 
+In-app help lives in `src/features/docs/content` (`*.md` and `*.en.md`). Model-tree hiding is `attrs.hideInTree` on a node type (`src/features/models/utils/treeVisibility.ts`). Feature-grant keys in the UI catalog must stay aligned with `FeatureGrantKeys` on arepos-server.
+
 ## Key Architectural Patterns
 
 ### State Management (No Pinia/Vuex)

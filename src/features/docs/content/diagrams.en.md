@@ -146,6 +146,10 @@ Or hold `Shift` and drag from the element body — Shift is not needed when drag
 
 Text on a node shape or link can be driven by a **template** in the notation component or relation: `${name}` for the node or relation name, `#{…}` for **node type / link type** fields, `${…}` for **component / relation** fields (except the reserved `name`). Values are edited in the node or link **properties panel** in the [model editor](/docs/models). See [Models](/docs/models) and [Notations → Label templates](/docs/notations).
 
+Double-click bound text on a composite to edit it on the canvas.
+
+While the diagram is open and not locked by someone else, the header shows initials of the other people in that session (up to three avatars, then a count). The full name is in the tooltip.
+
 ## Toolbar
 
 ### History

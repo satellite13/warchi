@@ -49,7 +49,7 @@ Details:
 - The `admin` role **always** receives the full grant catalog.
 - Admins configure the role matrix and user extras under [Administration → Role grants](/docs/admin).
 - In **phase 1**, grants only hide/show UI and soft-guard some routes; the API does **not** yet reject calls for a missing grant.
-- Examples: without `model.wiki.create` the Wiki nav item and `/wiki` route are hidden; without `model.comments` the comments panel and badges are hidden; without `profile.apiKeys` the profile API keys section is hidden (admin key revocation is unchanged).
+- Examples: without `model.wiki.create` the Wiki nav item and `/wiki` route are hidden; without `model.comments` the comments panel and badges are hidden; without `profile.apiKeys` the profile API keys section is hidden (admin key revocation is unchanged); without `profile.nav` the Profile section is hidden; without `model.diagram.create`, `model.tree.createNode`, and `model.tree.createRootNode` creating a diagram or tree nodes is hidden; without `model.validationReport` the Validation button is hidden; without `model.shareAccess` model sharing is hidden.
 
 ## Route protection
 

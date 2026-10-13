@@ -93,7 +93,7 @@ export const validationScriptsMessages = {
           nodesOfType: 'Ноды среза холста с типом по id или имени.',
           linksOfType: 'Связи среза холста с типом по id или имени.',
           linksBetween: 'Query: все связи модели между парой (оба направления).',
-          neighbors: 'Query: соседи в модели, { items, last }.',
+          neighbors: "Query: соседи в модели, {'{ items, last }'}.",
           searchNodes: 'Query: поиск нод. Нужен q или type.',
           apply: {
             root: 'Очередь команд холста. Запись только после кнопки Применить.',
@@ -208,7 +208,7 @@ export const validationScriptsMessages = {
           nodesOfType: 'Canvas-slice nodes matching a type id or name.',
           linksOfType: 'Canvas-slice links matching a type id or name.',
           linksBetween: 'Query: all model links between a pair (both directions).',
-          neighbors: 'Query: model neighbors, { items, last }.',
+          neighbors: "Query: model neighbors, {'{ items, last }'}.",
           searchNodes: 'Query: search nodes. Requires q or type.',
           apply: {
             root: 'Canvas command queue. Written only after Apply.',

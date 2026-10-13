@@ -1,6 +1,6 @@
 # User Profile
 
-The **Profile** section lets users manage personal data used across the UI and metadata, and manage API keys for MCP access.
+The **Profile** section lets users manage personal data used across the UI and metadata, and manage API keys for MCP access. Without the `profile.nav` grant the menu item is hidden.
 
 ## Available fields
 

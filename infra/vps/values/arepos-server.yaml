@@ -74,5 +74,7 @@ env:
     value: "false"
   - name: AREPOS_AUTH_REGISTRATION_ENABLED
     value: "true"
+  - name: AREPOS_AUTH_DEFAULT_ROLE
+    value: architect
   - name: MODEL_SYNC_OUTBOX_ENABLED
     value: "true"

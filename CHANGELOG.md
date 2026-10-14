@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.26.2] - 2026-10-14
+
+### Changed
+- New accounts on the production stand get the architect role.
+
 ## [0.26.1] - 2026-10-13
 
 ### Changed

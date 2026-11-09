@@ -110,6 +110,7 @@ import {
   clientPointForDrop,
   worldTopLeftCenteredOnScreenPoint,
 } from '../utils/dropCoordinates'
+import { modelDiagramGridOptions, snapDiagramCoord } from '../utils/diagramGrid'
 import { resolveComponentAnchorPoints, mergeEdgeLabelStyleFromDiagramStyle } from '@/features/diagram/utils/diagramElementBuilders'
 import {
   applyStylePropertyBindings,
@@ -128,7 +129,11 @@ import {
   isEdgeAnchorInstance,
   isNoteInstance,
 } from '../utils/diagramOnlyInstances'
-import { applyEdgeTypeFromContextMenu } from './diagram/setEdgeTypeFromContextMenu'
+import {
+  applyEdgeTypeFromContextMenu,
+  commitEdgeTypeChange,
+  polylineInteriorBends,
+} from './diagram/setEdgeTypeFromContextMenu'
 import {
   applyDiffOverlayToEdgeStyle,
   applyDiffOverlayToNodeStyle,
@@ -339,8 +344,9 @@ const canUndo = ref(false)
 const canRedo = ref(false)
 /**
  * History undo/redo persist orchestration (suppress flag, dirty stack, canUndo/canRedo).
- * Layout commands must use historyPersist.runWithoutCanvasPersist so papirus
- * persist-from-renderer does not race pre-layout coords.
+ * Layout and context-menu edge-type commands must use
+ * historyPersist.runWithoutCanvasPersist so papirus persist-from-renderer
+ * does not overwrite them with a pre-flush snapshot.
  */
 const historyPersist = useDiagramHistoryPersist({
   canUndo,
@@ -435,7 +441,8 @@ function onContainerPointerLeave(): void {
   props.onRemotePointerLeave?.()
 }
 
-const GRID_SIZE = 20
+const diagramGrid = modelDiagramGridOptions()
+const GRID_SIZE = diagramGrid.snapGridSize
 const MIN_ZOOM = 0.3
 const MAX_ZOOM = 2.5
 const DEFAULT_NODE_WIDTH = 160
@@ -1808,7 +1815,20 @@ function syncDiagram() {
     const edgeLabelText =
       typeof edgeLabelConfigRaw === 'string' ? edgeLabelConfigRaw : edgeLabelConfigRaw?.text
     const edgeLabelBackground = buildModelEdgeLabelBackground(ds)
-    const controlPoints = readControlPointsFromAttrs(edge.attrs)
+    let controlPoints = readControlPointsFromAttrs(edge.attrs)
+    if (
+      existing &&
+      existing.type === 'polyline' &&
+      edgeOpts.type === 'editable-polyline' &&
+      controlPoints.length === 0
+    ) {
+      const bends = polylineInteriorBends(existing.path)
+      if (bends.length > 0) {
+        controlPoints = bends
+        if (!edge.attrs) edge.attrs = {}
+        edge.attrs.controlPoints = bends.map(point => ({ x: point.x, y: point.y }))
+      }
+    }
 
     if (existing) {
       existing.from = fromEndpoint
@@ -1962,12 +1982,19 @@ function syncEdgeAnchors(options: { persist: boolean; updateRenderer: boolean })
   if (options.persist) {
     const next = cloneDiagramAttrs()
     // cloneDiagramAttrs reads props that may still be pre-drag (parent has not flushed a
-    // prior updateDiagram). Re-apply live renderer positions so edge-anchor persistence
-    // cannot snap moved nodes back to their old coordinates.
+    // prior updateDiagram). Re-apply live renderer positions and editable bends so
+    // edge-anchor persistence cannot snap moved nodes or polyline bends back.
     applyNodePositionsToDiagram(next, Array.from(nodeIdToInstance.keys()))
+    const controlPointsChanged = applyEditablePolylineControlPointChangesToDiagramAttrs(
+      next,
+      edgeIdToInstance,
+      papEdgeId => renderer?.getEdge(papEdgeId)
+    )
     const { nodes, changed } = syncEdgeAnchorPositions(next.instances.nodes, midpoints)
     if (changed) {
       next.instances.nodes = nodes
+    }
+    if (changed || controlPointsChanged) {
       syncEdgePortIds(next)
       emit('updateDiagram', next)
     }
@@ -2541,18 +2568,26 @@ function detectEditablePolylineControlPointChanges() {
 function setEdgeTypeFromContext(edgeInstanceId: string, edgeType: EdgePathType) {
   const before = cloneDiagramAttrs()
   const next = cloneDiagramAttrs()
-  if (!applyEdgeTypeFromContextMenu(next, edgeInstanceId, edgeType, getBoundRelationStyle)) return
-  const after = next
-  emit('flushDiagramHistory')
-  const history = interactionManager?.history
-  if (history && typeof history.execute === 'function') {
-    history.execute({
-      execute: () => emit('updateDiagram', after),
-      undo: () => emit('updateDiagram', before),
-    })
+  const renderedPath = renderer?.getEdge(`edge-${edgeInstanceId}`)?.path
+  if (
+    !applyEdgeTypeFromContextMenu(
+      next,
+      edgeInstanceId,
+      edgeType,
+      getBoundRelationStyle,
+      renderedPath
+    )
+  ) {
     return
   }
-  emit('updateDiagram', next)
+  emit('flushDiagramHistory')
+  commitEdgeTypeChange({
+    history: interactionManager?.history,
+    runWithoutCanvasPersist: action => historyPersist.runWithoutCanvasPersist(action),
+    apply: attrs => applyDiagramAttrsToCanvas(attrs),
+    before,
+    after: next,
+  })
 }
 
 // ── Persist positions from papirus back to model ──
@@ -3359,8 +3394,7 @@ const normalizeDropCoordinates = (
     { x: event.clientX, y: event.clientY },
     lastDragOverClient
   )
-  const snapTo = (value: number) =>
-    snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
+  const snapTo = (value: number) => (snapEnabled.value ? snapDiagramCoord(value, GRID_SIZE) : value)
   return worldTopLeftCenteredOnScreenPoint(
     client,
     point => renderer!.screenToWorld(point.x, point.y),
@@ -3380,8 +3414,7 @@ const addExistingNodeAtViewportCenter = (modelNodeId: string): void => {
   ) {
     return
   }
-  const snapTo = (value: number) =>
-    snapEnabled.value ? Math.round(value / GRID_SIZE) * GRID_SIZE : value
+  const snapTo = (value: number) => (snapEnabled.value ? snapDiagramCoord(value, GRID_SIZE) : value)
   if (hasMultipleCompatibleComponents(modelNodeId)) {
     const canvasCenter = getCanvasCenter()
     const center = renderer.screenToWorld(canvasCenter.x, canvasCenter.y)
@@ -3532,7 +3565,7 @@ useDiagramRenderer({
     scrollbarOverlay: true,
   },
   overlays: {
-    grid: { options: { gridSize: 24, color: '#e2e8f0' } },
+    grid: { options: { gridSize: diagramGrid.overlayGridSize, color: diagramGrid.color } },
     rulers: { options: { enabled: rulersEnabled.value } },
     miniMap: {
       options: {

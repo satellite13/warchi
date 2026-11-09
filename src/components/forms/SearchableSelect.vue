@@ -2,7 +2,12 @@
 import { computed, ref } from 'vue'
 import { DROPDOWN_SEARCH_BLOCK_PX } from '@/utils/dropdownPanelPosition'
 import { useDropdownPanel } from '@/composables/useDropdownPanel'
+import SelectOptionLabel from '@/components/forms/SelectOptionLabel.vue'
+import { measureLabelWidth, selectMenuContentWidth } from '@/components/forms/selectOptionLabel'
 import '@/components/forms/dropdownSelectPanel.css'
+
+/** Поля пункта, отступы списка и рамка панели. */
+const MENU_CHROME_PX = 30
 
 export type SelectOption = { id: string; label: string }
 
@@ -42,6 +47,16 @@ defineSlots<{
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const controlRef = ref<HTMLDivElement | null>(null)
 
+function measureContentWidth(): number | undefined {
+  const control = controlRef.value
+  if (!control) return undefined
+  const style = getComputedStyle(control)
+  const font = style.font || `${style.fontSize} ${style.fontFamily}`
+  const labels = props.options.map(option => option.label)
+  if (props.allowEmpty) labels.push(props.emptyLabel || '—')
+  return selectMenuContentWidth(labels, label => measureLabelWidth(label, font), MENU_CHROME_PX)
+}
+
 const {
   isOpen,
   searchQuery,
@@ -53,6 +68,7 @@ const {
   rootClass: 'searchable-select',
   headerBlockPx: DROPDOWN_SEARCH_BLOCK_PX,
   preferredMaxListHeight: 180,
+  measureContentWidth,
 })
 
 const searchBlocked = computed(
@@ -86,11 +102,11 @@ const selectOption = (id: string) => {
 <template>
   <div class="searchable-select" :class="{ 'searchable-select--disabled': disabled }">
     <div ref="controlRef" class="searchable-select__control" @click.stop="toggle(disabled)">
-      <span class="searchable-select__value">
+      <span class="searchable-select__value" :title="displayLabel">
         <slot v-if="selectedOption" name="selected" :option="selectedOption">
-          {{ displayLabel }}
+          <SelectOptionLabel :label="selectedOption.label" />
         </slot>
-        <template v-else>{{ displayLabel }}</template>
+        <span v-else class="searchable-select__placeholder">{{ displayLabel }}</span>
       </span>
       <UiIcon :name="isOpen ? 'expand_less' : 'expand_more'" class="searchable-select__arrow" />
     </div>
@@ -133,10 +149,11 @@ const selectOption = (id: string) => {
             type="button"
             class="searchable-select__item"
             :class="{ 'searchable-select__item--active': modelValue === option.id }"
+            :title="option.label"
             @click.stop="selectOption(option.id)"
           >
             <slot name="option" :option="option" :active="modelValue === option.id">
-              {{ option.label }}
+              <SelectOptionLabel :label="option.label" />
             </slot>
           </button>
           <div
@@ -192,6 +209,12 @@ const selectOption = (id: string) => {
 .searchable-select__value {
   flex: 1;
   min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.searchable-select__placeholder {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -205,8 +228,10 @@ const selectOption = (id: string) => {
 }
 
 .searchable-select__item {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
+  min-width: 0;
   padding: 6px 8px;
   font-size: 13px;
   font-family: inherit;
@@ -218,8 +243,6 @@ const selectOption = (id: string) => {
   cursor: pointer;
   transition: background 0.12s ease;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .searchable-select__item:hover {

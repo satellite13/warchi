@@ -31,6 +31,8 @@ export function computeDropdownPanelPlacement(
     headerBlockPx?: number
     /** Желаемая max-высота списка, если позволяет место */
     preferredMaxListHeight?: number
+    /** Натуральная ширина самой длинной подписи вместе с полями меню. */
+    contentWidth?: number
   }
 ): DropdownPanelPlacement {
   const headerBlockPx = options?.headerBlockPx ?? DROPDOWN_SEARCH_BLOCK_PX
@@ -42,8 +44,15 @@ export function computeDropdownPanelPlacement(
   const anchorMidY = anchorRect.top + anchorRect.height / 2
   const openUpward = anchorMidY > vh / 2
 
+  const maxWidth = vw - VIEWPORT_MARGIN * 2
+  const anchorWidth = Math.min(Math.max(0, anchorRect.width), maxWidth)
+  const contentWidth = options?.contentWidth
+  const width =
+    contentWidth !== undefined && Number.isFinite(contentWidth)
+      ? Math.min(maxWidth, Math.max(anchorWidth, contentWidth))
+      : anchorWidth
+
   let left = anchorRect.left
-  const width = Math.min(anchorRect.width, vw - VIEWPORT_MARGIN * 2)
   left = Math.min(Math.max(VIEWPORT_MARGIN, left), vw - width - VIEWPORT_MARGIN)
 
   let maxPanelHeight: number

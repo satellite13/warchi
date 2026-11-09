@@ -13,6 +13,8 @@ export interface UseDropdownPanelOptions {
   headerBlockPx: number
   /** Desired max list height */
   preferredMaxListHeight?: number
+  /** Natural width of the longest option, so the menu can grow past the control. */
+  measureContentWidth?: () => number | undefined
 }
 
 export function useDropdownPanel(
@@ -30,6 +32,7 @@ export function useDropdownPanel(
     panelPlacement.value = computeDropdownPanelPlacement(rect, {
       headerBlockPx: options.headerBlockPx,
       preferredMaxListHeight: options.preferredMaxListHeight ?? 180,
+      contentWidth: options.measureContentWidth?.(),
     })
   }
 

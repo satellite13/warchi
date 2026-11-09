@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 import type { DiagramAttrs } from '../../modelAttrs'
-import { applyEdgeTypeFromContextMenu } from './setEdgeTypeFromContextMenu'
+import { useDiagramHistoryPersist } from '../../composables/useDiagramHistoryPersist'
+import {
+  applyEdgeTypeFromContextMenu,
+  commitEdgeTypeChange,
+} from './setEdgeTypeFromContextMenu'
 
 function makeAttrs(edgeType?: string, controlPoints?: number[][]): DiagramAttrs {
   return {
@@ -59,5 +64,92 @@ describe('applyEdgeTypeFromContextMenu', () => {
     expect(changed).toBe(true)
     expect(attrs.instances.edges[0]?.attrs?.controlPoints).toBeUndefined()
     expect(attrs.instances.edges[0]?.attrs?.diagramStyle).toMatchObject({ edgeType: 'bezier' })
+  })
+
+  it('keeps the routed polyline bends when switching to an editable polyline', () => {
+    const attrs = makeAttrs('polyline')
+    const changed = applyEdgeTypeFromContextMenu(
+      attrs,
+      'e1',
+      'editable-polyline',
+      () => undefined,
+      [
+        { x: 0, y: 0 },
+        { x: 50, y: 0 },
+        { x: 50, y: 20 },
+        { x: 100, y: 20 },
+      ]
+    )
+    expect(changed).toBe(true)
+    expect(attrs.instances.edges[0]?.attrs?.diagramStyle).toMatchObject({
+      edgeType: 'editable-polyline',
+    })
+    expect(attrs.instances.edges[0]?.attrs?.controlPoints).toEqual([
+      { x: 50, y: 0 },
+      { x: 50, y: 20 },
+    ])
+  })
+
+  it('does not invent bends when the rendered polyline has only endpoints', () => {
+    const attrs = makeAttrs('polyline')
+    applyEdgeTypeFromContextMenu(attrs, 'e1', 'editable-polyline', () => undefined, [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+    ])
+    expect(attrs.instances.edges[0]?.attrs?.controlPoints).toBeUndefined()
+  })
+})
+
+describe('commitEdgeTypeChange', () => {
+  it('keeps the new edge type when history change would persist the pre-flush snapshot', () => {
+    const before = makeAttrs('polyline')
+    const after = structuredClone(before)
+    applyEdgeTypeFromContextMenu(after, 'e1', 'straight', () => undefined)
+
+    let state = structuredClone(before)
+    const props = structuredClone(before)
+    const persistHistoryLayoutFromRenderer = vi.fn(() => {
+      state = structuredClone(props)
+    })
+    let onChange: (() => void) | undefined
+    const history = {
+      canUndo: true,
+      canRedo: false,
+      undoCount: 1,
+      undo: vi.fn(),
+      redo: vi.fn(),
+      clear: vi.fn(),
+      on: vi.fn((event: string, handler: () => void) => {
+        if (event === 'change') onChange = handler
+      }),
+      execute(command: { execute: () => void }) {
+        command.execute()
+        onChange?.()
+      },
+    }
+    const persist = useDiagramHistoryPersist({
+      canUndo: ref(false),
+      canRedo: ref(false),
+      isReadOnly: () => false,
+      isDiagramDirty: () => false,
+      persistHistoryLayoutFromRenderer,
+      detectLabelChanges: vi.fn(),
+      detectEdgeLabelChanges: vi.fn(),
+      syncEdgeAnchors: vi.fn(),
+    })
+    persist.bindHistoryEvents(history)
+
+    commitEdgeTypeChange({
+      history,
+      runWithoutCanvasPersist: action => persist.runWithoutCanvasPersist(action),
+      apply: attrs => {
+        state = structuredClone(attrs)
+      },
+      before,
+      after,
+    })
+
+    expect(state.instances.edges[0]?.attrs?.diagramStyle).toMatchObject({ edgeType: 'straight' })
+    expect(persistHistoryLayoutFromRenderer).not.toHaveBeenCalled()
   })
 })

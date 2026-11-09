@@ -2,7 +2,12 @@
 import { computed, ref } from 'vue'
 import { DROPDOWN_SEARCH_BLOCK_PX } from '@/utils/dropdownPanelPosition'
 import { useDropdownPanel } from '@/composables/useDropdownPanel'
+import SelectOptionLabel from '@/components/forms/SelectOptionLabel.vue'
+import { measureLabelWidth, selectMenuContentWidth } from '@/components/forms/selectOptionLabel'
 import '@/components/forms/dropdownSelectPanel.css'
+
+/** Чекбокс, поля пункта, отступы списка и рамка панели. */
+const MENU_CHROME_PX = 48
 
 export type MultiSelectOption = { id: string; label: string }
 
@@ -34,6 +39,18 @@ const emit = defineEmits<{
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const controlRef = ref<HTMLDivElement | null>(null)
 
+function measureContentWidth(): number | undefined {
+  const control = controlRef.value
+  if (!control) return undefined
+  const style = getComputedStyle(control)
+  const font = style.font || `${style.fontSize} ${style.fontFamily}`
+  return selectMenuContentWidth(
+    props.options.map(option => option.label),
+    label => measureLabelWidth(label, font),
+    MENU_CHROME_PX
+  )
+}
+
 const showSearch = computed(
   () => props.forceSearch || props.options.length > 5
 )
@@ -48,6 +65,7 @@ const {
   rootClass: 'multi-select',
   headerBlockPx: props.forceSearch || props.options.length > 5 ? DROPDOWN_SEARCH_BLOCK_PX : 6,
   preferredMaxListHeight: 160,
+  measureContentWidth,
 })
 
 const filteredOptions = computed(() => {
@@ -88,6 +106,7 @@ const toggleOption = (id: string) => {
       <span
         class="multi-select__value"
         :class="{ 'multi-select__value--placeholder': modelValue.length === 0 }"
+        :title="displayLabel"
       >
         {{ displayLabel }}
       </span>
@@ -129,7 +148,7 @@ const toggleOption = (id: string) => {
             <span class="multi-select__check">
               <UiIcon v-if="selectedSet.has(option.id)" name="check" />
             </span>
-            <span class="multi-select__item-label">{{ option.label }}</span>
+            <SelectOptionLabel class="multi-select__item-label" :label="option.label" />
           </button>
           <div
             v-if="filteredOptions.length === 0"
@@ -251,8 +270,5 @@ const toggleOption = (id: string) => {
 .multi-select__item-label {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 </style>

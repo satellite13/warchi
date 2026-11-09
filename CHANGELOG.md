@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.26.3] - 2026-11-09
+
+### Fixed
+- The diagram grid and snap use the same 20px step, so a shape's top-left corner sits on a grid line.
+- Changing an arrow type from the context menu applies on the first try. A polyline switched to an editable polyline keeps its bends.
+- A select that cannot show the whole label keeps the trailing version, and the menu grows so two diagrams with the same name stay distinct.
+
 ## [0.26.2] - 2026-10-14
 
 ### Changed

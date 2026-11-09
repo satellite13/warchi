@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.26.4] - 2026-11-09
+
+### Changed
+- The app uses papirus 0.9.19. Dragging an edge end along the same outline follows the cursor, and a new editable-polyline bend no longer snaps back onto its own segment.
+
 ## [0.26.3] - 2026-11-09
 
 ### Fixed

@@ -78,6 +78,7 @@ import {
 } from '../utils/diagramViewportPersistence'
 import {
   applyEditablePolylineControlPointChangesToDiagram as applyEditablePolylineControlPointChangesToDiagramAttrs,
+  applyEdgeLabelLayoutChangesToDiagram as applyEdgeLabelLayoutChangesToDiagramAttrs,
   applyNodeAndEditablePolylineChangesToDiagram as applyNodeAndEditablePolylineChangesToDiagramAttrs,
   applyNodePositionsToDiagram as applyNodePositionsToDiagramAttrs,
   persistHistoryRendererLayout,
@@ -2047,6 +2048,21 @@ function handleCanvasClickPrioritizeEdge(event: MouseEvent) {
 
 function handleCanvasMouseUpSyncEditablePolyline() {
   detectEditablePolylineControlPointChanges()
+  detectEdgeLabelLayoutChanges()
+}
+
+function detectEdgeLabelLayoutChanges() {
+  if (!renderer) return
+
+  const next = cloneDiagramAttrs()
+  const changed = applyEdgeLabelLayoutChangesToDiagramAttrs(
+    next,
+    edgeIdToInstance,
+    papEdgeId => renderer?.getEdge(papEdgeId)
+  )
+  if (changed) {
+    emit('updateDiagram', next)
+  }
 }
 
 function handleCanvasDoubleClickOpenDirectory(event: MouseEvent) {
@@ -2727,6 +2743,7 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
   manager.drag.on('dragstart', flushHostHistory)
   manager.resize.on('resizeStart', flushHostHistory)
   manager.connection.on('controlPointDragStart', flushHostHistory)
+  manager.connection.on('labelDragStart', flushHostHistory)
 
   // Selection and other interaction events (only when not read-only)
   manager.selection.on('select', (elementIds: string[]) => {
@@ -3025,6 +3042,11 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
   manager.connection.on('controlPointDragEnd', () => {
     window.removeEventListener('pointermove', onPointerMoveDuringControlPointDrag)
     syncEdgeAnchors({ persist: true, updateRenderer: true })
+    detectEditablePolylineControlPointChanges()
+  })
+
+  manager.connection.on('labelDragEnd', () => {
+    detectEdgeLabelLayoutChanges()
   })
 
   if (props.diagramLiveBroadcastEnabled) {
@@ -3044,6 +3066,8 @@ function bindInteractionEvents(manager: InteractionManager, currentRenderer: Dia
     manager.connection.on('edgeReconnect', unblock)
     manager.connection.on('controlPointDragStart', block)
     manager.connection.on('controlPointDragEnd', unblock)
+    manager.connection.on('labelDragStart', block)
+    manager.connection.on('labelDragEnd', unblock)
   }
 }
 

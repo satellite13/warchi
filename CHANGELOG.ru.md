@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Добавлено
+- Диаграмма: после жестов papirus сохраняются promote в `editable-polyline` (`edgeType`) и раскладка метки (`edgeLabelPosition` / `edgeLabelOffset`); collab блокируется на `labelDrag*`.
+
 ## [0.26.4] - 2026-11-09
 
 ### Изменено

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { DiagramAttrs } from '../modelAttrs'
 import {
   applyEditablePolylineControlPointChangesToDiagram,
+  applyEdgeLabelLayoutChangesToDiagram,
   applyNodeAndEditablePolylineChangesToDiagram,
   persistHistoryRendererLayout,
 } from './diagramCanvasSync'
@@ -42,6 +43,7 @@ describe('diagramCanvasSync', () => {
     expect(diagram.instances.nodes[0]).toMatchObject({ x: 210, y: 320, width: 180, height: 90 })
     expect(diagram.instances.edges[0]?.attrs).toMatchObject({
       controlPoints: [{ x: 310, y: 410 }],
+      diagramStyle: { edgeType: 'editable-polyline' },
     })
   })
 
@@ -70,7 +72,40 @@ describe('diagramCanvasSync', () => {
     }))
 
     expect(changed).toBe(true)
-    expect(diagram.instances.edges[0]?.attrs).toBeUndefined()
+    expect(diagram.instances.edges[0]?.attrs).toEqual({
+      diagramStyle: { edgeType: 'editable-polyline' },
+    })
+  })
+
+  it('persists label layout into diagramStyle', () => {
+    const diagram: DiagramAttrs = {
+      instances: {
+        nodes: [],
+        edges: [
+          {
+            id: 'edge-inst-1',
+            modelLinkId: 'link-1',
+            sourceInstanceId: 'inst-1',
+            targetInstanceId: 'inst-2',
+            attrs: {
+              diagramStyle: { edgeLabelOffset: 0, edgeLabelPosition: 0.5 },
+            },
+          },
+        ],
+      },
+    }
+
+    const edgeRefs = new Map([['edge-edge-inst-1', { edgeId: 'edge-inst-1' }]])
+    const changed = applyEdgeLabelLayoutChangesToDiagram(diagram, edgeRefs, () => ({
+      type: 'polyline',
+      labelPosition: 0.25,
+      labelOffset: 18,
+    }))
+
+    expect(changed).toBe(true)
+    expect(diagram.instances.edges[0]?.attrs).toMatchObject({
+      diagramStyle: { edgeLabelPosition: 0.25, edgeLabelOffset: 18 },
+    })
   })
 
   it('persists undone node positions and control points in one snapshot', () => {
@@ -110,6 +145,7 @@ describe('diagramCanvasSync', () => {
     expect(result.next.instances.nodes[0]).toMatchObject({ x: 10, y: 20 })
     expect(result.next.instances.edges[0]?.attrs).toMatchObject({
       controlPoints: [{ x: 100, y: 100 }],
+      diagramStyle: { edgeType: 'editable-polyline' },
     })
     expect(source.instances.nodes[0]?.x).toBe(210)
     expect(source.instances.edges[0]?.attrs).toMatchObject({

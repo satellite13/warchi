@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Diagram edges: persist editable-polyline promote (`edgeType`) and label drag layout (`edgeLabelPosition` / `edgeLabelOffset`) from papirus gestures; collab blocks on `labelDrag*`.
+
 ## [0.26.4] - 2026-11-09
 
 ### Changed

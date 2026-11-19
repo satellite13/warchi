@@ -4,8 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.26.5] - 2026-11-19
+
 ### Added
 - Diagram edges: persist editable-polyline promote (`edgeType`) and label drag layout (`edgeLabelPosition` / `edgeLabelOffset`) from papirus gestures; collab blocks on `labelDrag*`.
+
+### Changed
+- The app uses papirus 0.9.21: min-bend polyline routing with end stubs, edge edit UX (segment drag, label drag, fillets), and insert-then-drag on the segment body.
 
 ## [0.26.4] - 2026-11-09
 

@@ -16,6 +16,8 @@ export type DiagramNodeLike = {
 export type DiagramEdgeLike = {
   type?: string
   controlPoints?: unknown
+  labelPosition?: number
+  labelOffset?: number
 }
 
 export const readControlPointsFromAttrs = (
@@ -98,14 +100,83 @@ export function applyEditablePolylineControlPointChangesToDiagram(
 
     const nextControlPoints = readControlPointsFromEdge(papEdge)
     const currentControlPoints = readControlPointsFromAttrs(edgeInst.attrs)
-    if (areControlPointsEqual(nextControlPoints, currentControlPoints)) continue
+    const controlPointsChanged = !areControlPointsEqual(nextControlPoints, currentControlPoints)
+
+    const currentStyle =
+      edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object'
+        ? (edgeInst.attrs.diagramStyle as Record<string, unknown>)
+        : undefined
+    const needsTypePromote = currentStyle?.edgeType !== 'editable-polyline'
+
+    if (!controlPointsChanged && !needsTypePromote) continue
 
     if (!edgeInst.attrs) edgeInst.attrs = {}
-    if (nextControlPoints.length > 0) edgeInst.attrs.controlPoints = nextControlPoints
-    else delete edgeInst.attrs.controlPoints
+    if (controlPointsChanged) {
+      if (nextControlPoints.length > 0) edgeInst.attrs.controlPoints = nextControlPoints
+      else delete edgeInst.attrs.controlPoints
+    }
+    if (needsTypePromote) {
+      edgeInst.attrs.diagramStyle = {
+        ...(currentStyle ?? {}),
+        edgeType: 'editable-polyline',
+      }
+    }
 
     if (Object.keys(edgeInst.attrs).length === 0) {
       delete edgeInst.attrs
+    }
+    changed = true
+  }
+
+  return changed
+}
+
+/**
+ * Persist edge label layout from papirus back into diagramStyle.
+ */
+export function applyEdgeLabelLayoutChangesToDiagram(
+  diagramAttrs: DiagramAttrs,
+  edgeIdToInstance: Map<string, EdgeInstanceBinding>,
+  getEdgeByPapId: (papEdgeId: string) => DiagramEdgeLike | null | undefined
+): boolean {
+  let changed = false
+
+  for (const [papEdgeId, entity] of edgeIdToInstance) {
+    const papEdge = getEdgeByPapId(papEdgeId)
+    if (!papEdge) continue
+
+    const edgeInst = diagramAttrs.instances.edges.find(edge => edge.id === entity.edgeId)
+    if (!edgeInst) continue
+
+    const nextPosition = papEdge.labelPosition
+    const nextOffset = papEdge.labelOffset
+    if (typeof nextPosition !== 'number' && typeof nextOffset !== 'number') continue
+
+    const currentStyle =
+      edgeInst.attrs?.diagramStyle && typeof edgeInst.attrs.diagramStyle === 'object'
+        ? (edgeInst.attrs.diagramStyle as Record<string, unknown>)
+        : undefined
+    const currentPosition =
+      typeof currentStyle?.edgeLabelPosition === 'number'
+        ? currentStyle.edgeLabelPosition
+        : undefined
+    const currentOffset =
+      typeof currentStyle?.edgeLabelOffset === 'number' ? currentStyle.edgeLabelOffset : undefined
+
+    const positionChanged =
+      typeof nextPosition === 'number' &&
+      (currentPosition === undefined || Math.abs(currentPosition - nextPosition) > 1e-6)
+    const offsetChanged =
+      typeof nextOffset === 'number' &&
+      (currentOffset === undefined || Math.abs(currentOffset - nextOffset) > 1e-6)
+
+    if (!positionChanged && !offsetChanged) continue
+
+    if (!edgeInst.attrs) edgeInst.attrs = {}
+    edgeInst.attrs.diagramStyle = {
+      ...(currentStyle ?? {}),
+      ...(typeof nextPosition === 'number' ? { edgeLabelPosition: nextPosition } : {}),
+      ...(typeof nextOffset === 'number' ? { edgeLabelOffset: nextOffset } : {}),
     }
     changed = true
   }

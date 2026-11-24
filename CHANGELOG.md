@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.26.7] - 2026-11-24
+
+### Fixed
+- Nginx no longer rate-limits fingerprinted `/assets/` chunks. Parallel SPA module loads no longer get 503 and fail with "Importing a module script failed".
+
 ## [0.26.6] - 2026-11-24
 
 ### Changed

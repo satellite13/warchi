@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.26.8] - 2026-11-24
+
+### Changed
+- The app uses papirus 0.9.23: with attach-to-outline on, dropping a reconnect inside a node projects the end onto that node's contour instead of locking the nearest port.
+
 ## [0.26.7] - 2026-11-24
 
 ### Fixed

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.26.6] - 2026-11-24
+
+### Changed
+- The app uses papirus 0.9.22: locked edge ports keep their side when anchors are missing, so polyline routes between nodes inside a group stay inside the container.
+
 ## [0.26.5] - 2026-11-19
 
 ### Added
